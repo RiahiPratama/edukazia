@@ -248,6 +248,9 @@ export default function JadwalPage() {
     if (!fClassGroup) { setFormError('Pilih kelas terlebih dahulu.'); return }
     setSaving(true); setFormError('')
 
+    // Fallback zoom dari classGroups jika fZoom kosong
+    const zoomToSave = fZoom || classGroups.find(c => c.id === fClassGroup)?.zoom_link || null
+
     if (isEditMode && editSession) {
       // FIX isu 2: build ISO string dengan benar
       const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
@@ -255,7 +258,7 @@ export default function JadwalPage() {
         class_group_id: fClassGroup,
         scheduled_at,
         status:    fStatus,
-        zoom_link: fZoom || null,
+        zoom_link: zoomToSave,
       }).eq('id', editSession.id)
       if (error) { setFormError(error.message); setSaving(false); return }
     } else {
@@ -263,7 +266,7 @@ export default function JadwalPage() {
       for (const row of jadwalRows) {
         if (!row.date || !row.time) continue
         for (const scheduled_at of generateSessions(row)) {
-          all.push({ class_group_id: fClassGroup, scheduled_at, status: fStatus, zoom_link: fZoom || null })
+          all.push({ class_group_id: fClassGroup, scheduled_at, status: fStatus, zoom_link: zoomToSave })
         }
       }
       if (all.length === 0) { setFormError('Isi minimal satu jadwal.'); setSaving(false); return }
