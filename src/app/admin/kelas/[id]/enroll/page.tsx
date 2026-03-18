@@ -5,65 +5,47 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-type Student = {
-  id: string
-  profiles: { full_name: string } | null
-}
-
-type Package = {
-  id: string
-  name: string
-  total_sessions: number
-  price: number
-}
-
+type Student = { id: string; profiles: { full_name: string } | null }
+type Package = { id: string; name: string; total_sessions: number; price: number }
 type ClassGroup = {
-  id: string
-  label: string
-  max_participants: number
+  id: string; label: string; max_participants: number
   courses: { name: string } | null
   class_types: { name: string } | null
   enrollments: { id: string }[]
 }
 
 export default function EnrollPage() {
-  const router  = useRouter()
-  const params  = useParams()
-  const kelasId = params.id as string
+  const router   = useRouter()
+  const params   = useParams()
+  const kelasId  = params.id as string
   const supabase = createClient()
 
-  const [kelas, setKelas]     = useState<ClassGroup | null>(null)
+  const [kelas,    setKelas]    = useState<ClassGroup | null>(null)
   const [students, setStudents] = useState<Student[]>([])
   const [packages, setPackages] = useState<Package[]>([])
   const [enrolled, setEnrolled] = useState<string[]>([])
 
   const [form, setForm] = useState({
-    student_id: '',
-    package_id: '',
-    start_date: '',
+    student_id:           '',
+    package_id:           '',
+    start_date:           '',
+    sessions_total:       8,
+    session_start_offset: 1,
   })
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [error,   setError]   = useState('')
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
     if (!kelasId) return
-
     Promise.all([
-      // Fetch kelas detail
       supabase.from('class_groups').select(`
         id, label, max_participants,
         courses(name), class_types(name),
         enrollments(id)
       `).eq('id', kelasId).single(),
-
-      // Fetch semua siswa
-      supabase.from('students').select('id, profiles(full_name)'),
-
-      // Fetch paket yang sesuai kursus kelas ini
+      supabase.from('students').select('id, profiles:profile_id(full_name)'),
       supabase.from('packages').select('id, name, total_sessions, price').eq('is_active', true),
-
-      // Fetch siswa yang sudah enrolled di kelas ini
       supabase.from('enrollments').select('student_id').eq('class_group_id', kelasId).eq('status', 'active'),
     ]).then(([k, s, p, e]) => {
       if (k.data) setKelas(k.data as any)
@@ -75,7 +57,17 @@ export default function EnrollPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) {
     const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
+    // Saat pilih paket, auto-set sessions_total dari paket
+    if (name === 'package_id') {
+      const pkg = packages.find(p => p.id === value)
+      setForm(prev => ({
+        ...prev,
+        package_id:     value,
+        sessions_total: pkg?.total_sessions ?? 8,
+      }))
+    } else {
+      setForm(prev => ({ ...prev, [name]: name === 'sessions_total' || name === 'session_start_offset' ? Number(value) : value }))
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -83,31 +75,31 @@ export default function EnrollPage() {
     if (!form.student_id) { setError('Pilih siswa.'); return }
     if (!form.package_id) { setError('Pilih paket.'); return }
     if (!form.start_date) { setError('Pilih tanggal mulai.'); return }
-
+    if (form.session_start_offset > form.sessions_total) {
+      setError('Mulai dari sesi ke- tidak boleh melebihi total sesi.'); return
+    }
     if (enrolled.includes(form.student_id)) {
-      setError('Siswa ini sudah terdaftar di kelas ini.')
-      return
+      setError('Siswa ini sudah terdaftar di kelas ini.'); return
     }
 
     setLoading(true); setError(''); setSuccess('')
 
-    const pkg = packages.find(p => p.id === form.package_id)
-
     const { error: err } = await supabase.from('enrollments').insert({
-      student_id:     form.student_id,
-      class_group_id: kelasId,
-      package_id:     form.package_id,
-      sessions_total: pkg?.total_sessions ?? 8,
-      sessions_used:  0,
-      start_date:     form.start_date,
-      status:         'active',
+      student_id:           form.student_id,
+      class_group_id:       kelasId,
+      package_id:           form.package_id,
+      sessions_total:       form.sessions_total,
+      sessions_used:        0,
+      session_start_offset: form.session_start_offset,
+      start_date:           form.start_date,
+      status:               'active',
     })
 
     if (err) { setError(err.message); setLoading(false); return }
 
     setSuccess('Siswa berhasil didaftarkan!')
     setEnrolled(prev => [...prev, form.student_id])
-    setForm(prev => ({ ...prev, student_id: '', package_id: '' }))
+    setForm(prev => ({ ...prev, student_id: '', package_id: '', start_date: '', sessions_total: 8, session_start_offset: 1 }))
     setLoading(false)
     router.refresh()
   }
@@ -118,18 +110,13 @@ export default function EnrollPage() {
 
   const availableStudents = students.filter(s => !enrolled.includes(s.id))
   const slotsLeft = kelas ? kelas.max_participants - (kelas.enrollments?.length ?? 0) : 0
-
   const inputClass = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
 
   return (
     <div className="max-w-xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/kelas" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
-          ← Kembali ke Kelas
-        </Link>
-        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>
-          Daftarkan Siswa
-        </h1>
+        <Link href="/admin/kelas" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">← Kembali ke Kelas</Link>
+        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Daftarkan Siswa</h1>
       </div>
 
       {/* Info kelas */}
@@ -156,6 +143,7 @@ export default function EnrollPage() {
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
 
+            {/* Siswa */}
             <div>
               <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                 Siswa <span className="text-red-500">*</span>
@@ -171,6 +159,7 @@ export default function EnrollPage() {
               )}
             </div>
 
+            {/* Paket */}
             <div>
               <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                 Paket Belajar <span className="text-red-500">*</span>
@@ -185,24 +174,60 @@ export default function EnrollPage() {
               </select>
             </div>
 
+            {/* Tanggal Mulai */}
             <div>
               <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                 Tanggal Mulai <span className="text-red-500">*</span>
               </label>
-              <input type="date" name="start_date" value={form.start_date} onChange={handleChange}
-                className={inputClass}/>
+              <input type="date" name="start_date" value={form.start_date} onChange={handleChange} className={inputClass}/>
+            </div>
+
+            {/* Pengaturan Paket — separator */}
+            <div className="border-t border-[#E5E3FF] pt-4">
+              <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-4">Pengaturan Sesi</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Total Sesi */}
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                    Total Sesi
+                  </label>
+                  <input type="number" name="sessions_total" min={1} max={100}
+                    value={form.sessions_total} onChange={handleChange} className={inputClass}/>
+                  <p className="text-xs text-[#7B78A8] mt-1">Otomatis dari paket, bisa diedit</p>
+                </div>
+
+                {/* Mulai dari sesi ke- */}
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                    Mulai dari Sesi ke-
+                  </label>
+                  <input type="number" name="session_start_offset" min={1} max={form.sessions_total}
+                    value={form.session_start_offset} onChange={handleChange} className={inputClass}/>
+                  <p className="text-xs text-[#7B78A8] mt-1">
+                    {form.session_start_offset === 1
+                      ? 'Paket baru mulai dari awal'
+                      : `Sesi pertama tampil sebagai sesi ke-${form.session_start_offset}/${form.sessions_total}`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Info box jika bukan dari awal */}
+              {form.session_start_offset > 1 && (
+                <div className="mt-3 px-4 py-3 bg-[#EEEDFE] border border-[#C4BFFF] rounded-xl">
+                  <p className="text-xs font-semibold text-[#3C3489]">
+                    💡 Lanjutan paket — {form.sessions_total - form.session_start_offset + 1} sesi tersisa akan dijadwalkan.
+                    Sesi pertama di sistem akan tampil sebagai sesi ke-{form.session_start_offset} dari {form.sessions_total}.
+                  </p>
+                </div>
+              )}
             </div>
 
             {error && (
-              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">
-                {error}
-              </div>
+              <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{error}</div>
             )}
-
             {success && (
-              <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-semibold">
-                ✅ {success}
-              </div>
+              <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-semibold">✅ {success}</div>
             )}
 
             <div className="flex gap-3 pt-2">
@@ -215,6 +240,7 @@ export default function EnrollPage() {
                 Selesai
               </Link>
             </div>
+
           </form>
         </div>
       )}
