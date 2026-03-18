@@ -463,6 +463,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
           </div>
 
           <div className="kelas-card privat kelas-card-privat-c reveal">
+            <div className="kelas-badge">🔥 Pilihan Terbaik</div>
             <div className="kelas-icon">🧑‍💻</div>
             <div className="kelas-name">Privat 1-on-1</div>
             <div className="kelas-capacity">👤 1 Orang</div>

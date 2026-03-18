@@ -213,14 +213,22 @@ nav{display:flex;align-items:center;height:62px;padding:0 10px 0 16px;gap:2px;ba
 .kelas-features li{font-size:.85rem;color:var(--text-2);display:flex;align-items:center;gap:8px}
 .kelas-features li::before{content:'✓';color:var(--purple);font-weight:800;flex-shrink:0}
 .kelas-card.privat .kelas-features li::before{color:var(--yellow-dark)}
-/* Warna kartu kelas — light mode */
-.kelas-card-reguler  { background: linear-gradient(145deg,#EEF2FF,#E0E7FF); }
-.kelas-card-semi     { background: linear-gradient(145deg,#F3F0FF,#EDE9FE); }
-.kelas-card-privat-c { background: linear-gradient(145deg,#FFFBEB,#FEF3C7); }
-/* Dark mode */
-[data-theme="dark"] .kelas-card-reguler  { background: linear-gradient(145deg,#1e1b4b,#2e1d6e); }
-[data-theme="dark"] .kelas-card-semi     { background: linear-gradient(145deg,#2d1b69,#3b1f8c); }
-[data-theme="dark"] .kelas-card-privat-c { background: linear-gradient(145deg,#1c1400,#2d2000); }
+/* Warna kartu kelas */
+.kelas-card-reguler  { background: var(--card); }
+.kelas-card-semi     { background: var(--card); }
+.kelas-card-privat-c { background: var(--card); }
+/* light theme pada kartu */
+[data-theme="light"] .kelas-card-reguler  { background: linear-gradient(145deg,#EEF2FF,#E0E7FF); }
+[data-theme="light"] .kelas-card-semi     { background: linear-gradient(145deg,#EDE9FE,#DDD6FE); }
+[data-theme="light"] .kelas-card-privat-c { background: linear-gradient(145deg,#FEF3C7,#FDE68A); }
+/* dark theme pada kartu */
+[data-theme="dark"] .kelas-card-reguler   { background: linear-gradient(145deg,#1e1b4b,#1e1a3a); }
+[data-theme="dark"] .kelas-card-semi      { background: linear-gradient(145deg,#2e1065,#3b0764); }
+[data-theme="dark"] .kelas-card-privat-c  { background: linear-gradient(145deg,#1c1400,#292004); }
+/* rule baru untuk center alignment kartu */
+.kelas-card { text-align: center; }
+.kelas-features { align-items: center; }
+.kelas-badge { align-self: center; }
 /* batas edit di sini */
 .btn-kelas-wa{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:50px;font-weight:800;font-size:.87rem;transition:all .25s;text-decoration:none;cursor:pointer;border:none;font-family:'Plus Jakarta Sans',sans-serif}
 .btn-kelas-outline{border:2px solid var(--wa-green)!important;background:transparent;color:var(--wa-green)}
