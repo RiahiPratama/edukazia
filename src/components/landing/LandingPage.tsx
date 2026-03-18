@@ -430,10 +430,10 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         <div className="s-head-center reveal">
           <div className="s-eyebrow">🎓 Jenis Kelas</div>
           <h2 className="s-title">Pilih Format Belajar yang Tepat</h2>
-          <p className="s-sub" style={{ margin: '0 auto' }}>Tiga jenis kelas sesuai kebutuhan. Hubungi admin untuk informasi harga tiap program.</p>
+          <p className="s-sub" style={{ margin: '0 auto', textAlign: 'center' }}>Tiga jenis kelas sesuai kebutuhan. Hubungi admin untuk informasi harga tiap program.</p>
         </div>
         <div className="kelas-grid">
-          <div className="kelas-card reveal" style={{ background: 'linear-gradient(145deg,#EEF2FF,#E0E7FF)' }}>
+          <div className="kelas-card kelas-card-reguler reveal">
             <div className="kelas-icon">👥</div>
             <div className="kelas-name">Kelas Reguler</div>
             <div className="kelas-capacity">👤 Maks. 8 Orang</div>
@@ -447,7 +447,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </a>
           </div>
 
-          <div className="kelas-card featured reveal" style={{ background: 'linear-gradient(145deg,#F3F0FF,#EDE9FE)' }}>
+          <div className="kelas-card featured kelas-card-semi reveal">
             <div className="kelas-badge">🔥 Paling Populer</div>
             <div className="kelas-icon" style={{ marginTop: '14px' }}>👫</div>
             <div className="kelas-name">Semi Privat</div>
@@ -462,7 +462,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </a>
           </div>
 
-          <div className="kelas-card privat reveal" style={{ background: 'linear-gradient(145deg,#FFFBEB,#FEF3C7)' }}>
+          <div className="kelas-card privat kelas-card-privat-c reveal">
             <div className="kelas-icon">🧑‍💻</div>
             <div className="kelas-name">Privat 1-on-1</div>
             <div className="kelas-capacity">👤 1 Orang</div>
