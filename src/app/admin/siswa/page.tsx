@@ -55,14 +55,38 @@ export default function SiswaPage() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error } = await supabase
+      // Step 1: fetch students
+      const { data: students, error: studentsErr } = await supabase
         .from('students')
-        .select('id, profile_id, created_at, profiles:profile_id(id, full_name, email, phone, avatar_url)')
+        .select('id, profile_id, created_at')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setSiswaList((data as unknown as Siswa[]) ?? [])
-      setFiltered((data as unknown as Siswa[]) ?? [])
+      if (studentsErr) throw studentsErr
+      if (!students || students.length === 0) {
+        setSiswaList([])
+        setFiltered([])
+        setLoading(false)
+        return
+      }
+
+      // Step 2: fetch profiles for those profile_ids
+      const profileIds = students.map((s: any) => s.profile_id).filter(Boolean)
+      const { data: profiles, error: profilesErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, phone, avatar_url')
+        .in('id', profileIds)
+
+      if (profilesErr) throw profilesErr
+
+      // Step 3: merge manually
+      const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]))
+      const merged: Siswa[] = students.map((s: any) => ({
+        ...s,
+        profiles: profileMap[s.profile_id] ?? null,
+      }))
+
+      setSiswaList(merged)
+      setFiltered(merged)
     } catch (err: any) {
       setError(err.message ?? 'Gagal memuat data siswa')
     } finally {
