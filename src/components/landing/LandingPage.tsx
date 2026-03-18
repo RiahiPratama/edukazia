@@ -499,7 +499,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </div>
           ))}
         </div>
-      </ >
+      </section>
 
       {/* TESTIMONIALS */}
       < section id="testi" >
@@ -530,7 +530,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </div>
           ))}
         </div>
-      </ >
+      </section>
 
       {/* TENTANG */}
       < section id="tentang" style={{ background: 'var(--bg3)' }
@@ -554,7 +554,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </div>
           ))}
         </div>
-      </ >
+      </section>
 
       {/* FAQ */}
       < section id="faq" >
