@@ -20,13 +20,13 @@ interface Siswa {
 
 export default function SiswaPage() {
   const [siswaList, setSiswaList] = useState<Siswa[]>([])
-  const [filtered,  setFiltered]  = useState<Siswa[]>([])
-  const [search,    setSearch]    = useState('')
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState<string | null>(null)
-  const [page,      setPage]      = useState(1)
-  const [deleteId,  setDeleteId]  = useState<string | null>(null)
-  const [deleting,  setDeleting]  = useState(false)
+  const [filtered, setFiltered] = useState<Siswa[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const PER_PAGE = 10
 
@@ -64,7 +64,11 @@ export default function SiswaPage() {
 
       const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]))
       const merged: Siswa[] = students.map((s: any) => ({ ...s, profiles: profileMap[s.profile_id] ?? null }))
-      setSiswaList(merged); setFiltered(merged)
+      const sorted = merged.sort((a, b) =>
+        (a.profiles?.full_name ?? '').localeCompare(b.profiles?.full_name ?? '', 'id')
+      )
+      setSiswaList(sorted)
+      setFiltered(sorted)
     } catch (err: any) {
       setError(err.message ?? 'Gagal memuat data siswa')
     } finally {
@@ -84,7 +88,7 @@ export default function SiswaPage() {
   }
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
-  const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -96,13 +100,13 @@ export default function SiswaPage() {
         <Link href="/admin/siswa/baru"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
           style={{ backgroundColor: '#5C4FE5' }}>
-          <Plus size={16}/> Tambah Siswa
+          <Plus size={16} /> Tambah Siswa
         </Link>
       </div>
 
       {/* Search — fix: tambah color text */}
       <div className="relative mb-5">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8]"/>
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8]" />
         <input
           type="text"
           placeholder="Cari nama, email, atau no. telepon..."
@@ -133,19 +137,19 @@ export default function SiswaPage() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  <td className="px-5 py-4"><div className="h-4 w-4 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gray-200"/><div className="h-4 w-32 bg-gray-200 rounded"/></div></td>
-                  <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 w-40 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 w-28 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4 hidden xl:table-cell"><div className="h-4 w-24 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4"><div className="h-4 w-16 bg-gray-200 rounded ml-auto"/></td>
+                  <td className="px-5 py-4"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
+                  <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gray-200" /><div className="h-4 w-32 bg-gray-200 rounded" /></div></td>
+                  <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 w-40 bg-gray-200 rounded" /></td>
+                  <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
+                  <td className="px-5 py-4 hidden xl:table-cell"><div className="h-4 w-24 bg-gray-200 rounded" /></td>
+                  <td className="px-5 py-4"><div className="h-4 w-16 bg-gray-200 rounded ml-auto" /></td>
                 </tr>
               ))
             ) : paginated.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-5 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-[#7B78A8]">
-                    <GraduationCap size={40} strokeWidth={1.5}/>
+                    <GraduationCap size={40} strokeWidth={1.5} />
                     <p className="font-medium">{search ? 'Siswa tidak ditemukan' : 'Belum ada siswa terdaftar'}</p>
                     {!search && (
                       <Link href="/admin/siswa/baru" className="text-sm font-semibold mt-1 hover:underline" style={{ color: '#5C4FE5' }}>
@@ -157,19 +161,19 @@ export default function SiswaPage() {
               </tr>
             ) : (
               paginated.map((siswa, idx) => {
-                const nama    = siswa.profiles?.full_name ?? '—'
-                const email   = siswa.profiles?.email ?? '—'
-                const phone   = siswa.profiles?.phone ?? '—'
+                const nama = siswa.profiles?.full_name ?? '—'
+                const email = siswa.profiles?.email ?? '—'
+                const phone = siswa.profiles?.phone ?? '—'
                 const tanggal = siswa.created_at
                   ? new Date(siswa.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
                   : '—'
                 return (
                   <tr key={siswa.id} className="bg-white hover:bg-[#F7F6FF] transition-colors">
-                    <td className="px-5 py-4 text-[#7B78A8] text-xs font-medium">{(page-1)*PER_PAGE+idx+1}</td>
+                    <td className="px-5 py-4 text-[#7B78A8] text-xs font-medium">{(page - 1) * PER_PAGE + idx + 1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         {siswa.profiles?.avatar_url ? (
-                          <img src={siswa.profiles.avatar_url} alt={nama} className="w-9 h-9 rounded-full object-cover flex-shrink-0"/>
+                          <img src={siswa.profiles.avatar_url} alt={nama} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
                         ) : (
                           <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ backgroundColor: '#5C4FE5' }}>
                             {getInitials(nama)}
@@ -180,13 +184,13 @@ export default function SiswaPage() {
                     </td>
                     <td className="px-5 py-4 hidden md:table-cell">
                       <div className="flex items-center gap-1.5 text-[#7B78A8]">
-                        <Mail size={13} className="flex-shrink-0"/>
+                        <Mail size={13} className="flex-shrink-0" />
                         <span className="truncate max-w-[200px]">{email}</span>
                       </div>
                     </td>
                     <td className="px-5 py-4 hidden lg:table-cell">
                       <div className="flex items-center gap-1.5 text-[#7B78A8]">
-                        <Phone size={13} className="flex-shrink-0"/>
+                        <Phone size={13} className="flex-shrink-0" />
                         <span>{phone}</span>
                       </div>
                     </td>
@@ -197,11 +201,11 @@ export default function SiswaPage() {
                       <div className="flex items-center justify-end gap-2">
                         <Link href={`/admin/siswa/${siswa.id}/edit`}
                           className="p-1.5 rounded-lg text-[#7B78A8] hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition-colors" title="Edit">
-                          <Pencil size={15}/>
+                          <Pencil size={15} />
                         </Link>
                         <button onClick={() => setDeleteId(siswa.id)}
                           className="p-1.5 rounded-lg text-[#7B78A8] hover:text-red-500 hover:bg-red-50 transition-colors" title="Hapus">
-                          <Trash2 size={15}/>
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -216,28 +220,28 @@ export default function SiswaPage() {
           <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: '#E5E3FF', backgroundColor: '#F7F6FF' }}>
             <span className="text-xs text-[#7B78A8]">Halaman {page} dari {totalPages}</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page===1}
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                 className="p-1.5 rounded-lg disabled:opacity-40 hover:bg-white transition-colors border" style={{ borderColor: '#E5E3FF' }}>
-                <ChevronLeft size={15}/>
+                <ChevronLeft size={15} />
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i+1)
-                .filter(p => p===1 || p===totalPages || Math.abs(p-page)<=1)
-                .reduce<(number|'...')[]>((acc, p, i, arr) => {
-                  if (i>0 && (p as number)-(arr[i-1] as number)>1) acc.push('...')
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .reduce<(number | '...')[]>((acc, p, i, arr) => {
+                  if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push('...')
                   acc.push(p); return acc
                 }, [])
-                .map((p, i) => p==='...' ? (
+                .map((p, i) => p === '...' ? (
                   <span key={`dots-${i}`} className="px-2 text-[#7B78A8] text-xs">…</span>
                 ) : (
                   <button key={p} onClick={() => setPage(p as number)}
                     className="w-8 h-8 rounded-lg text-xs font-medium transition-colors"
-                    style={{ backgroundColor: page===p?'#5C4FE5':'white', color: page===p?'white':'#374151', border: `1px solid ${page===p?'#5C4FE5':'#E5E3FF'}` }}>
+                    style={{ backgroundColor: page === p ? '#5C4FE5' : 'white', color: page === p ? 'white' : '#374151', border: `1px solid ${page === p ? '#5C4FE5' : '#E5E3FF'}` }}>
                     {p}
                   </button>
                 ))}
-              <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page===totalPages}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
                 className="p-1.5 rounded-lg disabled:opacity-40 hover:bg-white transition-colors border" style={{ borderColor: '#E5E3FF' }}>
-                <ChevronRight size={15}/>
+                <ChevronRight size={15} />
               </button>
             </div>
           </div>
@@ -248,7 +252,7 @@ export default function SiswaPage() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <Trash2 size={22} className="text-red-500"/>
+              <Trash2 size={22} className="text-red-500" />
             </div>
             <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Siswa?</h3>
             <p className="text-sm text-[#7B78A8] mb-6">Data siswa akan dihapus permanen dan tidak dapat dikembalikan.</p>
