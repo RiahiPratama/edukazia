@@ -187,7 +187,10 @@ export default function JadwalPage() {
 
     const merged: SiswaItem[] = enrollments.map((e: any) => {
       const offset     = e.session_start_offset ?? 1
-      const sessionNum = sessionOrder + (offset - 1)
+      // offset=0: sesi ke-1→0/8, sesi ke-2→1/8 (siswa baru, ada perkenalan bonus)
+      // offset=1: sesi ke-1→1/8, sesi ke-2→2/8 (normal)
+      // offset=N: sesi ke-1→N/8 (lanjutan paket)
+      const sessionNum = (sessionOrder - 1) + offset
       return { id: e.student_id, name: nameMap[e.student_id] ?? 'Siswa', sessionsTotal: e.sessions_total ?? 8, sessionStartOffset: offset, sessionNumber: sessionNum }
     })
 
