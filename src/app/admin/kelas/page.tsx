@@ -19,8 +19,8 @@ export default async function KelasPage() {
     active: 'Aktif', inactive: 'Nonaktif', completed: 'Selesai'
   }
   const statusColor: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    inactive: 'bg-gray-100 text-gray-500',
+    active:    'bg-green-100 text-green-700',
+    inactive:  'bg-gray-100 text-gray-500',
     completed: 'bg-blue-100 text-blue-700',
   }
 
@@ -68,10 +68,10 @@ export default async function KelasPage() {
                   👨‍🏫 {(k.tutors as any)?.profiles?.full_name ?? '—'}
                 </div>
 
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <div className="text-xs text-[#7B78A8]">Peserta</div>
                   <div className={`text-sm font-bold ${isFull ? 'text-red-600' : 'text-green-600'}`}>
-                    {activeEnroll}/{k.max_participants} {isFull ? '(Penuh)' : ''}
+                    {activeEnroll}/{k.max_participants}
                   </div>
                 </div>
 
@@ -82,13 +82,12 @@ export default async function KelasPage() {
                   />
                 </div>
 
+                {/* Tombol — hanya Edit Kelas & Detail */}
                 <div className="flex gap-2">
-                  {!isFull && k.status === 'active' && (
-                    <Link href={`/admin/kelas/${k.id}/enroll`}
-                      className="flex-1 text-center py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition-colors">
-                      + Daftarkan Siswa
-                    </Link>
-                  )}
+                  <Link href={`/admin/kelas/${k.id}/edit`}
+                    className="flex-1 text-center py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition-colors">
+                    Edit Kelas
+                  </Link>
                   <Link href={`/admin/kelas/${k.id}`}
                     className="flex-1 text-center py-2 border border-[#E5E3FF] text-[#4A4580] text-xs font-bold rounded-lg hover:bg-[#F0EFFF] transition-colors">
                     Detail
