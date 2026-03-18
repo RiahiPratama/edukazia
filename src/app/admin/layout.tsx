@@ -75,8 +75,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold mb-0.5 transition-all ${isActive(item.href)
-                    ? 'bg-[#5C4FE5] text-white shadow-sm'
-                    : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
+                  ? 'bg-[#5C4FE5] text-white shadow-sm'
+                  : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
                   }`}
               >
                 <span className="text-base">{item.icon}</span>
@@ -98,10 +98,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   )
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F7F6FF' }}>
+    <div className="flex bg-[#F7F6FF]" style={{ height: '100vh', overflow: 'hidden' }}>
 
       {/* Sidebar Desktop */}
-      <div style={{ width: '256px', flexShrink: 0, height: '100vh', background: 'white', borderRight: '1px solid #E5E3FF', display: 'flex', flexDirection: 'column', overflowY: 'auto' }} className="hidden lg:flex">
+      <div style=<div className="hidden lg:flex w-64 flex-shrink-0 flex-col bg-white border-r border-[#E5E3FF]" style={{ height: '100vh', overflowY: 'auto' }}>
         <SidebarContent />
       </div>
 
