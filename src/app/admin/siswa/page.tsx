@@ -124,7 +124,6 @@ export default function SiswaPage() {
           style={{
             borderColor: '#E5E3FF',
             backgroundColor: '#F7F6FF',
-            focusRingColor: '#5C4FE5',
           }}
         />
       </div>
