@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus } from 'lucide-react'
 
 type Session = {
   id: string
@@ -21,14 +21,22 @@ type ClassGroup = {
   course_id: string
 }
 
+type JadwalRow = {
+  date: string
+  time: string
+  repeat: number
+}
+
 const STATUS_MAP: Record<string, { label: string; pill: string }> = {
-  scheduled:  { label: 'Terjadwal', pill: 'bg-[#EEEDFE] text-[#3C3489]' },
-  completed:  { label: 'Selesai',   pill: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  cancelled:  { label: 'Dibatalkan',pill: 'bg-[#FEE9E9] text-[#991B1B]' },
-  rescheduled:{ label: 'Dijadwal Ulang', pill: 'bg-[#FEF3E2] text-[#92400E]' },
+  scheduled:   { label: 'Terjadwal',        pill: 'bg-[#EEEDFE] text-[#3C3489]' },
+  completed:   { label: 'Selesai',           pill: 'bg-[#E6F4EC] text-[#1A5C36]' },
+  cancelled:   { label: 'Dibatalkan',        pill: 'bg-[#FEE9E9] text-[#991B1B]' },
+  rescheduled: { label: 'Dijadwal Ulang',    pill: 'bg-[#FEF3E2] text-[#92400E]' },
 }
 
 const COURSE_COLORS = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED']
+const MAX_ROWS = 5
+const MAX_REPEAT = 16
 
 function getWeekDates(base: Date) {
   const day = base.getDay()
@@ -41,53 +49,68 @@ function getWeekDates(base: Date) {
   })
 }
 
-function fmtDate(d: Date) {
-  return d.toISOString().split('T')[0]
-}
-
+function fmtDate(d: Date) { return d.toISOString().split('T')[0] }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
-
 function fmtDayLabel(d: Date) {
   return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 const DAY_NAMES = ['Sen','Sel','Rab','Kam','Jum','Sab','Min']
 
+function generateSessions(row: JadwalRow): string[] {
+  const dates: string[] = []
+  const base = new Date(`${row.date}T${row.time}:00`)
+  for (let i = 0; i < row.repeat; i++) {
+    const d = new Date(base)
+    d.setDate(base.getDate() + i * 7)
+    dates.push(d.toISOString())
+  }
+  return dates
+}
+
+function countTotalSesi(rows: JadwalRow[]) {
+  return rows.reduce((acc, r) => acc + r.repeat, 0)
+}
+
 export default function JadwalPage() {
   const supabase = createClient()
 
-  const [sessions, setSessions]       = useState<Session[]>([])
-  const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
-  const [weekBase, setWeekBase]       = useState(new Date())
+  const [sessions, setSessions]         = useState<Session[]>([])
+  const [classGroups, setClassGroups]   = useState<ClassGroup[]>([])
+  const [weekBase, setWeekBase]         = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
-  const [loading, setLoading]         = useState(true)
+  const [loading, setLoading]           = useState(true)
 
   // Modal state
-  const [showModal, setShowModal]   = useState(false)
+  const [showModal, setShowModal]     = useState(false)
   const [editSession, setEditSession] = useState<Session | null>(null)
-  const [delConfirm, setDelConfirm] = useState<string | null>(null)
-  const [saving, setSaving]         = useState(false)
-  const [formError, setFormError]   = useState('')
+  const [delConfirm, setDelConfirm]   = useState<string | null>(null)
+  const [saving, setSaving]           = useState(false)
+  const [formError, setFormError]     = useState('')
 
-  // Form
+  // Form — single edit
   const [fClassGroup, setFClassGroup] = useState('')
-  const [fDate, setFDate]             = useState(fmtDate(new Date()))
-  const [fTime, setFTime]             = useState('08:00')
   const [fStatus, setFStatus]         = useState('scheduled')
   const [fZoom, setFZoom]             = useState('')
+  const [fDate, setFDate]             = useState(fmtDate(new Date()))
+  const [fTime, setFTime]             = useState('08:00')
+
+  // Multi-jadwal rows (only for add mode)
+  const [jadwalRows, setJadwalRows] = useState<JadwalRow[]>([
+    { date: fmtDate(new Date()), time: '08:00', repeat: 1 }
+  ])
 
   const weekDates = getWeekDates(weekBase)
+  const isEditMode = !!editSession
+  const totalSesi  = countTotalSesi(jadwalRows)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
-
-    // Fetch sessions for current month range (wider range)
     const start = new Date(weekBase)
-    start.setDate(1)
     start.setMonth(start.getMonth() - 1)
     const end = new Date(weekBase)
     end.setMonth(end.getMonth() + 2)
@@ -99,15 +122,10 @@ export default function JadwalPage() {
       .lte('scheduled_at', end.toISOString())
       .order('scheduled_at', { ascending: true })
 
-    // Fetch class groups
-    const { data: cg } = await supabase
-      .from('class_groups')
-      .select('id, label, tutor_id, course_id')
-
+    const { data: cg } = await supabase.from('class_groups').select('id, label, tutor_id, course_id')
     const cgList = (cg ?? []) as ClassGroup[]
     setClassGroups(cgList)
 
-    // Fetch tutor names
     const tutorIds = [...new Set(cgList.map(c => c.tutor_id).filter(Boolean))]
     let tutorMap: Record<string, string> = {}
     if (tutorIds.length > 0) {
@@ -120,20 +138,15 @@ export default function JadwalPage() {
       }
     }
 
-    // Fetch course names
     const courseIds = [...new Set(cgList.map(c => c.course_id).filter(Boolean))]
     let courseMap: Record<string, string> = {}
+    const courseColorMap: Record<string, string> = {}
     if (courseIds.length > 0) {
       const { data: courses } = await supabase.from('courses').select('id, name').in('id', courseIds)
       courseMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.name]))
+      courseIds.forEach((id, i) => { courseColorMap[id] = COURSE_COLORS[i % COURSE_COLORS.length] })
     }
 
-    // Assign colors per course
-    const courseColorMap: Record<string, string> = {}
-    let ci = 0
-    for (const id of courseIds) { courseColorMap[id] = COURSE_COLORS[ci++ % COURSE_COLORS.length] }
-
-    // Merge
     const cgMap = Object.fromEntries(cgList.map(c => [c.id, {
       label: c.label,
       tutor_name: tutorMap[c.tutor_id] ?? '—',
@@ -141,30 +154,44 @@ export default function JadwalPage() {
       color: courseColorMap[c.course_id] ?? '#5C4FE5',
     }]))
 
-    const merged = (sess ?? []).map((s: any) => ({ ...s, class_group: cgMap[s.class_group_id] }))
-    setSessions(merged)
+    setSessions((sess ?? []).map((s: any) => ({ ...s, class_group: cgMap[s.class_group_id] })))
     setLoading(false)
   }
 
-  // Sessions per date
   const sessionsOnDate = (date: string) =>
     sessions.filter(s => fmtDate(new Date(s.scheduled_at)) === date)
 
   const selectedSessions = sessionsOnDate(selectedDate)
 
-  // Open add modal
+  // ── Row helpers ──
+  function addRow() {
+    if (jadwalRows.length >= MAX_ROWS) return
+    const last = jadwalRows[jadwalRows.length - 1]
+    // suggest next day +7 from last
+    const nextDate = new Date(`${last.date}T00:00:00`)
+    nextDate.setDate(nextDate.getDate() + 7)
+    setJadwalRows(prev => [...prev, { date: fmtDate(nextDate), time: last.time, repeat: 1 }])
+  }
+
+  function removeRow(idx: number) {
+    setJadwalRows(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function updateRow(idx: number, field: keyof JadwalRow, value: string | number) {
+    setJadwalRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+  }
+
+  // ── Open modals ──
   function openAdd() {
     setEditSession(null)
     setFClassGroup(classGroups[0]?.id ?? '')
-    setFDate(selectedDate)
-    setFTime('08:00')
     setFStatus('scheduled')
     setFZoom('')
+    setJadwalRows([{ date: selectedDate, time: '08:00', repeat: 1 }])
     setFormError('')
     setShowModal(true)
   }
 
-  // Open edit modal
   function openEdit(s: Session) {
     setEditSession(s)
     setFClassGroup(s.class_group_id)
@@ -177,24 +204,38 @@ export default function JadwalPage() {
     setShowModal(true)
   }
 
+  // ── Save ──
   async function handleSave() {
     if (!fClassGroup) { setFormError('Pilih kelas terlebih dahulu.'); return }
-    setSaving(true)
-    setFormError('')
+    setSaving(true); setFormError('')
 
-    const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
-    const payload = {
-      class_group_id: fClassGroup,
-      scheduled_at,
-      status: fStatus,
-      zoom_link: fZoom || null,
-    }
-
-    if (editSession) {
-      const { error } = await supabase.from('sessions').update(payload).eq('id', editSession.id)
+    if (isEditMode && editSession) {
+      // Single update
+      const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
+      const { error } = await supabase.from('sessions').update({
+        class_group_id: fClassGroup,
+        scheduled_at,
+        status: fStatus,
+        zoom_link: fZoom || null,
+      }).eq('id', editSession.id)
       if (error) { setFormError(error.message); setSaving(false); return }
     } else {
-      const { error } = await supabase.from('sessions').insert(payload)
+      // Multi-insert: generate all sessions from all rows
+      const allSessions: any[] = []
+      for (const row of jadwalRows) {
+        if (!row.date || !row.time) continue
+        const isoTimes = generateSessions(row)
+        for (const scheduled_at of isoTimes) {
+          allSessions.push({
+            class_group_id: fClassGroup,
+            scheduled_at,
+            status: fStatus,
+            zoom_link: fZoom || null,
+          })
+        }
+      }
+      if (allSessions.length === 0) { setFormError('Isi minimal satu jadwal.'); setSaving(false); return }
+      const { error } = await supabase.from('sessions').insert(allSessions)
       if (error) { setFormError(error.message); setSaving(false); return }
     }
 
@@ -218,7 +259,7 @@ export default function JadwalPage() {
 
   return (
     <div className="max-w-3xl">
-      {/* Page header */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora, sans-serif' }}>Jadwal</h1>
@@ -232,63 +273,48 @@ export default function JadwalPage() {
 
       {/* Week card */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-4">
-        {/* Week navigation */}
         <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() - 7); setWeekBase(d) }}
-            className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"
-          >
+          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() - 7); setWeekBase(d) }}
+            className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition">
             <ChevronLeft size={18} />
           </button>
           <span className="text-sm font-semibold text-[#1A1640]">
             {weekDates[0].toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })} –{' '}
             {weekDates[6].toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
           </span>
-          <button
-            onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() + 7); setWeekBase(d) }}
-            className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"
-          >
+          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() + 7); setWeekBase(d) }}
+            className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition">
             <ChevronRight size={18} />
           </button>
         </div>
 
-        {/* 7-day strip */}
         <div className="grid grid-cols-7 gap-2">
           {weekDates.map((d, i) => {
-            const key  = fmtDate(d)
+            const key = fmtDate(d)
             const isToday    = key === fmtDate(new Date())
             const isSelected = key === selectedDate
-            const hasSesi    = sessionsOnDate(key).length > 0
             const count      = sessionsOnDate(key).length
-
             return (
-              <button
-                key={key}
-                onClick={() => setSelectedDate(key)}
+              <button key={key} onClick={() => setSelectedDate(key)}
                 className={[
                   'flex flex-col items-center py-2.5 px-1 rounded-xl border transition-all',
-                  isSelected
-                    ? 'bg-[#5C4FE5] border-[#5C4FE5]'
-                    : isToday
-                    ? 'bg-[#F0EEFF] border-[#C4BFFF]'
-                    : 'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]',
-                ].join(' ')}
-              >
+                  isSelected ? 'bg-[#5C4FE5] border-[#5C4FE5]'
+                  : isToday  ? 'bg-[#F0EEFF] border-[#C4BFFF]'
+                  : 'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]',
+                ].join(' ')}>
                 <span className={`text-[10px] font-semibold mb-1 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>
                   {DAY_NAMES[i]}
                 </span>
                 <span className={`text-sm font-bold ${isSelected ? 'text-white' : isToday ? 'text-[#5C4FE5]' : 'text-[#1A1640]'}`}>
                   {d.getDate()}
                 </span>
-                {hasSesi ? (
+                {count > 0 ? (
                   <div className="flex gap-0.5 mt-1.5">
                     {Array.from({ length: Math.min(count, 3) }).map((_, j) => (
                       <div key={j} className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-[#5C4FE5]'}`} />
                     ))}
                   </div>
-                ) : (
-                  <div className="h-3.5 mt-1" />
-                )}
+                ) : <div className="h-3.5 mt-1" />}
               </button>
             )
           })}
@@ -297,7 +323,6 @@ export default function JadwalPage() {
 
       {/* Session list */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-        {/* List header */}
         <div className="px-5 py-3.5 border-b border-[#E5E3FF] bg-[#F7F6FF]">
           <span className="text-xs font-bold uppercase tracking-wider text-[#7B78A8]">
             {fmtDayLabel(new Date(selectedDate + 'T00:00:00'))}
@@ -315,77 +340,49 @@ export default function JadwalPage() {
             </button>
           </div>
         ) : (
-          <div>
-            {selectedSessions.map((s, idx) => {
-              const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
-              return (
-                <div key={s.id} className={`flex items-center gap-4 px-5 py-4 ${idx < selectedSessions.length - 1 ? 'border-b border-[#E5E3FF]' : ''} hover:bg-[#F7F6FF] transition-colors`}>
-                  {/* Time */}
-                  <div className="min-w-[44px] text-sm font-bold text-[#5C4FE5]">
-                    {fmtTime(s.scheduled_at)}
-                  </div>
-
-                  {/* Color dot */}
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.class_group?.color ?? '#5C4FE5' }} />
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-[#1A1640] truncate">
-                      {s.class_group?.label ?? '—'}
-                    </div>
-                    <div className="text-xs text-[#7B78A8] mt-0.5">
-                      {s.class_group?.tutor_name} · {s.class_group?.course_name}
-                    </div>
-                  </div>
-
-                  {/* Zoom link */}
-                  {s.zoom_link && (
-                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                      className="text-[#5C4FE5] hover:opacity-70 transition"
-                      title="Buka Zoom">
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
-
-                  {/* Status pill */}
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.pill}`}>
-                    {st.label}
-                  </span>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {s.status === 'scheduled' && (
-                      <button onClick={() => markComplete(s.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition"
-                        title="Tandai Selesai">
-                        <Check size={14} />
-                      </button>
-                    )}
-                    <button onClick={() => openEdit(s)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition"
-                      title="Edit">
-                      <Pencil size={14} />
-                    </button>
-                    <button onClick={() => setDelConfirm(s.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
-                      title="Hapus">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+          selectedSessions.map((s, idx) => {
+            const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
+            return (
+              <div key={s.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-[#F7F6FF] transition-colors ${idx < selectedSessions.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                <div className="min-w-[44px] text-sm font-bold text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.class_group?.color ?? '#5C4FE5' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-[#1A1640] truncate">{s.class_group?.label ?? '—'}</div>
+                  <div className="text-xs text-[#7B78A8] mt-0.5">{s.class_group?.tutor_name} · {s.class_group?.course_name}</div>
                 </div>
-              )
-            })}
-          </div>
+                {s.zoom_link && (
+                  <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" className="text-[#5C4FE5] hover:opacity-70 transition" title="Buka Zoom">
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.pill}`}>{st.label}</span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {s.status === 'scheduled' && (
+                    <button onClick={() => markComplete(s.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
+                      <Check size={14} />
+                    </button>
+                  )}
+                  <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Edit">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={() => setDelConfirm(s.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            )
+          })
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF] sticky top-0 bg-white z-10">
               <h2 className="text-base font-bold text-[#1A1640]">
-                {editSession ? 'Edit Sesi' : 'Tambah Sesi Baru'}
+                {isEditMode ? 'Edit Sesi' : 'Tambah Sesi Baru'}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8] transition">
                 <X size={16} />
@@ -400,23 +397,102 @@ export default function JadwalPage() {
                 </label>
                 <select value={fClassGroup} onChange={e => setFClassGroup(e.target.value)} className={inputCls}>
                   <option value="">-- Pilih Kelas --</option>
-                  {classGroups.map(c => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
+                  {classGroups.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
 
-              {/* Tanggal & Jam */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tanggal</label>
-                  <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls} />
+              {/* ── EDIT MODE: single date/time ── */}
+              {isEditMode && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tanggal</label>
+                    <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jam Mulai</label>
+                    <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls} />
+                  </div>
                 </div>
+              )}
+
+              {/* ── ADD MODE: multi-jadwal rows ── */}
+              {!isEditMode && (
                 <div>
-                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jam Mulai</label>
-                  <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls} />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jadwal</label>
+                    <span className="text-xs text-[#7B78A8]">{jadwalRows.length}/{MAX_ROWS} jadwal</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {jadwalRows.map((row, idx) => (
+                      <div key={idx} className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3">
+                        {/* Row header */}
+                        <div className="flex items-center justify-between mb-2.5">
+                          <span className="text-xs font-semibold text-[#5C4FE5]">Jadwal {idx + 1}</span>
+                          {jadwalRows.length > 1 && (
+                            <button onClick={() => removeRow(idx)} className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition">
+                              <Minus size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Date + Time */}
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tanggal</label>
+                            <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)}
+                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jam Mulai</label>
+                            <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)}
+                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
+                          </div>
+                        </div>
+
+                        {/* Repeat */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                            Ulangi setiap minggu
+                            <span className="normal-case font-normal ml-1 text-[#7B78A8]">(1 = sekali saja, maks {MAX_REPEAT})</span>
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input type="range" min={1} max={MAX_REPEAT} value={row.repeat}
+                              onChange={e => updateRow(idx, 'repeat', Number(e.target.value))}
+                              className="flex-1 accent-[#5C4FE5]" />
+                            <span className="text-sm font-bold text-[#5C4FE5] min-w-[60px] text-right">
+                              {row.repeat}x
+                              {row.repeat > 1 && (
+                                <span className="text-[10px] font-normal text-[#7B78A8] block">
+                                  ≈ {Math.ceil(row.repeat / 4)} bln
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add row button */}
+                  {jadwalRows.length < MAX_ROWS && (
+                    <button onClick={addRow}
+                      className="mt-3 w-full py-2.5 border-2 border-dashed border-[#C4BFFF] rounded-xl text-sm font-semibold text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex items-center justify-center gap-2">
+                      <Plus size={14} />
+                      Tambah Jadwal Lain
+                    </button>
+                  )}
+
+                  {/* Total preview */}
+                  <div className="mt-3 flex items-center justify-between px-4 py-2.5 bg-[#EEEDFE] rounded-xl">
+                    <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
+                    <span className="text-sm font-bold text-[#5C4FE5]">
+                      {totalSesi} sesi
+                      {totalSesi >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.ceil(totalSesi / 8)} periode)</span>}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Status */}
               <div>
@@ -434,7 +510,8 @@ export default function JadwalPage() {
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
                 </label>
-                <input type="url" placeholder="https://zoom.us/j/..." value={fZoom} onChange={e => setFZoom(e.target.value)} className={inputCls} />
+                <input type="url" placeholder="https://zoom.us/j/..." value={fZoom}
+                  onChange={e => setFZoom(e.target.value)} className={inputCls} />
               </div>
 
               {formError && (
@@ -444,10 +521,10 @@ export default function JadwalPage() {
               )}
             </div>
 
-            <div className="px-6 pb-5 flex gap-3">
+            <div className="px-6 pb-5 flex gap-3 sticky bottom-0 bg-white border-t border-[#E5E3FF] pt-4">
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                {saving ? 'Menyimpan...' : editSession ? 'Simpan Perubahan' : 'Tambah Sesi'}
+                {saving ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : `Tambah ${totalSesi} Sesi`}
               </button>
               <button onClick={() => setShowModal(false)}
                 className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
@@ -458,7 +535,7 @@ export default function JadwalPage() {
         </div>
       )}
 
-      {/* Delete Confirm Modal */}
+      {/* Delete Confirm */}
       {delConfirm && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
