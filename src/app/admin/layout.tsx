@@ -26,8 +26,6 @@ const navItems = [
   ]},
 ]
 
-const logoStyle = { fontFamily: 'Sora, sans-serif' }
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -44,31 +42,43 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return pathname.startsWith(href)
   }
 
-  function NavLinks({ onClose }: { onClose?: () => void }) {
+  function NavContent({ onClose }: { onClose?: () => void }) {
     return (
       <>
-        {navItems.map(group => (
-          <div key={group.group} className="mb-4">
-            <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-[#7B78A8]">
-              {group.group}
+        <nav className="flex-1 overflow-y-auto py-4 px-3">
+          {navItems.map(group => (
+            <div key={group.group} className="mb-4">
+              <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-[#7B78A8]">
+                {group.group}
+              </div>
+              {group.items.map(item => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onClose}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold mb-0.5 transition-all',
+                    isActive(item.href)
+                      ? 'bg-[#5C4FE5] text-white'
+                      : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
+                  ].join(' ')}
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              ))}
             </div>
-            {group.items.map(item => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold mb-0.5 transition-all ${
-                  isActive(item.href)
-                    ? 'bg-[#5C4FE5] text-white'
-                    : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
-                }`}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        ))}
+          ))}
+        </nav>
+        <div className="p-4 border-t border-[#E5E3FF]">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-[#4A4580] hover:bg-red-50 hover:text-red-600 transition-all"
+          >
+            <span>🚪</span>
+            <span>Keluar</span>
+          </button>
+        </div>
       </>
     )
   }
@@ -76,66 +86,71 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7F6FF]">
 
-      {/* Sidebar Desktop */}
-      <aside className="hidden lg:flex flex-col w-64 flex-shrink-0 h-screen bg-white border-r border-[#E5E3FF] overflow-y-auto">
-        <div className="h-16 flex items-center px-6 border-b border-[#E5E3FF] flex-shrink-0">
-          <Link href="/admin/dashboard" className="flex items-center gap-2">
-            <span className="font-black text-xl" style={logoStyle}>
-              <span className="text-[#5C4FE5]">edu</span>
-              <span className="text-[#E6B800]">kazia</span>
+      {/* SIDEBAR DESKTOP */}
+      <div
+        className="hidden lg:flex"
+        style={{
+          width: '256px',
+          minWidth: '256px',
+          height: '100vh',
+          backgroundColor: 'white',
+          borderRight: '1.5px solid #E5E3FF',
+          flexDirection: 'column',
+          flexShrink: 0,
+          borderRadius: 0,
+        }}
+      >
+        <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
+          <Link href="/admin/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+            <span style={{ fontFamily: 'Sora, sans-serif', fontWeight: 800, fontSize: '1.2rem' }}>
+              <span style={{ color: '#5C4FE5' }}>edu</span>
+              <span style={{ color: '#E6B800' }}>kazia</span>
             </span>
-            <span className="text-xs bg-[#5C4FE5] text-white px-2 py-0.5 rounded-full font-semibold">
+            <span style={{ fontSize: '11px', background: '#5C4FE5', color: 'white', padding: '2px 8px', borderRadius: '999px', fontWeight: 600 }}>
               Admin
             </span>
           </Link>
         </div>
-        <nav className="flex-1 py-4 px-3">
-          <NavLinks />
-        </nav>
-        <div className="p-4 border-t border-[#E5E3FF] flex-shrink-0">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-[#4A4580] hover:bg-red-50 hover:text-red-600 transition-all"
-          >
-            <span>🚪</span> Keluar
-          </button>
-        </div>
-      </aside>
+        <NavContent />
+      </div>
 
-      {/* Overlay Mobile */}
+      {/* OVERLAY MOBILE */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
+          className="fixed inset-0 z-20 lg:hidden"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar Mobile */}
-      <aside className={`fixed top-0 left-0 h-full w-64 bg-white border-r border-[#E5E3FF] z-30 flex flex-col transition-transform duration-300 lg:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-16 flex items-center px-6 border-b border-[#E5E3FF] flex-shrink-0">
-          <Link href="/admin/dashboard" className="flex items-center gap-2" onClick={() => setSidebarOpen(false)}>
-            <span className="font-black text-xl" style={logoStyle}>
-              <span className="text-[#5C4FE5]">edu</span>
-              <span className="text-[#E6B800]">kazia</span>
+      {/* SIDEBAR MOBILE */}
+      <div
+        className="fixed top-0 left-0 h-full z-30 flex flex-col lg:hidden transition-transform duration-300"
+        style={{
+          width: '256px',
+          backgroundColor: 'white',
+          borderRight: '1.5px solid #E5E3FF',
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          borderRadius: 0,
+        }}
+      >
+        <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
+          <Link href="/admin/dashboard" onClick={() => setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+            <span style={{ fontFamily: 'Sora, sans-serif', fontWeight: 800, fontSize: '1.2rem' }}>
+              <span style={{ color: '#5C4FE5' }}>edu</span>
+              <span style={{ color: '#E6B800' }}>kazia</span>
             </span>
           </Link>
         </div>
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
-          <NavLinks onClose={() => setSidebarOpen(false)} />
-        </nav>
-        <div className="p-4 border-t border-[#E5E3FF] flex-shrink-0">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-[#4A4580] hover:bg-red-50 hover:text-red-600 transition-all"
-          >
-            <span>🚪</span> Keluar
-          </button>
-        </div>
-      </aside>
+        <NavContent onClose={() => setSidebarOpen(false)} />
+      </div>
 
-      {/* Main Content */}
+      {/* MAIN CONTENT */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        <header className="h-16 bg-white border-b border-[#E5E3FF] flex items-center px-4 lg:px-6 gap-4 flex-shrink-0">
+        <header
+          className="flex items-center gap-4 px-4 lg:px-6"
+          style={{ height: '64px', background: 'white', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}
+        >
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580]"
@@ -151,7 +166,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             🌐 Lihat Landing Page
           </a>
-          <div className="w-8 h-8 rounded-full bg-[#5C4FE5] flex items-center justify-center text-white text-sm font-bold">
+          <div
+            className="flex items-center justify-center text-white text-sm font-bold"
+            style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#5C4FE5', flexShrink: 0 }}
+          >
             A
           </div>
         </header>
