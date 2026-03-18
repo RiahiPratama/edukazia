@@ -39,9 +39,9 @@ const navItems = [
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname  = usePathname()
-  const router    = useRouter()
-  const supabase  = createClient()
+  const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createClient()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   async function handleLogout() {
@@ -68,9 +68,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* SIDEBAR */}
       <aside className={`
         fixed top-0 left-0 h-full w-64 bg-white border-r border-[#E5E3FF] z-30
-        flex flex-col transition-transform duration-300
+        flex flex-col transition-transform duration-300 flex-shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:z-auto
+        lg:translate-x-0 lg:sticky lg:z-auto
       `}>
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-[#E5E3FF]">
@@ -135,7 +135,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             ☰
           </button>
-          <div className="flex-1"/>
+          <div className="flex-1" />
           <a
             href="/"
             target="_blank"
