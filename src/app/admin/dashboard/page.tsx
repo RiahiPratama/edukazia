@@ -4,7 +4,6 @@ import Link from 'next/link'
 export default async function AdminDashboard() {
   const supabase = await createClient()
 
-  // Fetch semua data summary sekaligus
   const [
     { count: totalSiswa },
     { count: totalTutor },
@@ -16,69 +15,55 @@ export default async function AdminDashboard() {
     supabase.from('tutors').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('class_groups').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('sessions')
-      .select(`
-        id, scheduled_at, zoom_link, status,
-        class_groups ( label, courses ( name ) )
-      `)
+      .select(`id, scheduled_at, zoom_link, status, class_groups ( label, courses ( name ) )`)
       .gte('scheduled_at', new Date().toISOString().split('T')[0] + 'T00:00:00')
       .lte('scheduled_at', new Date().toISOString().split('T')[0] + 'T23:59:59')
       .order('scheduled_at'),
     supabase.from('payments')
-      .select(`
-        id, amount, method, paid_at,
-        students ( profiles ( full_name ) )
-      `)
+      .select(`id, amount, method, paid_at, students ( profiles ( full_name ) )`)
       .order('paid_at', { ascending: false })
       .limit(5),
   ])
 
-  // Hitung total pembayaran bulan ini
   const now = new Date()
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const { data: pembayaranBulanIni } = await supabase
-    .from('payments')
-    .select('amount')
-    .gte('paid_at', firstOfMonth)
+    .from('payments').select('amount').gte('paid_at', firstOfMonth)
 
   const totalBulanIni = pembayaranBulanIni?.reduce((sum, p) => sum + p.amount, 0) ?? 0
 
   function formatRupiah(n: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
-
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Makassar' })
   }
-
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   const statusColor: Record<string, string> = {
-    scheduled: 'bg-blue-50 text-blue-700',
-    completed: 'bg-green-50 text-green-700',
-    cancelled: 'bg-red-50 text-red-700',
+    scheduled:   'bg-blue-50 text-blue-700',
+    completed:   'bg-green-50 text-green-700',
+    cancelled:   'bg-red-50 text-red-700',
     rescheduled: 'bg-yellow-50 text-yellow-700',
   }
-
   const statusLabel: Record<string, string> = {
-    scheduled: 'Terjadwal',
-    completed: 'Selesai',
-    cancelled: 'Dibatalkan',
+    scheduled:   'Terjadwal',
+    completed:   'Selesai',
+    cancelled:   'Dibatalkan',
     rescheduled: 'Reschedule',
   }
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Dashboard</h1>
         <p className="text-sm text-[#7B78A8] mt-1">
-          {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Makassar' })}
+          {new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Makassar' })}
         </p>
       </div>
 
-      {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Pendapatan Bulan Ini', value: formatRupiah(totalBulanIni), icon: '💰', color: 'bg-purple-50 border-purple-100', iconBg: 'bg-[#5C4FE5]' },
@@ -87,9 +72,7 @@ export default async function AdminDashboard() {
           { label: 'Kelas Berjalan', value: String(totalKelas ?? 0), icon: '🏫', color: 'bg-yellow-50 border-yellow-100', iconBg: 'bg-yellow-500' },
         ].map(m => (
           <div key={m.label} className={`bg-white rounded-2xl border p-4 ${m.color}`}>
-            <div className={`w-10 h-10 rounded-xl ${m.iconBg} flex items-center justify-center text-lg mb-3`}>
-              {m.icon}
-            </div>
+            <div className={`w-10 h-10 rounded-xl ${m.iconBg} flex items-center justify-center text-lg mb-3`}>{m.icon}</div>
             <div className="text-2xl font-black text-[#1A1640] font-['Sora']">{m.value}</div>
             <div className="text-xs text-[#7B78A8] font-semibold mt-1">{m.label}</div>
           </div>
@@ -97,14 +80,11 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
         {/* Sesi hari ini */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1640]">Sesi Hari Ini</h2>
-            <Link href="/admin/jadwal" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
-              Lihat semua →
-            </Link>
+            <Link href="/admin/jadwal" className="text-xs text-[#5C4FE5] font-semibold hover:underline">Lihat semua →</Link>
           </div>
           {!sesiHariIni || sesiHariIni.length === 0 ? (
             <div className="text-center py-8 text-[#7B78A8] text-sm">
@@ -119,9 +99,7 @@ export default async function AdminDashboard() {
                     <div className="text-sm font-bold text-[#5C4FE5]">{formatTime(s.scheduled_at)}</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-[#1A1640] truncate">
-                      {s.class_groups?.label ?? '—'}
-                    </div>
+                    <div className="text-sm font-semibold text-[#1A1640] truncate">{s.class_groups?.label ?? '—'}</div>
                     <div className="text-xs text-[#7B78A8]">{s.class_groups?.courses?.name ?? '—'}</div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -139,11 +117,10 @@ export default async function AdminDashboard() {
               ))}
             </div>
           )}
-          <Link
-            href="/admin/jadwal"
-            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold"
-          >
-            + Buat Jadwal Baru
+          {/* FIX: link ke /admin/jadwal?new=1 */}
+          <Link href="/admin/jadwal?new=1"
+            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold">
+            + Tambah Sesi Baru
           </Link>
         </div>
 
@@ -151,9 +128,7 @@ export default async function AdminDashboard() {
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1640]">Pembayaran Terbaru</h2>
-            <Link href="/admin/pembayaran" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
-              Lihat semua →
-            </Link>
+            <Link href="/admin/pembayaran" className="text-xs text-[#5C4FE5] font-semibold hover:underline">Lihat semua →</Link>
           </div>
           {!pembayaranTerbaru || pembayaranTerbaru.length === 0 ? (
             <div className="text-center py-8 text-[#7B78A8] text-sm">
@@ -168,22 +143,17 @@ export default async function AdminDashboard() {
                     {(p.students?.profiles?.full_name ?? 'S').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-[#1A1640] truncate">
-                      {p.students?.profiles?.full_name ?? '—'}
-                    </div>
+                    <div className="text-xs font-semibold text-[#1A1640] truncate">{p.students?.profiles?.full_name ?? '—'}</div>
                     <div className="text-xs text-[#7B78A8]">{formatDate(p.paid_at)}</div>
                   </div>
-                  <div className="text-xs font-bold text-green-600 flex-shrink-0">
-                    +{formatRupiah(p.amount)}
-                  </div>
+                  <div className="text-xs font-bold text-green-600 flex-shrink-0">+{formatRupiah(p.amount)}</div>
                 </div>
               ))}
             </div>
           )}
-          <Link
-            href="/admin/pembayaran"
-            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold"
-          >
+          {/* FIX: link ke /admin/pembayaran?new=1 */}
+          <Link href="/admin/pembayaran?new=1"
+            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold">
             + Catat Pembayaran
           </Link>
         </div>
@@ -194,18 +164,15 @@ export default async function AdminDashboard() {
         <h2 className="font-bold text-[#1A1640] mb-4">Aksi Cepat</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { href: '/admin/siswa/baru', icon: '👨‍🎓', label: 'Tambah Siswa' },
-            { href: '/admin/tutor/baru', icon: '👨‍🏫', label: 'Tambah Tutor' },
-            { href: '/admin/kelas/baru', icon: '🏫', label: 'Buat Kelas' },
-            { href: '/admin/jadwal', icon: '📅', label: 'Buat Jadwal' },
-            { href: '/admin/pembayaran', icon: '💳', label: 'Catat Bayar' },
-            { href: '/admin/honor', icon: '💰', label: 'Honor Tutor' },
+            { href: '/admin/siswa/baru',        icon: '👨‍🎓', label: 'Tambah Siswa' },
+            { href: '/admin/tutor/baru',         icon: '👨‍🏫', label: 'Tambah Tutor' },
+            { href: '/admin/kelas/baru',         icon: '🏫',  label: 'Buat Kelas' },
+            { href: '/admin/jadwal?new=1',       icon: '📅',  label: 'Buat Jadwal' },    // FIX
+            { href: '/admin/pembayaran?new=1',   icon: '💳',  label: 'Catat Bayar' },    // FIX
+            { href: '/admin/honor',              icon: '💰',  label: 'Honor Tutor' },
           ].map(a => (
-            <Link
-              key={a.href}
-              href={a.href}
-              className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group"
-            >
+            <Link key={a.href} href={a.href}
+              className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
               <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center text-lg transition-colors">
                 {a.icon}
               </div>

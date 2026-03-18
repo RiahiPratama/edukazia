@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, X, Check, Search, ChevronDown, MessageCircle, Eye } from 'lucide-react'
+import { Plus, X, Check, Search, MessageCircle, Eye } from 'lucide-react'
 
 type Payment = {
   id: string
@@ -40,10 +41,10 @@ type StudentOption = {
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  unpaid:  { label: 'Belum Bayar',          cls: 'bg-[#FEE9E9] text-[#991B1B]' },
-  pending: { label: 'Menunggu Konfirmasi',   cls: 'bg-[#FEF3E2] text-[#92400E]' },
-  paid:    { label: 'Lunas',                 cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  overdue: { label: 'Terlambat',             cls: 'bg-[#FEE9E9] text-[#7F1D1D]' },
+  unpaid:  { label: 'Belum Bayar',        cls: 'bg-[#FEE9E9] text-[#991B1B]' },
+  pending: { label: 'Menunggu Konfirmasi', cls: 'bg-[#FEF3E2] text-[#92400E]' },
+  paid:    { label: 'Lunas',              cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
+  overdue: { label: 'Terlambat',          cls: 'bg-[#FEE9E9] text-[#7F1D1D]' },
 }
 
 const REGISTRATION_FEE_DEFAULT = 100000
@@ -51,54 +52,56 @@ const REGISTRATION_FEE_DEFAULT = 100000
 function formatRp(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default function PembayaranPage() {
-  const supabase = createClient()
+  const supabase     = createClient()
+  const searchParams = useSearchParams()
 
-  const [payments,   setPayments]   = useState<Payment[]>([])
-  const [students,   setStudents]   = useState<StudentOption[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [showModal,  setShowModal]  = useState(false)
-  const [showDetail, setShowDetail] = useState<Payment | null>(null)
-  const [saving,     setSaving]     = useState(false)
-  const [formError,  setFormError]  = useState('')
-  const [search,     setSearch]     = useState('')
+  const [payments,     setPayments]     = useState<Payment[]>([])
+  const [students,     setStudents]     = useState<StudentOption[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [showModal,    setShowModal]    = useState(false)
+  const [showDetail,   setShowDetail]   = useState<Payment | null>(null)
+  const [saving,       setSaving]       = useState(false)
+  const [formError,    setFormError]    = useState('')
+  const [search,       setSearch]       = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
 
-  // Form state
-  const [fStudentId,       setFStudentId]       = useState('')
-  const [fEnrollmentId,    setFEnrollmentId]     = useState('')
-  const [fBaseAmount,      setFBaseAmount]       = useState(0)
-  const [fRegFee,          setFRegFee]           = useState(0)
-  const [fIsNewStudent,    setFIsNewStudent]     = useState(false)
-  const [fDiscount,        setFDiscount]         = useState(0)
-  const [fDiscountNote,    setFDiscountNote]     = useState('')
-  const [fMethod,          setFMethod]           = useState('transfer')
-  const [fPeriodLabel,     setFPeriodLabel]      = useState('')
-  const [fWaPhone,         setFWaPhone]          = useState('')
-  const [fStatus,          setFStatus]           = useState('unpaid')
+  const [fStudentId,    setFStudentId]    = useState('')
+  const [fEnrollmentId, setFEnrollmentId] = useState('')
+  const [fBaseAmount,   setFBaseAmount]   = useState(0)
+  const [fRegFee,       setFRegFee]       = useState(0)
+  const [fIsNewStudent, setFIsNewStudent] = useState(false)
+  const [fDiscount,     setFDiscount]     = useState(0)
+  const [fDiscountNote, setFDiscountNote] = useState('')
+  const [fMethod,       setFMethod]       = useState('transfer')
+  const [fPeriodLabel,  setFPeriodLabel]  = useState('')
+  const [fWaPhone,      setFWaPhone]      = useState('')
+  const [fStatus,       setFStatus]       = useState('unpaid')
 
-  const totalAmount = fBaseAmount + fRegFee - fDiscount
-
-  const selectedStudent  = students.find(s => s.id === fStudentId)
-  const selectedEnroll   = selectedStudent?.enrollments.find(e => e.id === fEnrollmentId)
+  const totalAmount     = fBaseAmount + fRegFee - fDiscount
+  const selectedStudent = students.find(s => s.id === fStudentId)
 
   useEffect(() => { fetchAll() }, [])
+
+  // Auto-open modal jika ?new=1 dan students sudah loaded
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && students.length > 0) {
+      openAdd()
+    }
+  }, [students])
 
   async function fetchAll() {
     setLoading(true)
 
-    // Fetch payments
     const { data: pays } = await supabase
       .from('payments')
       .select('id, student_id, enrollment_id, amount, base_amount, registration_fee, discount_amount, discount_note, method, status, period_label, reference_note, is_new_student, wa_phone, confirmed_at, created_at')
       .order('created_at', { ascending: false })
 
-    // Fetch student names
     if (pays && pays.length > 0) {
       const sIds = [...new Set(pays.map((p: any) => p.student_id))]
       const { data: studs } = await supabase.from('students').select('id, profile_id').in('id', sIds)
@@ -110,20 +113,13 @@ export default function PembayaranPage() {
         nameMap = Object.fromEntries((studs ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
       }
 
-      // Fetch class info per enrollment
       const eIds = [...new Set(pays.map((p: any) => p.enrollment_id).filter(Boolean))]
       let classMap: Record<string, { label: string; type: string }> = {}
       if (eIds.length > 0) {
-        const { data: enrs } = await supabase
-          .from('enrollments')
-          .select('id, class_group_id')
-          .in('id', eIds)
+        const { data: enrs } = await supabase.from('enrollments').select('id, class_group_id').in('id', eIds)
         const cgIds = (enrs ?? []).map((e: any) => e.class_group_id).filter(Boolean)
         if (cgIds.length > 0) {
-          const { data: cgs } = await supabase
-            .from('class_groups')
-            .select('id, label, class_types(name)')
-            .in('id', cgIds)
+          const { data: cgs } = await supabase.from('class_groups').select('id, label, class_types(name)').in('id', cgIds)
           const cgMap = Object.fromEntries((cgs ?? []).map((c: any) => [c.id, { label: c.label, type: c.class_types?.name ?? '—' }]))
           classMap = Object.fromEntries((enrs ?? []).map((e: any) => [e.id, cgMap[e.class_group_id] ?? { label: '—', type: '—' }]))
         }
@@ -139,36 +135,24 @@ export default function PembayaranPage() {
       setPayments([])
     }
 
-    // Fetch students + enrollments for form
+    // Fetch students for form
     const { data: studs } = await supabase.from('students').select('id, profile_id')
     if (studs && studs.length > 0) {
       const profIds = studs.map((s: any) => s.profile_id).filter(Boolean)
       const { data: profs } = await supabase.from('profiles').select('id, full_name, phone').in('id', profIds)
       const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]))
 
-      // Fetch enrollments per student
       const sIds = studs.map((s: any) => s.id)
-      const { data: enrs } = await supabase
-        .from('enrollments')
-        .select('id, student_id, class_group_id, status')
-        .in('student_id', sIds)
-        .eq('status', 'active')
+      const { data: enrs } = await supabase.from('enrollments').select('id, student_id, class_group_id, status').in('student_id', sIds).eq('status', 'active')
 
       const cgIds = (enrs ?? []).map((e: any) => e.class_group_id).filter(Boolean)
       let cgMap: Record<string, any> = {}
       if (cgIds.length > 0) {
-        const { data: cgs } = await supabase
-          .from('class_groups')
-          .select('id, label, class_type_id, class_types(name, base_price)')
-          .in('id', cgIds)
+        const { data: cgs } = await supabase.from('class_groups').select('id, label, class_type_id, class_types(name, base_price)').in('id', cgIds)
         cgMap = Object.fromEntries((cgs ?? []).map((c: any) => [c.id, c]))
       }
 
-      // Cek siswa yang sudah pernah bayar (punya riwayat payment) → bukan new student lagi
-      const { data: existingPays } = await supabase
-        .from('payments')
-        .select('student_id')
-        .eq('is_new_student', true)
+      const { data: existingPays } = await supabase.from('payments').select('student_id').eq('is_new_student', true)
       const paidStudentIds = new Set((existingPays ?? []).map((p: any) => p.student_id))
 
       const studentOptions: StudentOption[] = studs.map((s: any) => {
@@ -178,19 +162,15 @@ export default function PembayaranPage() {
           .map((e: any) => {
             const cg = cgMap[e.class_group_id]
             return {
-              id:                   e.id,
-              class_label:          cg?.label ?? '—',
-              class_type:           cg?.class_types?.name ?? '—',
-              class_type_id:        cg?.class_type_id ?? '',
-              base_price:           cg?.class_types?.base_price ?? 0,
+              id:                    e.id,
+              class_label:           cg?.label ?? '—',
+              class_type:            cg?.class_types?.name ?? '—',
+              class_type_id:         cg?.class_type_id ?? '',
+              base_price:            cg?.class_types?.base_price ?? 0,
               has_paid_registration: paidStudentIds.has(s.id),
             }
           })
-        return {
-          id:          s.id,
-          name:        prof?.full_name ?? 'Siswa',
-          enrollments: studentEnrolls,
-        }
+        return { id: s.id, name: prof?.full_name ?? 'Siswa', enrollments: studentEnrolls }
       })
       setStudents(studentOptions)
     }
@@ -207,8 +187,7 @@ export default function PembayaranPage() {
   }
 
   function handleStudentChange(id: string) {
-    setFStudentId(id); setFEnrollmentId(''); setFBaseAmount(0)
-    setFRegFee(0); setFIsNewStudent(false)
+    setFStudentId(id); setFEnrollmentId(''); setFBaseAmount(0); setFRegFee(0); setFIsNewStudent(false)
   }
 
   function handleEnrollmentChange(eid: string) {
@@ -227,22 +206,15 @@ export default function PembayaranPage() {
     if (!fEnrollmentId) { setFormError('Pilih kelas.'); return }
     if (!fPeriodLabel)  { setFormError('Isi periode pembayaran.'); return }
     if (totalAmount <= 0) { setFormError('Total tagihan tidak valid.'); return }
-
     setSaving(true); setFormError('')
 
     const { error } = await supabase.from('payments').insert({
-      student_id:       fStudentId,
-      enrollment_id:    fEnrollmentId,
-      amount:           totalAmount,
-      base_amount:      fBaseAmount,
-      registration_fee: fRegFee,
-      discount_amount:  fDiscount,
-      discount_note:    fDiscountNote || null,
-      method:           fMethod,
-      status:           fStatus,
-      period_label:     fPeriodLabel,
-      is_new_student:   fIsNewStudent,
-      wa_phone:         fWaPhone || null,
+      student_id: fStudentId, enrollment_id: fEnrollmentId,
+      amount: totalAmount, base_amount: fBaseAmount,
+      registration_fee: fRegFee, discount_amount: fDiscount,
+      discount_note: fDiscountNote || null, method: fMethod,
+      status: fStatus, period_label: fPeriodLabel,
+      is_new_student: fIsNewStudent, wa_phone: fWaPhone || null,
     })
 
     if (error) { setFormError(error.message); setSaving(false); return }
@@ -252,10 +224,8 @@ export default function PembayaranPage() {
   async function handleConfirm(payment: Payment) {
     const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('payments').update({
-      status:       'paid',
-      confirmed_by: user?.id ?? null,
-      confirmed_at: new Date().toISOString(),
-      paid_at:      new Date().toISOString(),
+      status: 'paid', confirmed_by: user?.id ?? null,
+      confirmed_at: new Date().toISOString(), paid_at: new Date().toISOString(),
     }).eq('id', payment.id)
     fetchAll()
   }
@@ -269,12 +239,10 @@ export default function PembayaranPage() {
     const matchSearch = p.student_name.toLowerCase().includes(search.toLowerCase()) ||
       p.class_label.toLowerCase().includes(search.toLowerCase()) ||
       (p.period_label ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'all' || p.status === filterStatus
-    return matchSearch && matchStatus
+    return matchSearch && (filterStatus === 'all' || p.status === filterStatus)
   })
 
-  // Summary
-  const totalLunas  = payments.filter(p => p.status === 'paid').reduce((a, p) => a + p.amount, 0)
+  const totalLunas   = payments.filter(p => p.status === 'paid').reduce((a, p) => a + p.amount, 0)
   const totalPending = payments.filter(p => p.status === 'pending').length
   const totalUnpaid  = payments.filter(p => p.status === 'unpaid').length
 
@@ -282,7 +250,6 @@ export default function PembayaranPage() {
 
   return (
     <div className="max-w-5xl">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Pembayaran</h1>
@@ -294,7 +261,6 @@ export default function PembayaranPage() {
         </button>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
           <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Total Lunas</p>
@@ -310,7 +276,6 @@ export default function PembayaranPage() {
         </div>
       </div>
 
-      {/* Filter & Search */}
       <div className="flex gap-3 mb-4">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8]"/>
@@ -328,7 +293,6 @@ export default function PembayaranPage() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -343,7 +307,7 @@ export default function PembayaranPage() {
           </thead>
           <tbody className="divide-y divide-[#E5E3FF]">
             {loading ? (
-              Array.from({length: 4}).map((_, i) => (
+              Array.from({length:4}).map((_,i) => (
                 <tr key={i} className="animate-pulse">
                   <td className="px-5 py-4"><div className="h-4 w-32 bg-gray-200 rounded"/></td>
                   <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 w-28 bg-gray-200 rounded"/></td>
@@ -361,9 +325,7 @@ export default function PembayaranPage() {
                     {search || filterStatus !== 'all' ? 'Tidak ada tagihan yang sesuai' : 'Belum ada tagihan'}
                   </p>
                   {!search && filterStatus === 'all' && (
-                    <button onClick={openAdd} className="mt-3 text-sm text-[#5C4FE5] font-semibold hover:underline">
-                      + Buat tagihan pertama
-                    </button>
+                    <button onClick={openAdd} className="mt-3 text-sm text-[#5C4FE5] font-semibold hover:underline">+ Buat tagihan pertama</button>
                   )}
                 </td>
               </tr>
@@ -383,41 +345,30 @@ export default function PembayaranPage() {
                     <td className="px-5 py-4 hidden lg:table-cell text-[#7B78A8]">{p.period_label ?? '—'}</td>
                     <td className="px-5 py-4">
                       <div className="font-bold text-[#1A1640]">{formatRp(p.amount)}</div>
-                      {p.is_new_student && (
-                        <div className="text-[10px] text-[#5C4FE5] font-semibold mt-0.5">+ Biaya Daftar</div>
-                      )}
-                      {p.discount_amount > 0 && (
-                        <div className="text-[10px] text-green-600 font-semibold">- Diskon {formatRp(p.discount_amount)}</div>
-                      )}
+                      {p.is_new_student && <div className="text-[10px] text-[#5C4FE5] font-semibold mt-0.5">+ Biaya Daftar</div>}
+                      {p.discount_amount > 0 && <div className="text-[10px] text-green-600 font-semibold">- Diskon {formatRp(p.discount_amount)}</div>}
                     </td>
                     <td className="px-5 py-4">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.cls}`}>{st.label}</span>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Lihat detail */}
                         <button onClick={() => setShowDetail(p)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Detail">
                           <Eye size={14}/>
                         </button>
-                        {/* Konfirmasi */}
                         {p.status === 'pending' && (
                           <button onClick={() => handleConfirm(p)}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#E6F4EC] text-[#1A5C36] hover:bg-[#C6E8D4] transition">
                             <Check size={12}/> Konfirmasi
                           </button>
                         )}
-                        {/* Tandai pending (sudah bayar, belum dikonfirmasi) */}
                         {p.status === 'unpaid' && (
-                          <button onClick={async () => {
-                            await supabase.from('payments').update({ status: 'pending' }).eq('id', p.id)
-                            fetchAll()
-                          }}
+                          <button onClick={async () => { await supabase.from('payments').update({status:'pending'}).eq('id',p.id); fetchAll() }}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#FEF3E2] text-[#92400E] hover:bg-[#FDE9BF] transition">
                             Sudah Bayar
                           </button>
                         )}
-                        {/* WA notifikasi */}
                         {p.status === 'paid' && p.wa_phone && (
                           <a href={buildWaMessage(p)} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-700 hover:bg-green-100 transition">
@@ -442,9 +393,7 @@ export default function PembayaranPage() {
               <h2 className="text-base font-bold text-[#1A1640]">Buat Tagihan Baru</h2>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
             </div>
-
             <div className="px-6 py-5 space-y-4">
-              {/* Pilih Siswa */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Siswa <span className="text-red-500">*</span></label>
                 <select value={fStudentId} onChange={e => handleStudentChange(e.target.value)} className={inputCls}>
@@ -452,8 +401,6 @@ export default function PembayaranPage() {
                   {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
-
-              {/* Pilih Kelas */}
               {fStudentId && (
                 <div>
                   <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas <span className="text-red-500">*</span></label>
@@ -465,37 +412,24 @@ export default function PembayaranPage() {
                   </select>
                 </div>
               )}
-
-              {/* Periode */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Periode <span className="text-red-500">*</span></label>
                 <input type="text" placeholder="Contoh: April 2026" value={fPeriodLabel}
                   onChange={e => setFPeriodLabel(e.target.value)} className={inputCls}/>
               </div>
-
-              {/* Rincian Biaya */}
               {fEnrollmentId && (
                 <div className="bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl p-4 space-y-3">
                   <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Rincian Biaya</p>
-
-                  {/* Biaya Paket */}
                   <div>
                     <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Biaya Paket</label>
-                    <input type="number" value={fBaseAmount} onChange={e => setFBaseAmount(Number(e.target.value))}
-                      className={inputCls}/>
-                    <p className="text-xs text-[#7B78A8] mt-1">Otomatis dari tipe kelas, bisa diedit</p>
+                    <input type="number" value={fBaseAmount} onChange={e => setFBaseAmount(Number(e.target.value))} className={inputCls}/>
                   </div>
-
-                  {/* Biaya Pendaftaran */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-semibold text-[#7B78A8]">Biaya Pendaftaran</label>
                       <label className="flex items-center gap-1.5 text-xs text-[#7B78A8] cursor-pointer">
                         <input type="checkbox" checked={fIsNewStudent}
-                          onChange={e => {
-                            setFIsNewStudent(e.target.checked)
-                            setFRegFee(e.target.checked ? REGISTRATION_FEE_DEFAULT : 0)
-                          }}
+                          onChange={e => { setFIsNewStudent(e.target.checked); setFRegFee(e.target.checked ? REGISTRATION_FEE_DEFAULT : 0) }}
                           className="accent-[#5C4FE5]"/>
                         Siswa Baru
                       </label>
@@ -504,27 +438,20 @@ export default function PembayaranPage() {
                       disabled={!fIsNewStudent} className={`${inputCls} ${!fIsNewStudent ? 'opacity-50 cursor-not-allowed' : ''}`}/>
                     {fIsNewStudent && <p className="text-xs text-[#5C4FE5] mt-1 font-semibold">Biaya pendaftaran sekali seumur hidup</p>}
                   </div>
-
-                  {/* Diskon */}
                   <div>
                     <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Diskon <span className="font-normal">(opsional)</span></label>
-                    <input type="number" value={fDiscount} onChange={e => setFDiscount(Number(e.target.value))}
-                      placeholder="0" className={inputCls}/>
+                    <input type="number" value={fDiscount} onChange={e => setFDiscount(Number(e.target.value))} placeholder="0" className={inputCls}/>
                     {fDiscount > 0 && (
                       <input type="text" value={fDiscountNote} onChange={e => setFDiscountNote(e.target.value)}
-                        placeholder="Alasan diskon (promo, keringanan, dll)" className={`${inputCls} mt-2`}/>
+                        placeholder="Alasan diskon" className={`${inputCls} mt-2`}/>
                     )}
                   </div>
-
-                  {/* Total */}
                   <div className="flex items-center justify-between pt-2 border-t border-[#E5E3FF]">
                     <span className="text-sm font-bold text-[#1A1640]">Total Tagihan</span>
                     <span className="text-lg font-black text-[#5C4FE5]">{formatRp(totalAmount)}</span>
                   </div>
                 </div>
               )}
-
-              {/* Metode & Status */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Metode</label>
@@ -542,8 +469,6 @@ export default function PembayaranPage() {
                   </select>
                 </div>
               </div>
-
-              {/* No WA */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   No. WhatsApp <span className="normal-case font-normal text-[#7B78A8]">(untuk notifikasi)</span>
@@ -551,21 +476,15 @@ export default function PembayaranPage() {
                 <input type="text" placeholder="628xxxxxxxxxx" value={fWaPhone}
                   onChange={e => setFWaPhone(e.target.value)} className={inputCls}/>
               </div>
-
-              {formError && (
-                <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{formError}</div>
-              )}
+              {formError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{formError}</div>}
             </div>
-
             <div className="px-6 pb-5 flex gap-3 sticky bottom-0 bg-white border-t border-[#E5E3FF] pt-4">
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
                 {saving ? 'Menyimpan...' : 'Buat Tagihan'}
               </button>
               <button onClick={() => setShowModal(false)}
-                className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
-                Batal
-              </button>
+                className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">Batal</button>
             </div>
           </div>
         </div>

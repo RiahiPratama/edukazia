@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus, ChevronDown, ChevronUp, Users } from 'lucide-react'
 
@@ -74,6 +75,7 @@ function generateSessions(row: JadwalRow): string[] {
 
 export default function JadwalPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
   const [sessions,     setSessions]     = useState<Session[]>([])
   const [classGroups,  setClassGroups]  = useState<ClassGroup[]>([])
@@ -103,6 +105,13 @@ export default function JadwalPage() {
   const totalSesi  = jadwalRows.reduce((acc, r) => acc + r.repeat, 0)
 
   useEffect(() => { fetchAll() }, [])
+
+  // Auto-open modal jika ?new=1
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && classGroups.length > 0) {
+      openAdd()
+    }
+  }, [classGroups])
 
   async function fetchAll() {
     setLoading(true)
