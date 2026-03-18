@@ -8,7 +8,7 @@ export default async function TutorPage() {
     .from('tutors')
     .select(`
       id, rate_per_session, bank_name, bank_account, is_active,
-      profiles ( full_name, phone ),
+      profiles:profile_id ( full_name, phone ),
       tutor_courses ( courses ( name, color ) ),
       class_groups ( id, label, status )
     `)
