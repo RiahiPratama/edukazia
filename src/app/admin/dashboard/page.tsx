@@ -55,16 +55,16 @@ export default async function AdminDashboard() {
   }
 
   const statusColor: Record<string, string> = {
-    scheduled:   'bg-blue-50 text-blue-700',
-    completed:   'bg-green-50 text-green-700',
-    cancelled:   'bg-red-50 text-red-700',
+    scheduled: 'bg-blue-50 text-blue-700',
+    completed: 'bg-green-50 text-green-700',
+    cancelled: 'bg-red-50 text-red-700',
     rescheduled: 'bg-yellow-50 text-yellow-700',
   }
 
   const statusLabel: Record<string, string> = {
-    scheduled:   'Terjadwal',
-    completed:   'Selesai',
-    cancelled:   'Dibatalkan',
+    scheduled: 'Terjadwal',
+    completed: 'Selesai',
+    cancelled: 'Dibatalkan',
     rescheduled: 'Reschedule',
   }
 
@@ -74,7 +74,7 @@ export default async function AdminDashboard() {
       <div className="mb-6">
         <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Dashboard</h1>
         <p className="text-sm text-[#7B78A8] mt-1">
-          {new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Makassar' })}
+          {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Makassar' })}
         </p>
       </div>
 
@@ -140,7 +140,7 @@ export default async function AdminDashboard() {
             </div>
           )}
           <Link
-            href="/admin/jadwal/baru"
+            href="/admin/jadwal"
             className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold"
           >
             + Buat Jadwal Baru
@@ -181,7 +181,7 @@ export default async function AdminDashboard() {
             </div>
           )}
           <Link
-            href="/admin/pembayaran/baru"
+            href="/admin/pembayaran"
             className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold"
           >
             + Catat Pembayaran
@@ -197,8 +197,8 @@ export default async function AdminDashboard() {
             { href: '/admin/siswa/baru', icon: '👨‍🎓', label: 'Tambah Siswa' },
             { href: '/admin/tutor/baru', icon: '👨‍🏫', label: 'Tambah Tutor' },
             { href: '/admin/kelas/baru', icon: '🏫', label: 'Buat Kelas' },
-            { href: '/admin/jadwal/baru', icon: '📅', label: 'Buat Jadwal' },
-            { href: '/admin/pembayaran/baru', icon: '💳', label: 'Catat Bayar' },
+            { href: '/admin/jadwal', icon: '📅', label: 'Buat Jadwal' },
+            { href: '/admin/pembayaran', icon: '💳', label: 'Catat Bayar' },
             { href: '/admin/honor', icon: '💰', label: 'Honor Tutor' },
           ].map(a => (
             <Link
