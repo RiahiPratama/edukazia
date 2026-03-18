@@ -252,6 +252,15 @@ nav{display:flex;align-items:center;height:62px;padding:0 10px 0 16px;gap:2px;ba
 .faq-item.open .faq-arrow{transform:rotate(180deg);opacity:.9}
 .faq-body{max-height:0;overflow:hidden;transition:max-height .35s ease}
 .faq-body-inner{padding:0 22px 20px;font-size:.88rem;color:var(--text-m);line-height:1.75}
+/* edit tambahan agar faq muncul*/
+.faq-item {
+  animation: fadeUp .4s ease both;
+}
+.faq-item:nth-child(2) { animation-delay: .05s }
+.faq-item:nth-child(3) { animation-delay: .1s }
+.faq-item:nth-child(4) { animation-delay: .15s }
+.faq-item:nth-child(5) { animation-delay: .2s }
+.faq-item:nth-child(6) { animation-delay: .25s }
 
 /* CTA */
 #cta{background:linear-gradient(135deg,var(--purple-dark),var(--purple))}
