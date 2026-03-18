@@ -44,6 +44,13 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // Tambahkan setelah cek protected route
+  if (pathname === '/admin') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/admin/dashboard'
+    return NextResponse.redirect(redirectUrl)
+  }
+
   // ── Jika belum login dan akses protected route → ke /login ──
   const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
   if (!user && isProtected) {

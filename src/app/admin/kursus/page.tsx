@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 export default async function KursusPage() {
   const supabase = await createClient()
@@ -44,7 +43,7 @@ export default async function KursusPage() {
           {kursus?.map(k => (
             <div key={k.id} className={`rounded-xl border p-4 ${k.is_active ? 'border-[#E5E3FF] bg-[#F7F6FF]' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
               <div className="flex items-center justify-between mb-2">
-                <div className="w-3 h-3 rounded-full" style={{ background: k.color ?? '#5C4FE5' }}/>
+                <div className="w-3 h-3 rounded-full" style={{ background: k.color ?? '#5C4FE5' }} />
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${k.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   {k.is_active ? 'Aktif' : 'Nonaktif'}
                 </span>
@@ -84,7 +83,7 @@ export default async function KursusPage() {
                   <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Sesi</th>
                   <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Harga</th>
                   <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Status</th>
-                  <th className="py-3 px-4"/>
+                  <th className="py-3 px-4" />
                 </tr>
               </thead>
               <tbody>
