@@ -5,6 +5,50 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+// Data wilayah Indonesia (Provinsi → Kab/Kota)
+const WILAYAH: Record<string, string[]> = {
+  'Aceh': ['Kab. Aceh Barat','Kab. Aceh Barat Daya','Kab. Aceh Besar','Kab. Aceh Jaya','Kab. Aceh Selatan','Kab. Aceh Singkil','Kab. Aceh Tamiang','Kab. Aceh Tengah','Kab. Aceh Tenggara','Kab. Aceh Timur','Kab. Aceh Utara','Kab. Bener Meriah','Kab. Bireuen','Kab. Gayo Lues','Kab. Nagan Raya','Kab. Pidie','Kab. Pidie Jaya','Kab. Simeulue','Kota Banda Aceh','Kota Langsa','Kota Lhokseumawe','Kota Sabang','Kota Subulussalam'],
+  'Sumatera Utara': ['Kab. Asahan','Kab. Batu Bara','Kab. Dairi','Kab. Deli Serdang','Kab. Humbang Hasundutan','Kab. Karo','Kab. Labuhanbatu','Kab. Labuhanbatu Selatan','Kab. Labuhanbatu Utara','Kab. Langkat','Kab. Mandailing Natal','Kab. Nias','Kab. Nias Barat','Kab. Nias Selatan','Kab. Nias Utara','Kab. Padang Lawas','Kab. Padang Lawas Utara','Kab. Pakpak Bharat','Kab. Samosir','Kab. Serdang Bedagai','Kab. Simalungun','Kab. Tapanuli Selatan','Kab. Tapanuli Tengah','Kab. Tapanuli Utara','Kab. Toba','Kota Binjai','Kota Gunungsitoli','Kota Medan','Kota Padangsidimpuan','Kota Pematangsiantar','Kota Sibolga','Kota Tanjungbalai','Kota Tebing Tinggi'],
+  'Sumatera Barat': ['Kab. Agam','Kab. Dharmasraya','Kab. Kepulauan Mentawai','Kab. Lima Puluh Kota','Kab. Padang Pariaman','Kab. Pasaman','Kab. Pasaman Barat','Kab. Pesisir Selatan','Kab. Sijunjung','Kab. Solok','Kab. Solok Selatan','Kab. Tanah Datar','Kota Bukittinggi','Kota Padang','Kota Padang Panjang','Kota Pariaman','Kota Payakumbuh','Kota Sawahlunto','Kota Solok'],
+  'Riau': ['Kab. Bengkalis','Kab. Indragiri Hilir','Kab. Indragiri Hulu','Kab. Kampar','Kab. Kepulauan Meranti','Kab. Kuantan Singingi','Kab. Pelalawan','Kab. Rokan Hilir','Kab. Rokan Hulu','Kab. Siak','Kota Dumai','Kota Pekanbaru'],
+  'Kepulauan Riau': ['Kab. Bintan','Kab. Karimun','Kab. Kepulauan Anambas','Kab. Lingga','Kab. Natuna','Kota Batam','Kota Tanjungpinang'],
+  'Jambi': ['Kab. Batanghari','Kab. Bungo','Kab. Kerinci','Kab. Merangin','Kab. Muaro Jambi','Kab. Sarolangun','Kab. Tanjung Jabung Barat','Kab. Tanjung Jabung Timur','Kab. Tebo','Kota Jambi','Kota Sungai Penuh'],
+  'Sumatera Selatan': ['Kab. Banyuasin','Kab. Empat Lawang','Kab. Lahat','Kab. Muara Enim','Kab. Musi Banyuasin','Kab. Musi Rawas','Kab. Musi Rawas Utara','Kab. Ogan Ilir','Kab. Ogan Komering Ilir','Kab. Ogan Komering Ulu','Kab. Ogan Komering Ulu Selatan','Kab. Ogan Komering Ulu Timur','Kab. Penukal Abab Lematang Ilir','Kota Lubuklinggau','Kota Pagar Alam','Kota Palembang','Kota Prabumulih'],
+  'Bangka Belitung': ['Kab. Bangka','Kab. Bangka Barat','Kab. Bangka Selatan','Kab. Bangka Tengah','Kab. Belitung','Kab. Belitung Timur','Kota Pangkalpinang'],
+  'Bengkulu': ['Kab. Bengkulu Selatan','Kab. Bengkulu Tengah','Kab. Bengkulu Utara','Kab. Kaur','Kab. Kepahiang','Kab. Lebong','Kab. Mukomuko','Kab. Rejang Lebong','Kab. Seluma','Kota Bengkulu'],
+  'Lampung': ['Kab. Lampung Barat','Kab. Lampung Selatan','Kab. Lampung Tengah','Kab. Lampung Timur','Kab. Lampung Utara','Kab. Mesuji','Kab. Pesawaran','Kab. Pesisir Barat','Kab. Pringsewu','Kab. Tanggamus','Kab. Tulang Bawang','Kab. Tulang Bawang Barat','Kab. Way Kanan','Kota Bandar Lampung','Kota Metro'],
+  'DKI Jakarta': ['Kab. Kepulauan Seribu','Kota Jakarta Barat','Kota Jakarta Pusat','Kota Jakarta Selatan','Kota Jakarta Timur','Kota Jakarta Utara'],
+  'Jawa Barat': ['Kab. Bandung','Kab. Bandung Barat','Kab. Bekasi','Kab. Bogor','Kab. Ciamis','Kab. Cianjur','Kab. Cirebon','Kab. Garut','Kab. Indramayu','Kab. Karawang','Kab. Kuningan','Kab. Majalengka','Kab. Pangandaran','Kab. Purwakarta','Kab. Subang','Kab. Sukabumi','Kab. Sumedang','Kab. Tasikmalaya','Kota Bandung','Kota Bekasi','Kota Bogor','Kota Cimahi','Kota Cirebon','Kota Depok','Kota Sukabumi','Kota Tasikmalaya'],
+  'Banten': ['Kab. Lebak','Kab. Pandeglang','Kab. Serang','Kab. Tangerang','Kota Cilegon','Kota Serang','Kota Tangerang','Kota Tangerang Selatan'],
+  'Jawa Tengah': ['Kab. Banjarnegara','Kab. Banyumas','Kab. Batang','Kab. Blora','Kab. Boyolali','Kab. Brebes','Kab. Cilacap','Kab. Demak','Kab. Grobogan','Kab. Jepara','Kab. Karanganyar','Kab. Kebumen','Kab. Kendal','Kab. Klaten','Kab. Kudus','Kab. Magelang','Kab. Pati','Kab. Pekalongan','Kab. Pemalang','Kab. Purbalingga','Kab. Purworejo','Kab. Rembang','Kab. Semarang','Kab. Sragen','Kab. Sukoharjo','Kab. Tegal','Kab. Temanggung','Kab. Wonogiri','Kab. Wonosobo','Kota Magelang','Kota Pekalongan','Kota Salatiga','Kota Semarang','Kota Surakarta','Kota Tegal'],
+  'DI Yogyakarta': ['Kab. Bantul','Kab. Gunungkidul','Kab. Kulon Progo','Kab. Sleman','Kota Yogyakarta'],
+  'Jawa Timur': ['Kab. Bangkalan','Kab. Banyuwangi','Kab. Blitar','Kab. Bojonegoro','Kab. Bondowoso','Kab. Gresik','Kab. Jember','Kab. Jombang','Kab. Kediri','Kab. Lamongan','Kab. Lumajang','Kab. Madiun','Kab. Magetan','Kab. Malang','Kab. Mojokerto','Kab. Nganjuk','Kab. Ngawi','Kab. Pacitan','Kab. Pamekasan','Kab. Pasuruan','Kab. Ponorogo','Kab. Probolinggo','Kab. Sampang','Kab. Sidoarjo','Kab. Situbondo','Kab. Sumenep','Kab. Trenggalek','Kab. Tuban','Kab. Tulungagung','Kota Batu','Kota Blitar','Kota Kediri','Kota Madiun','Kota Malang','Kota Mojokerto','Kota Pasuruan','Kota Probolinggo','Kota Surabaya'],
+  'Bali': ['Kab. Badung','Kab. Bangli','Kab. Buleleng','Kab. Gianyar','Kab. Jembrana','Kab. Karangasem','Kab. Klungkung','Kab. Tabanan','Kota Denpasar'],
+  'Nusa Tenggara Barat': ['Kab. Bima','Kab. Dompu','Kab. Lombok Barat','Kab. Lombok Tengah','Kab. Lombok Timur','Kab. Lombok Utara','Kab. Sumbawa','Kab. Sumbawa Barat','Kota Bima','Kota Mataram'],
+  'Nusa Tenggara Timur': ['Kab. Alor','Kab. Belu','Kab. Ende','Kab. Flores Timur','Kab. Kupang','Kab. Lembata','Kab. Malaka','Kab. Manggarai','Kab. Manggarai Barat','Kab. Manggarai Timur','Kab. Nagekeo','Kab. Ngada','Kab. Rote Ndao','Kab. Sabu Raijua','Kab. Sikka','Kab. Sumba Barat','Kab. Sumba Barat Daya','Kab. Sumba Tengah','Kab. Sumba Timur','Kab. Timor Tengah Selatan','Kab. Timor Tengah Utara','Kota Kupang'],
+  'Kalimantan Barat': ['Kab. Bengkayang','Kab. Kapuas Hulu','Kab. Kayong Utara','Kab. Ketapang','Kab. Kubu Raya','Kab. Landak','Kab. Melawi','Kab. Mempawah','Kab. Sambas','Kab. Sanggau','Kab. Sekadau','Kab. Sintang','Kota Pontianak','Kota Singkawang'],
+  'Kalimantan Tengah': ['Kab. Barito Selatan','Kab. Barito Timur','Kab. Barito Utara','Kab. Gunung Mas','Kab. Kapuas','Kab. Katingan','Kab. Kotawaringin Barat','Kab. Kotawaringin Timur','Kab. Lamandau','Kab. Murung Raya','Kab. Pulang Pisau','Kab. Seruyan','Kab. Sukamara','Kota Palangka Raya'],
+  'Kalimantan Selatan': ['Kab. Balangan','Kab. Banjar','Kab. Barito Kuala','Kab. Hulu Sungai Selatan','Kab. Hulu Sungai Tengah','Kab. Hulu Sungai Utara','Kab. Kotabaru','Kab. Tabalong','Kab. Tanah Bumbu','Kab. Tanah Laut','Kab. Tapin','Kota Banjarbaru','Kota Banjarmasin'],
+  'Kalimantan Timur': ['Kab. Berau','Kab. Kutai Barat','Kab. Kutai Kartanegara','Kab. Kutai Timur','Kab. Mahakam Ulu','Kab. Paser','Kab. Penajam Paser Utara','Kota Balikpapan','Kota Bontang','Kota Samarinda'],
+  'Kalimantan Utara': ['Kab. Bulungan','Kab. Malinau','Kab. Nunukan','Kab. Tana Tidung','Kota Tarakan'],
+  'Sulawesi Utara': ['Kab. Bolaang Mongondow','Kab. Bolaang Mongondow Selatan','Kab. Bolaang Mongondow Timur','Kab. Bolaang Mongondow Utara','Kab. Kepulauan Sangihe','Kab. Kepulauan Siau Tagulandang Biaro','Kab. Kepulauan Talaud','Kab. Minahasa','Kab. Minahasa Selatan','Kab. Minahasa Tenggara','Kab. Minahasa Utara','Kota Bitung','Kota Kotamobagu','Kota Manado','Kota Tomohon'],
+  'Sulawesi Tengah': ['Kab. Banggai','Kab. Banggai Kepulauan','Kab. Banggai Laut','Kab. Buol','Kab. Donggala','Kab. Morowali','Kab. Morowali Utara','Kab. Parigi Moutong','Kab. Poso','Kab. Sigi','Kab. Tojo Una-Una','Kab. Tolitoli','Kota Palu'],
+  'Sulawesi Selatan': ['Kab. Bantaeng','Kab. Barru','Kab. Bone','Kab. Bulukumba','Kab. Enrekang','Kab. Gowa','Kab. Jeneponto','Kab. Kepulauan Selayar','Kab. Luwu','Kab. Luwu Timur','Kab. Luwu Utara','Kab. Maros','Kab. Pangkajene dan Kepulauan','Kab. Pinrang','Kab. Sidenreng Rappang','Kab. Sinjai','Kab. Soppeng','Kab. Takalar','Kab. Tana Toraja','Kab. Toraja Utara','Kab. Wajo','Kota Makassar','Kota Palopo','Kota Parepare'],
+  'Sulawesi Tenggara': ['Kab. Bombana','Kab. Buton','Kab. Buton Selatan','Kab. Buton Tengah','Kab. Buton Utara','Kab. Kolaka','Kab. Kolaka Timur','Kab. Kolaka Utara','Kab. Konawe','Kab. Konawe Kepulauan','Kab. Konawe Selatan','Kab. Konawe Utara','Kab. Muna','Kab. Muna Barat','Kab. Wakatobi','Kota Bau-Bau','Kota Kendari'],
+  'Gorontalo': ['Kab. Bone Bolango','Kab. Gorontalo','Kab. Gorontalo Utara','Kab. Pahuwato','Kab. Pohuwato','Kota Gorontalo'],
+  'Sulawesi Barat': ['Kab. Majene','Kab. Mamasa','Kab. Mamuju','Kab. Mamuju Tengah','Kab. Pasangkayu','Kab. Polewali Mandar'],
+  'Maluku': ['Kab. Buru','Kab. Buru Selatan','Kab. Kepulauan Aru','Kab. Maluku Barat Daya','Kab. Maluku Tengah','Kab. Maluku Tenggara','Kab. Maluku Tenggara Barat','Kab. Seram Bagian Barat','Kab. Seram Bagian Timur','Kota Ambon','Kota Tual'],
+  'Maluku Utara': ['Kab. Halmahera Barat','Kab. Halmahera Selatan','Kab. Halmahera Tengah','Kab. Halmahera Timur','Kab. Halmahera Utara','Kab. Kepulauan Sula','Kab. Pulau Morotai','Kab. Pulau Taliabu','Kota Ternate','Kota Tidore Kepulauan'],
+  'Papua Barat': ['Kab. Fakfak','Kab. Kaimana','Kab. Manokwari','Kab. Manokwari Selatan','Kab. Maybrat','Kab. Pegunungan Arfak','Kab. Raja Ampat','Kab. Sorong','Kab. Sorong Selatan','Kab. Tambrauw','Kab. Teluk Bintuni','Kab. Teluk Wondama','Kota Sorong'],
+  'Papua Barat Daya': ['Kab. Maybrat','Kab. Raja Ampat','Kab. Sorong','Kab. Sorong Selatan','Kab. Tambrauw','Kota Sorong'],
+  'Papua': ['Kab. Asmat','Kab. Biak Numfor','Kab. Boven Digoel','Kab. Deiyai','Kab. Dogiyai','Kab. Intan Jaya','Kab. Jayapura','Kab. Jayawijaya','Kab. Keerom','Kab. Kepulauan Yapen','Kab. Lanny Jaya','Kab. Mamberamo Raya','Kab. Mamberamo Tengah','Kab. Mappi','Kab. Merauke','Kab. Mimika','Kab. Nabire','Kab. Nduga','Kab. Paniai','Kab. Pegunungan Bintang','Kab. Puncak','Kab. Puncak Jaya','Kab. Sarmi','Kab. Supiori','Kab. Tolikara','Kab. Waropen','Kab. Yahukimo','Kab. Yalimo','Kota Jayapura'],
+  'Papua Tengah': ['Kab. Deiyai','Kab. Dogiyai','Kab. Intan Jaya','Kab. Mimika','Kab. Nabire','Kab. Paniai','Kab. Puncak','Kab. Puncak Jaya'],
+  'Papua Pegunungan': ['Kab. Jayawijaya','Kab. Lanny Jaya','Kab. Mamberamo Tengah','Kab. Nduga','Kab. Pegunungan Bintang','Kab. Tolikara','Kab. Yahukimo','Kab. Yalimo'],
+  'Papua Selatan': ['Kab. Asmat','Kab. Boven Digoel','Kab. Mappi','Kab. Merauke'],
+}
+
+const PROVINCES = Object.keys(WILAYAH).sort()
+
 export default function SiswaBaruPage() {
   const router   = useRouter()
   const supabase = createBrowserClient(
@@ -13,26 +57,33 @@ export default function SiswaBaruPage() {
   )
 
   const [form, setForm] = useState({
-    full_name:        '',
-    phone:            '',
-    email:            '',
-    // Pihak berelasi (orang tua/wali)
-    relation_name:    '',
-    relation_role:    'Orang Tua',
-    relation_phone:   '',
-    // Info tambahan
-    school:           '',
-    grade:            '',
-    notes:            '',
+    full_name:      '',
+    phone:          '',
+    email:          '',
+    birth_date:     '',
+    province:       '',
+    city:           '',
+    relation_name:  '',
+    relation_role:  'Orang Tua',
+    relation_phone: '',
+    relation_email: '',
+    school:         '',
+    grade:          '',
+    notes:          '',
   })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
 
   const RELATION_ROLES = ['Orang Tua', 'Wali', 'Diri Sendiri']
+  const cities = form.province ? (WILAYAH[form.province] ?? []) : []
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
+    if (name === 'province') {
+      setForm(prev => ({ ...prev, province: value, city: '' }))
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -40,7 +91,6 @@ export default function SiswaBaruPage() {
     if (!form.full_name.trim()) { setError('Nama siswa wajib diisi.'); return }
     setLoading(true); setError('')
 
-    // 1. Buat profile
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
       .insert({
@@ -48,26 +98,25 @@ export default function SiswaBaruPage() {
         phone:     form.phone.trim() || null,
         email:     form.email.trim() || null,
       })
-      .select('id')
-      .single()
+      .select('id').single()
 
     if (profileErr) { setError(profileErr.message); setLoading(false); return }
 
-    // 2. Buat student record
-    const { error: studentErr } = await supabase
-      .from('students')
-      .insert({
-        profile_id:     profile.id,
-        relation_name:  form.relation_name.trim() || null,
-        relation_role:  form.relation_role || null,
-        relation_phone: form.relation_phone.trim() || null,
-        school:         form.school.trim() || null,
-        grade:          form.grade.trim() || null,
-        notes:          form.notes.trim() || null,
-      })
+    const { error: studentErr } = await supabase.from('students').insert({
+      profile_id:     profile.id,
+      birth_date:     form.birth_date || null,
+      province:       form.province || null,
+      city:           form.city || null,
+      relation_name:  form.relation_name.trim() || null,
+      relation_role:  form.relation_role || null,
+      relation_phone: form.relation_phone.trim() || null,
+      relation_email: form.relation_email.trim() || null,
+      school:         form.school.trim() || null,
+      grade:          form.grade.trim() || null,
+      notes:          form.notes.trim() || null,
+    })
 
     if (studentErr) {
-      // Hapus profile kalau student gagal
       await supabase.from('profiles').delete().eq('id', profile.id)
       setError(studentErr.message); setLoading(false); return
     }
@@ -88,7 +137,7 @@ export default function SiswaBaruPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
-        {/* ── DATA SISWA ── */}
+        {/* DATA SISWA */}
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
           <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Data Siswa</p>
 
@@ -111,6 +160,31 @@ export default function SiswaBaruPage() {
             </div>
           </div>
 
+          {/* Tanggal Lahir */}
+          <div>
+            <label className={labelCls}>Tanggal Lahir <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+            <input type="date" name="birth_date" value={form.birth_date} onChange={handleChange} className={inputCls}/>
+          </div>
+
+          {/* Asal Daerah */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Provinsi <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <select name="province" value={form.province} onChange={handleChange} className={inputCls}>
+                <option value="">-- Pilih Provinsi --</option>
+                {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Kabupaten/Kota <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <select name="city" value={form.city} onChange={handleChange}
+                disabled={!form.province} className={`${inputCls} ${!form.province ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <option value="">-- Pilih Kab/Kota --</option>
+                {cities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Sekolah <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
@@ -120,12 +194,12 @@ export default function SiswaBaruPage() {
             <div>
               <label className={labelCls}>Kelas/Tingkat <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
               <input type="text" name="grade" value={form.grade} onChange={handleChange}
-                placeholder="Contoh: Kelas 10, Semester 3" className={inputCls}/>
+                placeholder="Kelas 10 / Semester 3" className={inputCls}/>
             </div>
           </div>
         </div>
 
-        {/* ── PIHAK BERELASI ── */}
+        {/* PIHAK BERELASI */}
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
           <div>
             <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Pihak Berelasi</p>
@@ -139,38 +213,43 @@ export default function SiswaBaruPage() {
             </select>
           </div>
 
-          {form.relation_role !== 'Diri Sendiri' && (
+          {form.relation_role !== 'Diri Sendiri' ? (
             <>
               <div>
                 <label className={labelCls}>Nama {form.relation_role}</label>
                 <input type="text" name="relation_name" value={form.relation_name} onChange={handleChange}
                   placeholder={`Nama ${form.relation_role.toLowerCase()} siswa`} className={inputCls}/>
               </div>
-              <div>
-                <label className={labelCls}>No. HP {form.relation_role}</label>
-                <input type="text" name="relation_phone" value={form.relation_phone} onChange={handleChange}
-                  placeholder="08xxxxxxxxxx" className={inputCls}/>
-                <p className="text-xs text-[#7B78A8] mt-1">Nomor ini digunakan untuk notifikasi WhatsApp</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>No. HP {form.relation_role}</label>
+                  <input type="text" name="relation_phone" value={form.relation_phone} onChange={handleChange}
+                    placeholder="08xxxxxxxxxx" className={inputCls}/>
+                  <p className="text-xs text-[#7B78A8] mt-1">Untuk notifikasi WhatsApp</p>
+                </div>
+                <div>
+                  <label className={labelCls}>Email {form.relation_role} <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+                  <input type="email" name="relation_email" value={form.relation_email} onChange={handleChange}
+                    placeholder="email@contoh.com" className={inputCls}/>
+                  <p className="text-xs text-[#7B78A8] mt-1">Untuk akses Google Drive</p>
+                </div>
               </div>
             </>
-          )}
-
-          {form.relation_role === 'Diri Sendiri' && (
+          ) : (
             <div className="px-4 py-3 bg-[#EEEDFE] rounded-xl">
               <p className="text-xs font-semibold text-[#3C3489]">
-                💡 Notifikasi WhatsApp akan dikirim ke nomor HP siswa yang diisi di atas.
+                💡 Notifikasi WA dan akses Google Drive akan menggunakan data kontak siswa di atas.
               </p>
             </div>
           )}
         </div>
 
-        {/* ── CATATAN ── */}
+        {/* CATATAN */}
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
           <label className={labelCls}>Catatan <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
           <textarea name="notes" value={form.notes} onChange={handleChange}
             placeholder="Catatan tambahan tentang siswa ini..."
-            rows={3}
-            className={`${inputCls} resize-none`}/>
+            rows={3} className={`${inputCls} resize-none`}/>
         </div>
 
         {error && (
