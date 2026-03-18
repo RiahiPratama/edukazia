@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── Mapping role → route yang diizinkan ──────────────────
 const ROLE_ROUTES: Record<string, string> = {
-  admin: '/admin/dashboard',  // ← ubah dari /admin
+  admin: '/admin',
   tutor: '/tutor',
   student: '/siswa',
 }
