@@ -1,0 +1,485 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink } from 'lucide-react'
+
+type Session = {
+  id: string
+  class_group_id: string
+  scheduled_at: string
+  status: string
+  zoom_link: string | null
+  reschedule_reason: string | null
+  class_group?: { label: string; tutor_name: string; course_name: string; color: string }
+}
+
+type ClassGroup = {
+  id: string
+  label: string
+  tutor_id: string
+  course_id: string
+}
+
+const STATUS_MAP: Record<string, { label: string; pill: string }> = {
+  scheduled:  { label: 'Terjadwal', pill: 'bg-[#EEEDFE] text-[#3C3489]' },
+  completed:  { label: 'Selesai',   pill: 'bg-[#E6F4EC] text-[#1A5C36]' },
+  cancelled:  { label: 'Dibatalkan',pill: 'bg-[#FEE9E9] text-[#991B1B]' },
+  rescheduled:{ label: 'Dijadwal Ulang', pill: 'bg-[#FEF3E2] text-[#92400E]' },
+}
+
+const COURSE_COLORS = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED']
+
+function getWeekDates(base: Date) {
+  const day = base.getDay()
+  const monday = new Date(base)
+  monday.setDate(base.getDate() - (day === 0 ? 6 : day - 1))
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
+function fmtDate(d: Date) {
+  return d.toISOString().split('T')[0]
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function fmtDayLabel(d: Date) {
+  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+const DAY_NAMES = ['Sen','Sel','Rab','Kam','Jum','Sab','Min']
+
+export default function JadwalPage() {
+  const supabase = createClient()
+
+  const [sessions, setSessions]       = useState<Session[]>([])
+  const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
+  const [weekBase, setWeekBase]       = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
+  const [loading, setLoading]         = useState(true)
+
+  // Modal state
+  const [showModal, setShowModal]   = useState(false)
+  const [editSession, setEditSession] = useState<Session | null>(null)
+  const [delConfirm, setDelConfirm] = useState<string | null>(null)
+  const [saving, setSaving]         = useState(false)
+  const [formError, setFormError]   = useState('')
+
+  // Form
+  const [fClassGroup, setFClassGroup] = useState('')
+  const [fDate, setFDate]             = useState(fmtDate(new Date()))
+  const [fTime, setFTime]             = useState('08:00')
+  const [fStatus, setFStatus]         = useState('scheduled')
+  const [fZoom, setFZoom]             = useState('')
+
+  const weekDates = getWeekDates(weekBase)
+
+  useEffect(() => { fetchAll() }, [])
+
+  async function fetchAll() {
+    setLoading(true)
+
+    // Fetch sessions for current month range (wider range)
+    const start = new Date(weekBase)
+    start.setDate(1)
+    start.setMonth(start.getMonth() - 1)
+    const end = new Date(weekBase)
+    end.setMonth(end.getMonth() + 2)
+
+    const { data: sess } = await supabase
+      .from('sessions')
+      .select('id, class_group_id, scheduled_at, status, zoom_link, reschedule_reason')
+      .gte('scheduled_at', start.toISOString())
+      .lte('scheduled_at', end.toISOString())
+      .order('scheduled_at', { ascending: true })
+
+    // Fetch class groups
+    const { data: cg } = await supabase
+      .from('class_groups')
+      .select('id, label, tutor_id, course_id')
+
+    const cgList = (cg ?? []) as ClassGroup[]
+    setClassGroups(cgList)
+
+    // Fetch tutor names
+    const tutorIds = [...new Set(cgList.map(c => c.tutor_id).filter(Boolean))]
+    let tutorMap: Record<string, string> = {}
+    if (tutorIds.length > 0) {
+      const { data: tutors } = await supabase.from('tutors').select('id, profile_id').in('id', tutorIds)
+      const profIds = (tutors ?? []).map((t: any) => t.profile_id).filter(Boolean)
+      if (profIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', profIds)
+        const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]))
+        tutorMap = Object.fromEntries((tutors ?? []).map((t: any) => [t.id, profMap[t.profile_id] ?? 'Tutor']))
+      }
+    }
+
+    // Fetch course names
+    const courseIds = [...new Set(cgList.map(c => c.course_id).filter(Boolean))]
+    let courseMap: Record<string, string> = {}
+    if (courseIds.length > 0) {
+      const { data: courses } = await supabase.from('courses').select('id, name').in('id', courseIds)
+      courseMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.name]))
+    }
+
+    // Assign colors per course
+    const courseColorMap: Record<string, string> = {}
+    let ci = 0
+    for (const id of courseIds) { courseColorMap[id] = COURSE_COLORS[ci++ % COURSE_COLORS.length] }
+
+    // Merge
+    const cgMap = Object.fromEntries(cgList.map(c => [c.id, {
+      label: c.label,
+      tutor_name: tutorMap[c.tutor_id] ?? '—',
+      course_name: courseMap[c.course_id] ?? '—',
+      color: courseColorMap[c.course_id] ?? '#5C4FE5',
+    }]))
+
+    const merged = (sess ?? []).map((s: any) => ({ ...s, class_group: cgMap[s.class_group_id] }))
+    setSessions(merged)
+    setLoading(false)
+  }
+
+  // Sessions per date
+  const sessionsOnDate = (date: string) =>
+    sessions.filter(s => fmtDate(new Date(s.scheduled_at)) === date)
+
+  const selectedSessions = sessionsOnDate(selectedDate)
+
+  // Open add modal
+  function openAdd() {
+    setEditSession(null)
+    setFClassGroup(classGroups[0]?.id ?? '')
+    setFDate(selectedDate)
+    setFTime('08:00')
+    setFStatus('scheduled')
+    setFZoom('')
+    setFormError('')
+    setShowModal(true)
+  }
+
+  // Open edit modal
+  function openEdit(s: Session) {
+    setEditSession(s)
+    setFClassGroup(s.class_group_id)
+    const dt = new Date(s.scheduled_at)
+    setFDate(fmtDate(dt))
+    setFTime(dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }))
+    setFStatus(s.status)
+    setFZoom(s.zoom_link ?? '')
+    setFormError('')
+    setShowModal(true)
+  }
+
+  async function handleSave() {
+    if (!fClassGroup) { setFormError('Pilih kelas terlebih dahulu.'); return }
+    setSaving(true)
+    setFormError('')
+
+    const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
+    const payload = {
+      class_group_id: fClassGroup,
+      scheduled_at,
+      status: fStatus,
+      zoom_link: fZoom || null,
+    }
+
+    if (editSession) {
+      const { error } = await supabase.from('sessions').update(payload).eq('id', editSession.id)
+      if (error) { setFormError(error.message); setSaving(false); return }
+    } else {
+      const { error } = await supabase.from('sessions').insert(payload)
+      if (error) { setFormError(error.message); setSaving(false); return }
+    }
+
+    setSaving(false)
+    setShowModal(false)
+    fetchAll()
+  }
+
+  async function handleDelete(id: string) {
+    await supabase.from('sessions').delete().eq('id', id)
+    setDelConfirm(null)
+    fetchAll()
+  }
+
+  async function markComplete(id: string) {
+    await supabase.from('sessions').update({ status: 'completed' }).eq('id', id)
+    fetchAll()
+  }
+
+  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+
+  return (
+    <div className="max-w-3xl">
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora, sans-serif' }}>Jadwal</h1>
+          <p className="text-sm text-[#7B78A8] mt-0.5">Kelola sesi kelas mingguan</p>
+        </div>
+        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2.5 bg-[#5C4FE5] text-white text-sm font-semibold rounded-xl hover:bg-[#3D34C4] transition active:scale-95">
+          <Plus size={15} />
+          Tambah Sesi
+        </button>
+      </div>
+
+      {/* Week card */}
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-4">
+        {/* Week navigation */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() - 7); setWeekBase(d) }}
+            className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm font-semibold text-[#1A1640]">
+            {weekDates[0].toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })} –{' '}
+            {weekDates[6].toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </span>
+          <button
+            onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() + 7); setWeekBase(d) }}
+            className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+
+        {/* 7-day strip */}
+        <div className="grid grid-cols-7 gap-2">
+          {weekDates.map((d, i) => {
+            const key  = fmtDate(d)
+            const isToday    = key === fmtDate(new Date())
+            const isSelected = key === selectedDate
+            const hasSesi    = sessionsOnDate(key).length > 0
+            const count      = sessionsOnDate(key).length
+
+            return (
+              <button
+                key={key}
+                onClick={() => setSelectedDate(key)}
+                className={[
+                  'flex flex-col items-center py-2.5 px-1 rounded-xl border transition-all',
+                  isSelected
+                    ? 'bg-[#5C4FE5] border-[#5C4FE5]'
+                    : isToday
+                    ? 'bg-[#F0EEFF] border-[#C4BFFF]'
+                    : 'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]',
+                ].join(' ')}
+              >
+                <span className={`text-[10px] font-semibold mb-1 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>
+                  {DAY_NAMES[i]}
+                </span>
+                <span className={`text-sm font-bold ${isSelected ? 'text-white' : isToday ? 'text-[#5C4FE5]' : 'text-[#1A1640]'}`}>
+                  {d.getDate()}
+                </span>
+                {hasSesi ? (
+                  <div className="flex gap-0.5 mt-1.5">
+                    {Array.from({ length: Math.min(count, 3) }).map((_, j) => (
+                      <div key={j} className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-[#5C4FE5]'}`} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-3.5 mt-1" />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Session list */}
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+        {/* List header */}
+        <div className="px-5 py-3.5 border-b border-[#E5E3FF] bg-[#F7F6FF]">
+          <span className="text-xs font-bold uppercase tracking-wider text-[#7B78A8]">
+            {fmtDayLabel(new Date(selectedDate + 'T00:00:00'))}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Memuat jadwal...</div>
+        ) : selectedSessions.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <div className="text-3xl mb-3">📅</div>
+            <p className="text-sm font-semibold text-[#7B78A8]">Tidak ada sesi pada hari ini</p>
+            <button onClick={openAdd} className="mt-3 text-sm text-[#5C4FE5] font-semibold hover:underline">
+              + Tambah sesi baru
+            </button>
+          </div>
+        ) : (
+          <div>
+            {selectedSessions.map((s, idx) => {
+              const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
+              return (
+                <div key={s.id} className={`flex items-center gap-4 px-5 py-4 ${idx < selectedSessions.length - 1 ? 'border-b border-[#E5E3FF]' : ''} hover:bg-[#F7F6FF] transition-colors`}>
+                  {/* Time */}
+                  <div className="min-w-[44px] text-sm font-bold text-[#5C4FE5]">
+                    {fmtTime(s.scheduled_at)}
+                  </div>
+
+                  {/* Color dot */}
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.class_group?.color ?? '#5C4FE5' }} />
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-[#1A1640] truncate">
+                      {s.class_group?.label ?? '—'}
+                    </div>
+                    <div className="text-xs text-[#7B78A8] mt-0.5">
+                      {s.class_group?.tutor_name} · {s.class_group?.course_name}
+                    </div>
+                  </div>
+
+                  {/* Zoom link */}
+                  {s.zoom_link && (
+                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                      className="text-[#5C4FE5] hover:opacity-70 transition"
+                      title="Buka Zoom">
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+
+                  {/* Status pill */}
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.pill}`}>
+                    {st.label}
+                  </span>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {s.status === 'scheduled' && (
+                      <button onClick={() => markComplete(s.id)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition"
+                        title="Tandai Selesai">
+                        <Check size={14} />
+                      </button>
+                    )}
+                    <button onClick={() => openEdit(s)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition"
+                      title="Edit">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => setDelConfirm(s.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                      title="Hapus">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF]">
+              <h2 className="text-base font-bold text-[#1A1640]">
+                {editSession ? 'Edit Sesi' : 'Tambah Sesi Baru'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8] transition">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {/* Kelas */}
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                  Kelas <span className="text-red-500">*</span>
+                </label>
+                <select value={fClassGroup} onChange={e => setFClassGroup(e.target.value)} className={inputCls}>
+                  <option value="">-- Pilih Kelas --</option>
+                  {classGroups.map(c => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tanggal & Jam */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tanggal</label>
+                  <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jam Mulai</label>
+                  <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Status</label>
+                <select value={fStatus} onChange={e => setFStatus(e.target.value)} className={inputCls}>
+                  <option value="scheduled">Terjadwal</option>
+                  <option value="completed">Selesai</option>
+                  <option value="cancelled">Dibatalkan</option>
+                  <option value="rescheduled">Dijadwal Ulang</option>
+                </select>
+              </div>
+
+              {/* Zoom */}
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                  Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
+                </label>
+                <input type="url" placeholder="https://zoom.us/j/..." value={fZoom} onChange={e => setFZoom(e.target.value)} className={inputCls} />
+              </div>
+
+              {formError && (
+                <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">
+                  {formError}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 pb-5 flex gap-3">
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                {saving ? 'Menyimpan...' : editSession ? 'Simpan Perubahan' : 'Tambah Sesi'}
+              </button>
+              <button onClick={() => setShowModal(false)}
+                className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {delConfirm && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+              <Trash2 size={22} className="text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Sesi?</h3>
+            <p className="text-sm text-[#7B78A8] mb-6">Data sesi ini akan dihapus permanen.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDelConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-[#F7F6FF] transition">
+                Batal
+              </button>
+              <button onClick={() => handleDelete(delConfirm)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition">
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
