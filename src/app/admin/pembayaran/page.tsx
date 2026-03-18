@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, X, Check, Search, MessageCircle, Eye } from 'lucide-react'
@@ -56,7 +56,7 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function PembayaranPage() {
+function PembayaranContent() {
   const supabase     = createClient()
   const searchParams = useSearchParams()
 
@@ -532,5 +532,13 @@ export default function PembayaranPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function PembayaranPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-[#7B78A8]">Memuat pembayaran...</div>}>
+      <PembayaranContent />
+    </Suspense>
   )
 }

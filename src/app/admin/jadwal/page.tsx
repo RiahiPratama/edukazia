@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus, ChevronDown, ChevronUp, Users } from 'lucide-react'
@@ -73,7 +73,7 @@ function generateSessions(row: JadwalRow): string[] {
   })
 }
 
-export default function JadwalPage() {
+function JadwalContent() {
   const supabase = createClient()
   const searchParams = useSearchParams()
 
@@ -586,5 +586,13 @@ export default function JadwalPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function JadwalPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-[#7B78A8]">Memuat jadwal...</div>}>
+      <JadwalContent />
+    </Suspense>
   )
 }
