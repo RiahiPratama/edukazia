@@ -163,12 +163,17 @@ export default function TambahSiswaPage() {
                 </label>
                 <select name="parent_relation" value={form.parent_relation} onChange={handleChange}
                   className={inputClass}>
+                  <option>Diri Sendiri</option>
                   <option>Ayah</option>
                   <option>Ibu</option>
                   <option>Wali</option>
                   <option>Kakak</option>
+                  <option>Lainnya</option>
                 </select>
               </div>
+              <p className="text-xs text-[#7B78A8] col-span-3 mt-1">
+                Untuk siswa dewasa yang mendaftar sendiri, pilih "Diri Sendiri" dan isi nama & HP dengan data siswa.
+              </p>
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Nama <span className="text-red-500">*</span>
