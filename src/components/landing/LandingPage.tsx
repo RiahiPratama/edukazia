@@ -430,7 +430,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         <div className="s-head-center reveal">
           <div className="s-eyebrow">🎓 Jenis Kelas</div>
           <h2 className="s-title">Pilih Format Belajar yang Tepat</h2>
-          < className="s-sub" style={{ margin: '0 auto', textAlign: 'center' }}>Tiga jenis kelas sesuai kebutuhan. Hubungi admin untuk informasi harga tiap program.</p>
+          <p className="s-sub" style={{ margin: '0 auto', textAlign: 'center', maxWidth: '800px' }}>Tiga jenis kelas sesuai kebutuhan. Hubungi admin untuk informasi harga tiap program.</p>
         </div>
         <div className="kelas-grid">
           <div className="kelas-card kelas-card-reguler reveal">
@@ -478,8 +478,8 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         </div>
       </section >
 
-    {/* FEATURES */ }
-    < section id = "features" >
+      {/* FEATURES */}
+      < section id="features" >
         <div className="s-head-center reveal">
           <div className="s-eyebrow">💡 Keunggulan</div>
           <h2 className="s-title">Kenapa Beda dari yang Lain?</h2>
@@ -501,8 +501,8 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         </div>
       </ >
 
-    {/* TESTIMONIALS */ }
-    < section id = "testi" >
+      {/* TESTIMONIALS */}
+      < section id="testi" >
         <div className="s-head-center reveal">
           <div className="s-eyebrow">💬 Cerita Pelajar</div>
           <h2 className="s-title">Hasil Nyata dari Pelajar Kami</h2>
@@ -532,9 +532,9 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         </div>
       </ >
 
-    {/* TENTANG */ }
-    < section id = "tentang" style = {{ background: 'var(--bg3)' }
-}>
+      {/* TENTANG */}
+      < section id="tentang" style={{ background: 'var(--bg3)' }
+      }>
         <div className="s-head-center reveal">
           <div className="s-eyebrow">🏫 Tentang Kami</div>
           <h2 className="s-title">Kenapa EduKazia?</h2>
@@ -556,8 +556,8 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         </div>
       </ >
 
-  {/* FAQ */ }
-  < section id = "faq" >
+      {/* FAQ */}
+      < section id="faq" >
         <div className="s-head-center reveal">
           <div className="s-eyebrow">❓ FAQ</div>
           <h2 className="s-title">Pertanyaan yang Sering Ditanyakan</h2>
@@ -585,23 +585,23 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         </div>
       </section >
 
-  {/* CTA */ }
-  < section id = "cta" >
-    <div className="cta-wrap reveal">
-      <div className="s-eyebrow" style={{ display: 'inline-flex', margin: '0 auto 18px', borderColor: 'rgba(255,255,255,.2)', color: 'rgba(255,255,255,.8)', background: 'rgba(255,255,255,.08)' }}>🚀 Mulai Sekarang</div>
-      <h2 className="cta-title">Siap Mulai Perjalanan Belajarmu?</h2>
-      <p className="cta-sub">Mulai perjalanan belajarmu bersama EduKazia. Sesi pertama dapat dijadwalkan setelah konsultasi singkat via WhatsApp — gratis, tanpa komitmen.</p>
-      <div className="cta-btns">
-        <a href={`${waBase}Halo+EduKazia%2C+saya+ingin+konsultasi+dan+daftar+kursus`} target="_blank" rel="noopener noreferrer" className="btn-cta-y">
-          {WA_SVG_LG} Daftar via WhatsApp — Gratis!
-        </a>
-        <a href="#faq" className="btn-cta-w">❓ Lihat Pertanyaan Umum</a>
-      </div>
-    </div>
+      {/* CTA */}
+      < section id="cta" >
+        <div className="cta-wrap reveal">
+          <div className="s-eyebrow" style={{ display: 'inline-flex', margin: '0 auto 18px', borderColor: 'rgba(255,255,255,.2)', color: 'rgba(255,255,255,.8)', background: 'rgba(255,255,255,.08)' }}>🚀 Mulai Sekarang</div>
+          <h2 className="cta-title">Siap Mulai Perjalanan Belajarmu?</h2>
+          <p className="cta-sub">Mulai perjalanan belajarmu bersama EduKazia. Sesi pertama dapat dijadwalkan setelah konsultasi singkat via WhatsApp — gratis, tanpa komitmen.</p>
+          <div className="cta-btns">
+            <a href={`${waBase}Halo+EduKazia%2C+saya+ingin+konsultasi+dan+daftar+kursus`} target="_blank" rel="noopener noreferrer" className="btn-cta-y">
+              {WA_SVG_LG} Daftar via WhatsApp — Gratis!
+            </a>
+            <a href="#faq" className="btn-cta-w">❓ Lihat Pertanyaan Umum</a>
+          </div>
+        </div>
       </section >
 
-  {/* FOOTER */ }
-  < footer >
+      {/* FOOTER */}
+      < footer >
         <div className="footer-grid">
           <div className="fb">
             <p style={{ fontFamily: "'Sora',sans-serif", fontWeight: 800, fontSize: '1.4rem' }}>
