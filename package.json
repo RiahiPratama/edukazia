@@ -9,9 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.2",
     "lucide-react": "^0.577.0",
+=======
+>>>>>>> 47a74ed (Initial commit from Create Next App)
     "next": "16.1.7",
     "react": "19.2.3",
     "react-dom": "19.2.3"
@@ -24,7 +27,10 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
+<<<<<<< HEAD
     "supabase": "^2.81.0",
+=======
+>>>>>>> 47a74ed (Initial commit from Create Next App)
     "tailwindcss": "^4",
     "typescript": "^5"
   }
