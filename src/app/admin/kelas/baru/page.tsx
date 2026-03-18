@@ -259,7 +259,7 @@ export default function BuatKelasPage() {
                         placeholder="Cari siswa..."
                         value={siswaSearch}
                         onChange={e => setSiswaSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-[#E5E3FF] bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5] transition"
+                        className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-[#E5E3FF] bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] transition"
                         autoFocus
                       />
                     </div>
