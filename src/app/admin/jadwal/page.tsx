@@ -13,30 +13,36 @@ type Session = {
   class_group?: { label: string; tutor_name: string; course_name: string; color: string }
 }
 
-type ClassGroup = { id: string; label: string; tutor_id: string; course_id: string }
+type ClassGroup = {
+  id: string
+  label: string
+  tutor_id: string
+  course_id: string
+  zoom_link: string | null  // FIX isu 3: tambah zoom_link
+}
 
 type SiswaItem = {
   id: string
   name: string
   sessionsTotal: number
   sessionStartOffset: number
-  sessionNumber: number  // calculated: urutan sesi ini untuk siswa tsb
+  sessionNumber: number
 }
 
 type JadwalRow = { date: string; time: string; repeat: number }
 
 const STATUS_MAP: Record<string, { label: string; pill: string }> = {
-  scheduled: { label: 'Terjadwal', pill: 'bg-[#EEEDFE] text-[#3C3489]' },
-  completed: { label: 'Selesai', pill: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  cancelled: { label: 'Dibatalkan', pill: 'bg-[#FEE9E9] text-[#991B1B]' },
+  scheduled:   { label: 'Terjadwal',      pill: 'bg-[#EEEDFE] text-[#3C3489]' },
+  completed:   { label: 'Selesai',        pill: 'bg-[#E6F4EC] text-[#1A5C36]' },
+  cancelled:   { label: 'Dibatalkan',     pill: 'bg-[#FEE9E9] text-[#991B1B]' },
   rescheduled: { label: 'Dijadwal Ulang', pill: 'bg-[#FEF3E2] text-[#92400E]' },
 }
 
-const COURSE_COLORS = ['#5C4FE5', '#27A05A', '#D97706', '#DC2626', '#0891B2', '#7C3AED']
-const AVATAR_COLORS = ['#5C4FE5', '#27A05A', '#D97706', '#DC2626', '#0891B2', '#7C3AED', '#BE185D', '#065F46', '#92400E', '#1E40AF']
-const MAX_ROWS = 5
+const COURSE_COLORS  = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED']
+const AVATAR_COLORS  = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED','#BE185D','#065F46','#92400E','#1E40AF']
+const MAX_ROWS   = 5
 const MAX_REPEAT = 16
-const DAY_NAMES = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
+const DAY_NAMES  = ['Sen','Sel','Rab','Kam','Jum','Sab','Min']
 
 function getWeekDates(base: Date) {
   const day = base.getDay()
@@ -46,12 +52,18 @@ function getWeekDates(base: Date) {
 }
 function fmtDate(d: Date) {
   const offset = d.getTimezoneOffset()
-  const local = new Date(d.getTime() - offset * 60 * 1000)
+  const local  = new Date(d.getTime() - offset * 60 * 1000)
   return local.toISOString().split('T')[0]
 }
-function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) }
-function fmtDayLabel(d: Date) { return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
-function getInitials(name: string) { return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase() }
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+function fmtDayLabel(d: Date) {
+  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+function getInitials(name: string) {
+  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
+}
 function generateSessions(row: JadwalRow): string[] {
   return Array.from({ length: row.repeat }, (_, i) => {
     const d = new Date(`${row.date}T${row.time}:00`)
@@ -63,39 +75,39 @@ function generateSessions(row: JadwalRow): string[] {
 export default function JadwalPage() {
   const supabase = createClient()
 
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
-  const [weekBase, setWeekBase] = useState(new Date())
+  const [sessions,     setSessions]     = useState<Session[]>([])
+  const [classGroups,  setClassGroups]  = useState<ClassGroup[]>([])
+  const [weekBase,     setWeekBase]     = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
-  const [loading, setLoading] = useState(true)
+  const [loading,      setLoading]      = useState(true)
 
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [siswaMap, setSiswaMap] = useState<Record<string, SiswaItem[]>>({})
-  const [loadingSiswa, setLoadingSiswa] = useState<string | null>(null)
+  const [expandedId,    setExpandedId]    = useState<string | null>(null)
+  const [siswaMap,      setSiswaMap]      = useState<Record<string, SiswaItem[]>>({})
+  const [loadingSiswa,  setLoadingSiswa]  = useState<string | null>(null)
 
-  const [showModal, setShowModal] = useState(false)
+  const [showModal,   setShowModal]   = useState(false)
   const [editSession, setEditSession] = useState<Session | null>(null)
-  const [delConfirm, setDelConfirm] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [delConfirm,  setDelConfirm]  = useState<string | null>(null)
+  const [saving,      setSaving]      = useState(false)
+  const [formError,   setFormError]   = useState('')
 
   const [fClassGroup, setFClassGroup] = useState('')
-  const [fStatus, setFStatus] = useState('scheduled')
-  const [fZoom, setFZoom] = useState('')
-  const [fDate, setFDate] = useState(fmtDate(new Date()))
-  const [fTime, setFTime] = useState('08:00')
-  const [jadwalRows, setJadwalRows] = useState<JadwalRow[]>([{ date: fmtDate(new Date()), time: '08:00', repeat: 1 }])
+  const [fStatus,     setFStatus]     = useState('scheduled')
+  const [fZoom,       setFZoom]       = useState('')
+  const [fDate,       setFDate]       = useState(fmtDate(new Date()))
+  const [fTime,       setFTime]       = useState('08:00')
+  const [jadwalRows,  setJadwalRows]  = useState<JadwalRow[]>([{ date: fmtDate(new Date()), time: '08:00', repeat: 1 }])
 
-  const weekDates = getWeekDates(weekBase)
+  const weekDates  = getWeekDates(weekBase)
   const isEditMode = !!editSession
-  const totalSesi = jadwalRows.reduce((acc, r) => acc + r.repeat, 0)
+  const totalSesi  = jadwalRows.reduce((acc, r) => acc + r.repeat, 0)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
     const start = new Date(weekBase); start.setMonth(start.getMonth() - 1)
-    const end = new Date(weekBase); end.setMonth(end.getMonth() + 2)
+    const end   = new Date(weekBase); end.setMonth(end.getMonth() + 2)
 
     const { data: sess } = await supabase
       .from('sessions')
@@ -104,7 +116,10 @@ export default function JadwalPage() {
       .lte('scheduled_at', end.toISOString())
       .order('scheduled_at', { ascending: true })
 
-    const { data: cg } = await supabase.from('class_groups').select('id, label, tutor_id, course_id')
+    // FIX isu 3: fetch zoom_link dari class_groups
+    const { data: cg } = await supabase
+      .from('class_groups')
+      .select('id, label, tutor_id, course_id, zoom_link')
     const cgList = (cg ?? []) as ClassGroup[]
     setClassGroups(cgList)
 
@@ -130,47 +145,36 @@ export default function JadwalPage() {
     }
 
     const cgMap = Object.fromEntries(cgList.map(c => [c.id, {
-      label: c.label,
-      tutor_name: tutorMap[c.tutor_id] ?? '—',
+      label:       c.label,
+      tutor_name:  tutorMap[c.tutor_id] ?? '—',
       course_name: courseMap[c.course_id] ?? '—',
-      color: courseColorMap[c.course_id] ?? '#5C4FE5',
+      color:       courseColorMap[c.course_id] ?? '#5C4FE5',
     }]))
 
     setSessions((sess ?? []).map((s: any) => ({ ...s, class_group: cgMap[s.class_group_id] })))
     setLoading(false)
   }
 
-  // ── Fetch siswa dengan perhitungan sesi ke-X dari Y ──
   async function fetchSiswa(session: Session) {
     const sid = session.id
     if (siswaMap[sid]) { setExpandedId(prev => prev === sid ? null : sid); return }
+    setLoadingSiswa(sid); setExpandedId(sid)
 
-    setLoadingSiswa(sid)
-    setExpandedId(sid)
-
-    // 1. Ambil semua sessions untuk class_group ini, urut by scheduled_at
     const { data: allSessions } = await supabase
-      .from('sessions')
-      .select('id, scheduled_at')
+      .from('sessions').select('id, scheduled_at')
       .eq('class_group_id', session.class_group_id)
       .order('scheduled_at', { ascending: true })
 
-    // Urutan sesi ini (1-based)
     const sessionOrder = (allSessions ?? []).findIndex((s: any) => s.id === sid) + 1
 
-    // 2. Ambil enrollments untuk class_group ini
     const { data: enrollments } = await supabase
-      .from('enrollments')
-      .select('id, student_id, sessions_total, session_start_offset')
+      .from('enrollments').select('id, student_id, sessions_total, session_start_offset')
       .eq('class_group_id', session.class_group_id)
 
     if (!enrollments || enrollments.length === 0) {
-      setSiswaMap(prev => ({ ...prev, [sid]: [] }))
-      setLoadingSiswa(null)
-      return
+      setSiswaMap(prev => ({ ...prev, [sid]: [] })); setLoadingSiswa(null); return
     }
 
-    // 3. Ambil nama siswa
     const studentIds = enrollments.map((e: any) => e.student_id).filter(Boolean)
     const { data: students } = await supabase.from('students').select('id, profile_id').in('id', studentIds)
     const profIds = (students ?? []).map((s: any) => s.profile_id).filter(Boolean)
@@ -181,24 +185,16 @@ export default function JadwalPage() {
       nameMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
     }
 
-    // 4. Merge + hitung sessionNumber
     const merged: SiswaItem[] = enrollments.map((e: any) => {
-      const offset = e.session_start_offset ?? 1
+      const offset     = e.session_start_offset ?? 1
       const sessionNum = sessionOrder + (offset - 1)
-      return {
-        id: e.student_id,
-        name: nameMap[e.student_id] ?? 'Siswa',
-        sessionsTotal: e.sessions_total ?? 8,
-        sessionStartOffset: offset,
-        sessionNumber: sessionNum,
-      }
+      return { id: e.student_id, name: nameMap[e.student_id] ?? 'Siswa', sessionsTotal: e.sessions_total ?? 8, sessionStartOffset: offset, sessionNumber: sessionNum }
     })
 
-    setSiswaMap(prev => ({ ...prev, [sid]: merged }))
-    setLoadingSiswa(null)
+    setSiswaMap(prev => ({ ...prev, [sid]: merged })); setLoadingSiswa(null)
   }
 
-  const sessionsOnDate = (date: string) => sessions.filter(s => fmtDate(new Date(s.scheduled_at)) === date)
+  const sessionsOnDate   = (date: string) => sessions.filter(s => fmtDate(new Date(s.scheduled_at)) === date)
   const selectedSessions = sessionsOnDate(selectedDate)
 
   function addRow() {
@@ -213,24 +209,53 @@ export default function JadwalPage() {
   }
 
   function openAdd() {
-    setEditSession(null); setFClassGroup(classGroups[0]?.id ?? ''); setFStatus('scheduled')
-    setFZoom(''); setJadwalRows([{ date: selectedDate, time: '08:00', repeat: 1 }]); setFormError(''); setShowModal(true)
+    setEditSession(null)
+    const defaultCg = classGroups[0]?.id ?? ''
+    setFClassGroup(defaultCg)
+    setFStatus('scheduled')
+    // FIX isu 3: auto-fill zoom dari kelas pertama
+    setFZoom(classGroups[0]?.zoom_link ?? '')
+    setJadwalRows([{ date: selectedDate, time: '08:00', repeat: 1 }])
+    setFormError('')
+    setShowModal(true)
   }
+
+  // FIX isu 3: auto-fill zoom saat ganti kelas di dropdown
+  function handleClassGroupChange(id: string) {
+    setFClassGroup(id)
+    const cg = classGroups.find(c => c.id === id)
+    setFZoom(cg?.zoom_link ?? '')
+  }
+
   function openEdit(s: Session) {
-    setEditSession(s); setFClassGroup(s.class_group_id)
-    const dt = new Date(s.scheduled_at)
-    setFDate(fmtDate(dt)); setFTime(dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }))
-    setFStatus(s.status); setFZoom(s.zoom_link ?? ''); setFormError(''); setShowModal(true)
+    setEditSession(s)
+    setFClassGroup(s.class_group_id)
+    // FIX isu 2: parse tanggal dengan benar menggunakan timezone lokal
+    const dt     = new Date(s.scheduled_at)
+    const offset = dt.getTimezoneOffset()
+    const local  = new Date(dt.getTime() - offset * 60 * 1000)
+    const dateStr = local.toISOString().split('T')[0]
+    const timeStr = local.toISOString().split('T')[1].slice(0, 5)
+    setFDate(dateStr)
+    setFTime(timeStr)
+    setFStatus(s.status)
+    setFZoom(s.zoom_link ?? '')
+    setFormError('')
+    setShowModal(true)
   }
 
   async function handleSave() {
     if (!fClassGroup) { setFormError('Pilih kelas terlebih dahulu.'); return }
     setSaving(true); setFormError('')
+
     if (isEditMode && editSession) {
+      // FIX isu 2: build ISO string dengan benar
+      const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
       const { error } = await supabase.from('sessions').update({
         class_group_id: fClassGroup,
-        scheduled_at: new Date(`${fDate}T${fTime}:00`).toISOString(),
-        status: fStatus, zoom_link: fZoom || null,
+        scheduled_at,
+        status:    fStatus,
+        zoom_link: fZoom || null,
       }).eq('id', editSession.id)
       if (error) { setFormError(error.message); setSaving(false); return }
     } else {
@@ -245,8 +270,8 @@ export default function JadwalPage() {
       const { error } = await supabase.from('sessions').insert(all)
       if (error) { setFormError(error.message); setSaving(false); return }
     }
-    // Reset cached siswa for affected class
-    setSiswaMap(prev => { const n = { ...prev }; delete n[editSession?.id ?? '']; return n })
+
+    setSiswaMap(prev => { const n = { ...prev }; if (editSession?.id) delete n[editSession.id]; return n })
     setSaving(false); setShowModal(false); fetchAll()
   }
 
@@ -275,11 +300,11 @@ export default function JadwalPage() {
       {/* Week strip */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-4">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() - 7); setWeekBase(d) }} className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"><ChevronLeft size={18} /></button>
+          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate()-7); setWeekBase(d) }} className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"><ChevronLeft size={18}/></button>
           <span className="text-sm font-semibold text-[#1A1640]">
-            {weekDates[0].toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })} – {weekDates[6].toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+            {weekDates[0].toLocaleDateString('id-ID',{day:'numeric',month:'long'})} – {weekDates[6].toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}
           </span>
-          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate() + 7); setWeekBase(d) }} className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"><ChevronRight size={18} /></button>
+          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate()+7); setWeekBase(d) }} className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"><ChevronRight size={18}/></button>
         </div>
         <div className="grid grid-cols-7 gap-2">
           {weekDates.map((d, i) => {
@@ -287,12 +312,12 @@ export default function JadwalPage() {
             return (
               <button key={key} onClick={() => { setSelectedDate(key); setExpandedId(null) }}
                 className={['flex flex-col items-center py-2.5 px-1 rounded-xl border transition-all',
-                  isSelected ? 'bg-[#5C4FE5] border-[#5C4FE5]' : isToday ? 'bg-[#F0EEFF] border-[#C4BFFF]' : 'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]'].join(' ')}>
-                <span className={`text-[10px] font-semibold mb-1 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>{DAY_NAMES[i]}</span>
-                <span className={`text-sm font-bold ${isSelected ? 'text-white' : isToday ? 'text-[#5C4FE5]' : 'text-[#1A1640]'}`}>{d.getDate()}</span>
+                  isSelected?'bg-[#5C4FE5] border-[#5C4FE5]':isToday?'bg-[#F0EEFF] border-[#C4BFFF]':'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]'].join(' ')}>
+                <span className={`text-[10px] font-semibold mb-1 ${isSelected?'text-white/70':'text-[#7B78A8]'}`}>{DAY_NAMES[i]}</span>
+                <span className={`text-sm font-bold ${isSelected?'text-white':isToday?'text-[#5C4FE5]':'text-[#1A1640]'}`}>{d.getDate()}</span>
                 {count > 0
-                  ? <div className="flex gap-0.5 mt-1.5">{Array.from({ length: Math.min(count, 3) }).map((_, j) => <div key={j} className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-[#5C4FE5]'}`} />)}</div>
-                  : <div className="h-3.5 mt-1" />}
+                  ? <div className="flex gap-0.5 mt-1.5">{Array.from({length:Math.min(count,3)}).map((_,j)=><div key={j} className={`w-1.5 h-1.5 rounded-full ${isSelected?'bg-white':'bg-[#5C4FE5]'}`}/>)}</div>
+                  : <div className="h-3.5 mt-1"/>}
               </button>
             )
           })}
@@ -302,7 +327,7 @@ export default function JadwalPage() {
       {/* Session list */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
         <div className="px-5 py-3.5 border-b border-[#E5E3FF] bg-[#F7F6FF]">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#7B78A8]">{fmtDayLabel(new Date(selectedDate + 'T00:00:00'))}</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-[#7B78A8]">{fmtDayLabel(new Date(selectedDate+'T00:00:00'))}</span>
         </div>
         {loading ? (
           <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Memuat jadwal...</div>
@@ -314,36 +339,59 @@ export default function JadwalPage() {
           </div>
         ) : (
           selectedSessions.map((s, idx) => {
-            const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
+            const st         = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
             const isExpanded = expandedId === s.id
-            const siswaList = siswaMap[s.id] ?? []
-            const isLoading = loadingSiswa === s.id
-            const isLast = idx === selectedSessions.length - 1
+            const siswaList  = siswaMap[s.id] ?? []
+            const isLoading  = loadingSiswa === s.id
+            const isLast     = idx === selectedSessions.length - 1
             return (
               <div key={s.id} className={!isLast || isExpanded ? 'border-b border-[#E5E3FF]' : ''}>
-                <div className={`flex items-center gap-4 px-5 py-4 transition-colors ${isExpanded ? 'bg-[#F0EEFF] border-l-4 border-l-[#5C4FE5]' : 'hover:bg-[#F7F6FF]'}`}>
+                <div className={`flex items-center gap-3 px-5 py-4 transition-colors ${isExpanded?'bg-[#F0EEFF] border-l-4 border-l-[#5C4FE5]':'hover:bg-[#F7F6FF]'}`}>
+                  {/* Jam */}
                   <div className="min-w-[44px] text-sm font-bold text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.class_group?.color ?? '#5C4FE5' }} />
+
+                  {/* Warna dot */}
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{backgroundColor: s.class_group?.color ?? '#5C4FE5'}}/>
+
+                  {/* Info kelas */}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-[#1A1640] truncate">{s.class_group?.label ?? '—'}</div>
                     <div className="text-xs text-[#7B78A8] mt-0.5">{s.class_group?.tutor_name} · {s.class_group?.course_name}</div>
                   </div>
-                  {s.zoom_link && <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" className="text-[#5C4FE5] hover:opacity-70 transition"><ExternalLink size={14} /></a>}
+
+                  {/* FIX isu 1: tombol expand siswa dipindah ke sini, sebelum zoom & status */}
+                  <button onClick={() => fetchSiswa(s)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${isExpanded?'bg-[#5C4FE5] text-white':'bg-[#F0EEFF] text-[#5C4FE5] hover:bg-[#E0DCFF]'}`}
+                    title="Lihat siswa">
+                    <Users size={12}/>{isExpanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}
+                  </button>
+
+                  {s.zoom_link && (
+                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" className="text-[#5C4FE5] hover:opacity-70 transition flex-shrink-0"><ExternalLink size={14}/></a>
+                  )}
+
                   <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.pill}`}>{st.label}</span>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => fetchSiswa(s)}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${isExpanded ? 'bg-[#5C4FE5] text-white' : 'bg-[#F0EEFF] text-[#5C4FE5] hover:bg-[#E0DCFF]'}`}>
-                      <Users size={12} />{isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </button>
+
+                  {/* FIX isu 1: tombol aksi dipisah dengan divider visual, gap lebih besar */}
+                  <div className="flex items-center gap-2 flex-shrink-0 pl-2 border-l border-[#E5E3FF]">
                     {s.status === 'scheduled' && (
-                      <button onClick={() => markComplete(s.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai"><Check size={14} /></button>
+                      <button onClick={() => markComplete(s.id)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
+                        <Check size={14}/>
+                      </button>
                     )}
-                    <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition"><Pencil size={14} /></button>
-                    <button onClick={() => setDelConfirm(s.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"><Trash2 size={14} /></button>
+                    <button onClick={() => openEdit(s)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Edit">
+                      <Pencil size={14}/>
+                    </button>
+                    <button onClick={() => setDelConfirm(s.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
+                      <Trash2 size={14}/>
+                    </button>
                   </div>
                 </div>
 
-                {/* Expand panel */}
+                {/* Expand panel siswa */}
                 {isExpanded && (
                   <div className="px-5 py-4 bg-[#F7F6FF] border-t border-[#E5E3FF]">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[#7B78A8] mb-3">
@@ -358,20 +406,17 @@ export default function JadwalPage() {
                         {siswaList.map((siswa, si) => (
                           <div key={siswa.id} className="flex items-center gap-2.5 bg-white border border-[#E5E3FF] rounded-xl px-3 py-2.5">
                             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                              style={{ backgroundColor: AVATAR_COLORS[si % AVATAR_COLORS.length] }}>
+                              style={{backgroundColor: AVATAR_COLORS[si % AVATAR_COLORS.length]}}>
                               {getInitials(siswa.name)}
                             </div>
                             <div>
                               <div className="text-xs font-semibold text-[#1A1640]">{siswa.name}</div>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                {/* Progress bar */}
                                 <div className="w-20 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
                                   <div className="h-full rounded-full bg-[#5C4FE5] transition-all"
-                                    style={{ width: `${Math.min((siswa.sessionNumber / siswa.sessionsTotal) * 100, 100)}%` }} />
+                                    style={{width:`${Math.min((siswa.sessionNumber/siswa.sessionsTotal)*100,100)}%`}}/>
                                 </div>
-                                <span className="text-[10px] font-bold text-[#5C4FE5]">
-                                  {siswa.sessionNumber}/{siswa.sessionsTotal}
-                                </span>
+                                <span className="text-[10px] font-bold text-[#5C4FE5]">{siswa.sessionNumber}/{siswa.sessionsTotal}</span>
                               </div>
                             </div>
                           </div>
@@ -386,34 +431,39 @@ export default function JadwalPage() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Modal Tambah/Edit */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF] sticky top-0 bg-white z-10">
-              <h2 className="text-base font-bold text-[#1A1640]">{isEditMode ? 'Edit Sesi' : 'Tambah Sesi Baru'}</h2>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8] transition"><X size={16} /></button>
+              <h2 className="text-base font-bold text-[#1A1640]">{isEditMode?'Edit Sesi':'Tambah Sesi Baru'}</h2>
+              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {/* Kelas — FIX isu 3: pakai handleClassGroupChange */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas <span className="text-red-500">*</span></label>
-                <select value={fClassGroup} onChange={e => setFClassGroup(e.target.value)} className={inputCls}>
+                <select value={fClassGroup} onChange={e => handleClassGroupChange(e.target.value)} className={inputCls}>
                   <option value="">-- Pilih Kelas --</option>
                   {classGroups.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
+
+              {/* Edit: tanggal & jam */}
               {isEditMode && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tanggal</label>
-                    <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls} />
+                    <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls}/>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jam Mulai</label>
-                    <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls} />
+                    <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls}/>
                   </div>
                 </div>
               )}
+
+              {/* Tambah: multi rows */}
               {!isEditMode && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -424,17 +474,21 @@ export default function JadwalPage() {
                     {jadwalRows.map((row, idx) => (
                       <div key={idx} className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3">
                         <div className="flex items-center justify-between mb-2.5">
-                          <span className="text-xs font-semibold text-[#5C4FE5]">Jadwal {idx + 1}</span>
-                          {jadwalRows.length > 1 && <button onClick={() => removeRow(idx)} className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition"><Minus size={13} /></button>}
+                          <span className="text-xs font-semibold text-[#5C4FE5]">Jadwal {idx+1}</span>
+                          {jadwalRows.length > 1 && (
+                            <button onClick={() => removeRow(idx)} className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition"><Minus size={13}/></button>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-2 mb-2">
                           <div>
                             <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tanggal</label>
-                            <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
+                            <input type="date" value={row.date} onChange={e => updateRow(idx,'date',e.target.value)}
+                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jam Mulai</label>
-                            <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)} className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
+                            <input type="time" value={row.time} onChange={e => updateRow(idx,'time',e.target.value)}
+                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
                           </div>
                         </div>
                         <div>
@@ -442,9 +496,10 @@ export default function JadwalPage() {
                             Ulangi setiap minggu <span className="normal-case font-normal text-[#7B78A8]">(1 = sekali saja, maks {MAX_REPEAT})</span>
                           </label>
                           <div className="flex items-center gap-3">
-                            <input type="range" min={1} max={MAX_REPEAT} value={row.repeat} onChange={e => updateRow(idx, 'repeat', Number(e.target.value))} className="flex-1 accent-[#5C4FE5]" />
+                            <input type="range" min={1} max={MAX_REPEAT} value={row.repeat}
+                              onChange={e => updateRow(idx,'repeat',Number(e.target.value))} className="flex-1 accent-[#5C4FE5]"/>
                             <span className="text-sm font-bold text-[#5C4FE5] min-w-[60px] text-right">
-                              {row.repeat}x{row.repeat > 1 && <span className="text-[10px] font-normal text-[#7B78A8] block">≈ {Math.ceil(row.repeat / 4)} bln</span>}
+                              {row.repeat}x{row.repeat>1&&<span className="text-[10px] font-normal text-[#7B78A8] block">≈ {Math.ceil(row.repeat/4)} bln</span>}
                             </span>
                           </div>
                         </div>
@@ -453,17 +508,18 @@ export default function JadwalPage() {
                   </div>
                   {jadwalRows.length < MAX_ROWS && (
                     <button onClick={addRow} className="mt-3 w-full py-2.5 border-2 border-dashed border-[#C4BFFF] rounded-xl text-sm font-semibold text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex items-center justify-center gap-2">
-                      <Plus size={14} /> Tambah Jadwal Lain
+                      <Plus size={14}/> Tambah Jadwal Lain
                     </button>
                   )}
                   <div className="mt-3 flex items-center justify-between px-4 py-2.5 bg-[#EEEDFE] rounded-xl">
                     <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
                     <span className="text-sm font-bold text-[#5C4FE5]">
-                      {totalSesi} sesi{totalSesi >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.ceil(totalSesi / 8)} periode)</span>}
+                      {totalSesi} sesi{totalSesi>=8&&<span className="text-[10px] font-normal ml-1">(≈ {Math.ceil(totalSesi/8)} periode)</span>}
                     </span>
                   </div>
                 </div>
               )}
+
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Status</label>
                 <select value={fStatus} onChange={e => setFStatus(e.target.value)} className={inputCls}>
@@ -473,27 +529,38 @@ export default function JadwalPage() {
                   <option value="rescheduled">Dijadwal Ulang</option>
                 </select>
               </div>
+
+              {/* FIX isu 3: zoom sudah auto-fill, tambah keterangan */}
               <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-                <input type="url" placeholder="https://zoom.us/j/..." value={fZoom} onChange={e => setFZoom(e.target.value)} className={inputCls} />
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                  Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(otomatis dari kelas, bisa diubah)</span>
+                </label>
+                <input type="url" placeholder="https://zoom.us/j/..." value={fZoom}
+                  onChange={e => setFZoom(e.target.value)} className={inputCls}/>
               </div>
+
               {formError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{formError}</div>}
             </div>
+
             <div className="px-6 pb-5 flex gap-3 sticky bottom-0 bg-white border-t border-[#E5E3FF] pt-4">
-              <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                {saving ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : `Tambah ${totalSesi} Sesi`}
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                {saving?'Menyimpan...':isEditMode?'Simpan Perubahan':`Tambah ${totalSesi} Sesi`}
               </button>
-              <button onClick={() => setShowModal(false)} className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">Batal</button>
+              <button onClick={() => setShowModal(false)}
+                className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
+                Batal
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirm */}
+      {/* Konfirmasi Hapus */}
       {delConfirm && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4"><Trash2 size={22} className="text-red-500" /></div>
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4"><Trash2 size={22} className="text-red-500"/></div>
             <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Sesi?</h3>
             <p className="text-sm text-[#7B78A8] mb-6">Data sesi ini akan dihapus permanen.</p>
             <div className="flex gap-3">
