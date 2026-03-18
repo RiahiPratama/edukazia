@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { ChevronDown, Search, Check, X } from 'lucide-react'
 
 type Course    = { id: string; name: string; color: string | null }
 type Tutor     = { id: string; profiles: { full_name: string } | null }
@@ -13,12 +14,16 @@ type Student   = { id: string; profiles: { full_name: string } | null }
 export default function BuatKelasPage() {
   const router   = useRouter()
   const supabase = createClient()
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const [courses,    setCourses]    = useState<Course[]>([])
   const [tutors,     setTutors]     = useState<Tutor[]>([])
   const [classTypes, setClassTypes] = useState<ClassType[]>([])
   const [students,   setStudents]   = useState<Student[]>([])
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
+
+  const [siswaOpen,   setSiswaOpen]   = useState(false)
+  const [siswaSearch, setSiswaSearch] = useState('')
 
   const [form, setForm] = useState({
     label:         '',
@@ -45,6 +50,16 @@ export default function BuatKelasPage() {
     })
   }, [])
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setSiswaOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
@@ -62,7 +77,18 @@ export default function BuatKelasPage() {
       }
       setSelectedStudents(prev => [...prev, id])
     }
+    setError('')
   }
+
+  function getStudentName(id: string) {
+    return (students.find(s => s.id === id) as any)?.profiles?.full_name ?? 'Siswa'
+  }
+
+  const filteredStudents = students.filter(s =>
+    ((s as any).profiles?.full_name ?? '').toLowerCase().includes(siswaSearch.toLowerCase())
+  )
+
+  const maxParticipants = classTypes.find(ct => ct.id === form.class_type_id)?.max_participants ?? 8
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -91,7 +117,6 @@ export default function BuatKelasPage() {
 
     if (err) { setError(err.message); setLoading(false); return }
 
-    // Enrollment siswa yang dipilih
     if (selectedStudents.length > 0 && classGroupData) {
       await supabase.from('enrollments').insert(
         selectedStudents.map(studentId => ({
@@ -197,36 +222,118 @@ export default function BuatKelasPage() {
             </select>
           </div>
 
-          {/* Pilih Siswa */}
+          {/* Pilih Siswa — dropdown multiselect */}
           <div>
-            <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">
-              Daftarkan Siswa (opsional)
+            <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+              Daftarkan Siswa{' '}
+              <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
               {form.class_type_id && (
                 <span className="ml-2 text-[#5C4FE5] normal-case font-normal">
-                  {selectedStudents.length}/{classTypes.find(ct => ct.id === form.class_type_id)?.max_participants ?? '?'} dipilih
+                  {selectedStudents.length}/{maxParticipants} dipilih
                 </span>
               )}
             </label>
-            <div className="flex flex-wrap gap-2">
-              {students.map((s: any) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => toggleStudent(s.id)}
-                  className={[
-                    'px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
-                    selectedStudents.includes(s.id)
-                      ? 'bg-[#5C4FE5] text-white border-[#5C4FE5]'
-                      : 'bg-white border-[#E5E3FF] text-[#4A4580] hover:border-[#5C4FE5]'
-                  ].join(' ')}
-                >
-                  {s.profiles?.full_name ?? 'Siswa'}
-                </button>
-              ))}
-              {students.length === 0 && (
-                <p className="text-sm text-[#7B78A8]">Belum ada siswa. Tambah siswa dulu.</p>
+
+            <div className="relative" ref={dropdownRef}>
+              {/* Trigger button */}
+              <button
+                type="button"
+                onClick={() => setSiswaOpen(o => !o)}
+                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-left flex items-center justify-between focus:outline-none focus:border-[#5C4FE5] transition"
+              >
+                <span className={selectedStudents.length === 0 ? 'text-[#7B78A8]' : 'text-[#1A1640] font-medium'}>
+                  {selectedStudents.length === 0 ? '-- Pilih Siswa --' : `${selectedStudents.length} siswa dipilih`}
+                </span>
+                <ChevronDown size={16} className={`text-[#7B78A8] transition-transform duration-200 ${siswaOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown panel */}
+              {siswaOpen && (
+                <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-[#E5E3FF] shadow-lg overflow-hidden">
+                  {/* Search */}
+                  <div className="p-2 border-b border-[#E5E3FF]">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7B78A8]" />
+                      <input
+                        type="text"
+                        placeholder="Cari siswa..."
+                        value={siswaSearch}
+                        onChange={e => setSiswaSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-[#E5E3FF] bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5] transition"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {/* List */}
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredStudents.length === 0 ? (
+                      <p className="text-center text-sm text-[#7B78A8] py-5">
+                        {students.length === 0 ? 'Belum ada siswa terdaftar' : 'Siswa tidak ditemukan'}
+                      </p>
+                    ) : (
+                      filteredStudents.map((s: any) => {
+                        const isSelected = selectedStudents.includes(s.id)
+                        const isDisabled = !isSelected && selectedStudents.length >= maxParticipants && !!form.class_type_id
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => !isDisabled && toggleStudent(s.id)}
+                            disabled={isDisabled}
+                            className={[
+                              'w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition-colors',
+                              isSelected ? 'bg-[#F0EEFF]' : 'hover:bg-[#F7F6FF]',
+                              isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
+                            ].join(' ')}
+                          >
+                            <span className={isSelected ? 'font-semibold text-[#5C4FE5]' : 'text-[#1A1640]'}>
+                              {s.profiles?.full_name ?? 'Siswa'}
+                            </span>
+                            {isSelected && <Check size={15} className="text-[#5C4FE5] flex-shrink-0" />}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  {selectedStudents.length > 0 && (
+                    <div className="px-4 py-2 border-t border-[#E5E3FF] bg-[#F7F6FF] flex items-center justify-between">
+                      <span className="text-xs text-[#7B78A8]">{selectedStudents.length} dipilih</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStudents([])}
+                        className="text-xs text-red-400 hover:text-red-600 font-semibold transition-colors"
+                      >
+                        Hapus semua
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
+
+            {/* Chips siswa terpilih */}
+            {selectedStudents.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {selectedStudents.map(id => (
+                  <span
+                    key={id}
+                    className="flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-xs font-semibold text-white bg-[#5C4FE5]"
+                  >
+                    {getStudentName(id)}
+                    <button
+                      type="button"
+                      onClick={() => toggleStudent(id)}
+                      className="hover:opacity-75 transition-opacity"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Error */}
