@@ -430,7 +430,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
         <div className="s-head-center reveal">
           <div className="s-eyebrow">🎓 Jenis Kelas</div>
           <h2 className="s-title">Pilih Format Belajar yang Tepat</h2>
-          <p className="s-sub" style={{ margin: '0 auto', textAlign: 'center' }}>Tiga jenis kelas sesuai kebutuhan.</p> Hubungi admin untuk informasi harga tiap program.</p>
+          < className="s-sub" style={{ margin: '0 auto', textAlign: 'center' }}>Tiga jenis kelas sesuai kebutuhan. Hubungi admin untuk informasi harga tiap program.</p>
         </div>
         <div className="kelas-grid">
           <div className="kelas-card kelas-card-reguler reveal">
@@ -499,7 +499,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </div>
           ))}
         </div>
-      </section >
+      </ >
 
     {/* TESTIMONIALS */ }
     < section id = "testi" >
@@ -530,7 +530,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </div>
           ))}
         </div>
-      </section >
+      </ >
 
     {/* TENTANG */ }
     < section id = "tentang" style = {{ background: 'var(--bg3)' }
@@ -554,7 +554,7 @@ export default function LandingPage({ isLoggedIn, portalUrl, testimonials, faqs,
             </div>
           ))}
         </div>
-      </section >
+      </ >
 
   {/* FAQ */ }
   < section id = "faq" >
