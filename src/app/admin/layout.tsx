@@ -1,5 +1,6 @@
 'use client'
 
+import './admin.css'
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -84,22 +85,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F7F6FF]">
+    <div className="admin-root flex h-screen overflow-hidden bg-[#F7F6FF]">
 
       {/* SIDEBAR DESKTOP */}
-      <div
-        className="hidden lg:flex"
-        style={{
-          width: '256px',
-          minWidth: '256px',
-          height: '100vh',
-          backgroundColor: 'white',
-          borderRight: '1.5px solid #E5E3FF',
-          flexDirection: 'column',
-          flexShrink: 0,
-          borderRadius: 0,
-        }}
-      >
+      <div className="admin-sidebar-wrap hidden lg:flex" style={{ width: '256px', minWidth: '256px', height: '100vh', backgroundColor: 'white', borderRight: '1.5px solid #E5E3FF', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
           <Link href="/admin/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
             <span style={{ fontFamily: 'Sora, sans-serif', fontWeight: 800, fontSize: '1.2rem' }}>
@@ -126,13 +115,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* SIDEBAR MOBILE */}
       <div
         className="fixed top-0 left-0 h-full z-30 flex flex-col lg:hidden transition-transform duration-300"
-        style={{
-          width: '256px',
-          backgroundColor: 'white',
-          borderRight: '1.5px solid #E5E3FF',
-          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-          borderRadius: 0,
-        }}
+        style={{ width: '256px', backgroundColor: 'white', borderRight: '1.5px solid #E5E3FF', transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', borderRadius: 0 }}
       >
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
           <Link href="/admin/dashboard" onClick={() => setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
@@ -147,29 +130,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* MAIN CONTENT */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        <header
-          className="flex items-center gap-4 px-4 lg:px-6"
-          style={{ height: '64px', background: 'white', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}
-        >
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580]"
-          >
+        <header className="flex items-center gap-4 px-4 lg:px-6" style={{ height: '64px', background: 'white', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580]">
             ☰
           </button>
           <div className="flex-1" />
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-[#7B78A8] hover:text-[#5C4FE5] transition-colors"
-          >
+          <a href="/" target="_blank" rel="noopener noreferrer" className="text-sm text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
             🌐 Lihat Landing Page
           </a>
-          <div
-            className="flex items-center justify-center text-white text-sm font-bold"
-            style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#5C4FE5', flexShrink: 0 }}
-          >
+          <div className="flex items-center justify-center text-white text-sm font-bold" style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#5C4FE5', flexShrink: 0 }}>
             A
           </div>
         </header>
