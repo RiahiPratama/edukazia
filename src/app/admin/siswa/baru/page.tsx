@@ -40,7 +40,12 @@ export default function TambahSiswaPage() {
     // 1. Buat profile orang tua
     const { data: parentProfile, error: parentErr } = await supabase
       .from('profiles')
-      .insert({ full_name: form.parent_name.trim(), phone: form.parent_phone.trim(), role: 'student' })
+      .insert({
+        id: crypto.randomUUID(),
+        full_name: form.parent_name.trim(),
+        phone: form.parent_phone.trim(),
+        role: 'student'
+      })
       .select('id').single()
 
     if (parentErr || !parentProfile) {
@@ -52,6 +57,7 @@ export default function TambahSiswaPage() {
     const { data: studentProfile, error: studentProfileErr } = await supabase
       .from('profiles')
       .insert({
+        id: crypto.randomUUID(),
         full_name: form.full_name.trim(),
         phone: form.phone.trim() || null,
         birth_date: form.birth_date || null,
@@ -89,7 +95,7 @@ export default function TambahSiswaPage() {
         <Link href="/admin/siswa" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
           ← Kembali
         </Link>
-        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>
+        <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>
           Tambah Siswa
         </h1>
       </div>
@@ -108,14 +114,14 @@ export default function TambahSiswaPage() {
                   Nama Lengkap <span className="text-red-500">*</span>
                 </label>
                 <input type="text" name="full_name" value={form.full_name} onChange={handleChange}
-                  placeholder="Nama lengkap siswa" className={inputClass}/>
+                  placeholder="Nama lengkap siswa" className={inputClass} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Nomor HP Siswa
                 </label>
                 <input type="tel" name="phone" value={form.phone} onChange={handleChange}
-                  placeholder="(opsional)" className={inputClass}/>
+                  placeholder="(opsional)" className={inputClass} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -124,21 +130,21 @@ export default function TambahSiswaPage() {
                   Tanggal Lahir
                 </label>
                 <input type="date" name="birth_date" value={form.birth_date} onChange={handleChange}
-                  className={inputClass}/>
+                  className={inputClass} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Sekolah
                 </label>
                 <input type="text" name="school" value={form.school} onChange={handleChange}
-                  placeholder="Nama sekolah" className={inputClass}/>
+                  placeholder="Nama sekolah" className={inputClass} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Kelas / Level
                 </label>
                 <input type="text" name="grade" value={form.grade} onChange={handleChange}
-                  placeholder="Contoh: Kelas 5, SMA" className={inputClass}/>
+                  placeholder="Contoh: Kelas 5, SMA" className={inputClass} />
               </div>
             </div>
           </div>
@@ -168,14 +174,14 @@ export default function TambahSiswaPage() {
                   Nama <span className="text-red-500">*</span>
                 </label>
                 <input type="text" name="parent_name" value={form.parent_name} onChange={handleChange}
-                  placeholder="Nama orang tua" className={inputClass}/>
+                  placeholder="Nama orang tua" className={inputClass} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Nomor HP <span className="text-red-500">*</span>
                 </label>
                 <input type="tel" name="parent_phone" value={form.parent_phone} onChange={handleChange}
-                  placeholder="08xx xxxx xxxx" className={inputClass}/>
+                  placeholder="08xx xxxx xxxx" className={inputClass} />
               </div>
             </div>
           </div>
