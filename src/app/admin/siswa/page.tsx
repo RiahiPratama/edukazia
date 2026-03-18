@@ -7,9 +7,8 @@ export default async function SiswaPage() {
   const { data: siswa } = await supabase
     .from('students')
     .select(`
-      id,
-      grade, school,
-      profiles!students_profile_id_fkey ( full_name, phone, birth_date ),
+      id, grade, school,
+      profiles!students_profile_id_fkey ( full_name, phone ),
       parent:profiles!students_parent_profile_id_fkey ( full_name, phone ),
       enrollments ( id, sessions_used, sessions_total, status,
         class_groups ( label, courses ( name ) )
@@ -21,13 +20,10 @@ export default async function SiswaPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Data Siswa</h1>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>Data Siswa</h1>
           <p className="text-sm text-[#7B78A8] mt-1">{siswa?.length ?? 0} siswa terdaftar</p>
         </div>
-        <Link
-          href="/admin/siswa/baru"
-          className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors"
-        >
+        <Link href="/admin/siswa/baru" className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
           + Tambah Siswa
         </Link>
       </div>
@@ -52,15 +48,14 @@ export default async function SiswaPage() {
                   <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Sekolah</th>
                   <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Kelas Aktif</th>
                   <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Kuota</th>
-                  <th className="py-3 px-4"/>
+                  <th className="py-3 px-4" />
                 </tr>
               </thead>
               <tbody>
                 {siswa.map((s: any) => {
                   const activeEnroll = s.enrollments?.find((e: any) => e.status === 'active')
                   const sisa = activeEnroll ? activeEnroll.sessions_total - activeEnroll.sessions_used : null
-                  const pct  = activeEnroll ? Math.round((activeEnroll.sessions_used / activeEnroll.sessions_total) * 100) : 0
-
+                  const pct = activeEnroll ? Math.round((activeEnroll.sessions_used / activeEnroll.sessions_total) * 100) : 0
                   return (
                     <tr key={s.id} className="border-t border-[#F0EFFF] hover:bg-[#F7F6FF] transition-colors">
                       <td className="py-3 px-4">
@@ -88,34 +83,20 @@ export default async function SiswaPage() {
                             <div className="text-xs font-semibold text-[#1A1640]">{activeEnroll.class_groups?.label ?? '—'}</div>
                             <div className="text-xs text-[#7B78A8]">{activeEnroll.class_groups?.courses?.name ?? '—'}</div>
                           </div>
-                        ) : (
-                          <span className="text-xs text-[#7B78A8]">Belum ada kelas</span>
-                        )}
+                        ) : <span className="text-xs text-[#7B78A8]">Belum ada kelas</span>}
                       </td>
                       <td className="py-3 px-4">
                         {activeEnroll ? (
                           <div>
-                            <div className="text-xs font-semibold text-[#1A1640] mb-1">
-                              {sisa} sisa dari {activeEnroll.sessions_total}
-                            </div>
+                            <div className="text-xs font-semibold text-[#1A1640] mb-1">{sisa} sisa dari {activeEnroll.sessions_total}</div>
                             <div className="w-24 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-[#5C4FE5] rounded-full"
-                                style={{ width: `${pct}%` }}
-                              />
+                              <div className="h-full bg-[#5C4FE5] rounded-full" style={{ width: `${pct}%` }} />
                             </div>
                           </div>
-                        ) : (
-                          <span className="text-xs text-[#7B78A8]">—</span>
-                        )}
+                        ) : <span className="text-xs text-[#7B78A8]">—</span>}
                       </td>
                       <td className="py-3 px-4">
-                        <Link
-                          href={`/admin/siswa/${s.id}`}
-                          className="text-xs text-[#5C4FE5] font-semibold hover:underline"
-                        >
-                          Detail →
-                        </Link>
+                        <Link href={`/admin/siswa/${s.id}`} className="text-xs text-[#5C4FE5] font-semibold hover:underline">Detail →</Link>
                       </td>
                     </tr>
                   )

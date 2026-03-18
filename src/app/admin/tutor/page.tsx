@@ -22,13 +22,10 @@ export default async function TutorPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Data Tutor</h1>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>Data Tutor</h1>
           <p className="text-sm text-[#7B78A8] mt-1">{tutors?.filter(t => t.is_active).length ?? 0} tutor aktif</p>
         </div>
-        <Link
-          href="/admin/tutor/baru"
-          className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors"
-        >
+        <Link href="/admin/tutor/baru" className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
           + Tambah Tutor
         </Link>
       </div>
@@ -62,23 +59,14 @@ export default async function TutorPage() {
                     {t.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </div>
-
-                {/* Kursus yang dikuasai */}
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {t.tutor_courses?.map((tc: any) => (
-                    <span
-                      key={tc.courses?.name}
-                      className="text-xs px-2 py-0.5 rounded-full font-semibold text-white"
-                      style={{ background: tc.courses?.color ?? '#5C4FE5' }}
-                    >
+                    <span key={tc.courses?.name} className="text-xs px-2 py-0.5 rounded-full font-semibold text-white"
+                      style={{ background: tc.courses?.color ?? '#5C4FE5' }}>
                       {tc.courses?.name}
                     </span>
                   ))}
-                  {(!t.tutor_courses || t.tutor_courses.length === 0) && (
-                    <span className="text-xs text-[#7B78A8]">Belum ada kursus</span>
-                  )}
                 </div>
-
                 <div className="border-t border-[#F0EFFF] pt-3 flex items-center justify-between">
                   <div>
                     <div className="text-xs text-[#7B78A8]">Tarif per sesi</div>
@@ -89,11 +77,7 @@ export default async function TutorPage() {
                     <div className="text-sm font-bold text-[#1A1640]">{activeClasses.length} kelas</div>
                   </div>
                 </div>
-
-                <Link
-                  href={`/admin/tutor/${t.id}`}
-                  className="mt-3 w-full text-center block text-xs text-[#5C4FE5] font-semibold hover:underline"
-                >
+                <Link href={`/admin/tutor/${t.id}`} className="mt-3 w-full text-center block text-xs text-[#5C4FE5] font-semibold hover:underline">
                   Lihat Detail →
                 </Link>
               </div>
