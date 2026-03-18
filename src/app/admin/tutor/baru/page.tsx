@@ -59,6 +59,7 @@ export default function TambahTutorPage() {
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
       .insert({
+        id: crypto.randomUUID(),
         full_name: form.full_name.trim(),
         phone: form.phone.trim(),
         role: 'tutor',
@@ -107,7 +108,7 @@ export default function TambahTutorPage() {
         <Link href="/admin/tutor" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
           ← Kembali
         </Link>
-        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>
+        <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>
           Tambah Tutor
         </h1>
       </div>
@@ -122,7 +123,7 @@ export default function TambahTutorPage() {
               </label>
               <input type="text" name="full_name" value={form.full_name} onChange={handleChange}
                 placeholder="Nama tutor"
-                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"/>
+                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
             </div>
             <div>
               <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
@@ -130,7 +131,7 @@ export default function TambahTutorPage() {
               </label>
               <input type="tel" name="phone" value={form.phone} onChange={handleChange}
                 placeholder="08xx xxxx xxxx"
-                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"/>
+                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
             </div>
           </div>
 
@@ -140,7 +141,7 @@ export default function TambahTutorPage() {
             </label>
             <input type="number" name="rate_per_session" value={form.rate_per_session} onChange={handleChange}
               placeholder="Contoh: 150000"
-              className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"/>
+              className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
           </div>
 
           {/* Rekening bank */}
@@ -151,19 +152,19 @@ export default function TambahTutorPage() {
                 <label className="block text-xs font-semibold text-[#4A4580] mb-1">Nama Bank</label>
                 <input type="text" name="bank_name" value={form.bank_name} onChange={handleChange}
                   placeholder="BCA, BRI, dll"
-                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-[#F7F6FF] text-[#1A1640] placeholder-[#B0ACD0] focus:outline-none focus:border-[#5C4FE5] transition" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#4A4580] mb-1">Nomor Rekening</label>
                 <input type="text" name="bank_account" value={form.bank_account} onChange={handleChange}
                   placeholder="1234567890"
-                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-[#F7F6FF] text-[#1A1640] placeholder-[#B0ACD0] focus:outline-none focus:border-[#5C4FE5] transition" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#4A4580] mb-1">Atas Nama</label>
                 <input type="text" name="bank_holder" value={form.bank_holder} onChange={handleChange}
                   placeholder="Nama pemilik rekening"
-                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-[#F7F6FF] text-[#1A1640] placeholder-[#B0ACD0] focus:outline-none focus:border-[#5C4FE5] transition" />
               </div>
             </div>
           </div>
@@ -177,11 +178,10 @@ export default function TambahTutorPage() {
               {courses.map(c => (
                 <button
                   key={c.id} type="button" onClick={() => toggleCourse(c.id)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
-                    selectedCourses.includes(c.id)
-                      ? 'text-white border-transparent'
-                      : 'bg-white border-[#E5E3FF] text-[#4A4580]'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${selectedCourses.includes(c.id)
+                    ? 'text-white border-transparent'
+                    : 'bg-white border-[#E5E3FF] text-[#4A4580]'
+                    }`}
                   style={selectedCourses.includes(c.id) ? { background: c.color ?? '#5C4FE5', borderColor: c.color ?? '#5C4FE5' } : {}}
                 >
                   {c.name}
@@ -195,7 +195,7 @@ export default function TambahTutorPage() {
 
           <div className="flex items-center gap-3">
             <input type="checkbox" id="is_active" name="is_active" checked={form.is_active} onChange={handleChange}
-              className="w-4 h-4 accent-[#5C4FE5]"/>
+              className="w-4 h-4 accent-[#5C4FE5]" />
             <label htmlFor="is_active" className="text-sm font-semibold text-[#4A4580]">
               Tutor aktif
             </label>
