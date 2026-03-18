@@ -55,7 +55,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F6FF] flex">
+    <div className="min-h-screen bg-[#F7F6FF] flex overflow-hidden">
 
       {/* Overlay mobile */}
       {sidebarOpen && (
@@ -68,10 +68,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* SIDEBAR */}
       <aside className={`
         fixed top-0 left-0 h-full w-64 bg-white border-r border-[#E5E3FF] z-30
-        flex flex-col transition-transform duration-300 flex-shrink-0
+        flex flex-col transition-transform duration-300
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:sticky lg:z-auto
+        lg:relative lg:translate-x-0 lg:z-auto lg:h-screen lg:top-0 lg:flex-shrink-0
       `}>
+
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-[#E5E3FF]">
           <Link href="/admin" className="flex items-center gap-2">
