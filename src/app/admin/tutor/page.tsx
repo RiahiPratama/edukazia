@@ -1,20 +1,43 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { Plus, Trash2 } from 'lucide-react'
 
-export default async function TutorPage() {
-  const supabase = await createClient()
+export default function TutorPage() {
+  const supabase = createClient()
+  const [tutors,    setTutors]    = useState<any[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [deleteId,  setDeleteId]  = useState<string | null>(null)
+  const [deleting,  setDeleting]  = useState(false)
+  const [deleteName,setDeleteName]= useState('')
 
-  const { data: tutors } = await supabase
-    .from('tutors')
-    .select(`
-      id, rate_per_session, bank_name, bank_account, is_active,
-      profiles:profile_id ( full_name, phone ),
-      tutor_courses ( courses ( name, color ) ),
-      class_groups ( id, label, status )
-    `)
-    .order('created_at', { ascending: false })
+  useEffect(() => { fetchTutors() }, [])
 
-  function formatRupiah(n: number) {
+  async function fetchTutors() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('tutors')
+      .select(`id, rate_per_session, bank_name, bank_account, is_active,
+        profiles:profile_id(full_name, phone),
+        tutor_courses(courses(name, color)),
+        class_groups(id, label, status)`)
+      .order('created_at', { ascending: false })
+    setTutors(data ?? [])
+    setLoading(false)
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return
+    setDeleting(true)
+    await supabase.from('tutor_courses').delete().eq('tutor_id', deleteId)
+    await supabase.from('tutors').delete().eq('id', deleteId)
+    setDeleting(false); setDeleteId(null)
+    fetchTutors()
+  }
+
+  function formatRp(n: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
 
@@ -22,20 +45,35 @@ export default async function TutorPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>Data Tutor</h1>
-          <p className="text-sm text-[#7B78A8] mt-1">{tutors?.filter(t => t.is_active).length ?? 0} tutor aktif</p>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Data Tutor</h1>
+          <p className="text-sm text-[#7B78A8] mt-1">{tutors.filter(t => t.is_active).length} tutor aktif</p>
         </div>
-        <Link href="/admin/tutor/baru" className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+        <Link href="/admin/tutor/baru"
+          className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
           + Tambah Tutor
         </Link>
       </div>
 
-      {!tutors || tutors.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({length:3}).map((_,i) => (
+            <div key={i} className="bg-white rounded-2xl border border-[#E5E3FF] p-5 animate-pulse">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-gray-200"/>
+                <div><div className="h-4 w-28 bg-gray-200 rounded mb-1"/><div className="h-3 w-20 bg-gray-200 rounded"/></div>
+              </div>
+              <div className="h-3 w-full bg-gray-200 rounded mb-4"/>
+              <div className="h-8 w-full bg-gray-200 rounded-lg"/>
+            </div>
+          ))}
+        </div>
+      ) : tutors.length === 0 ? (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center">
           <div className="text-5xl mb-4">👨‍🏫</div>
           <p className="font-bold text-[#1A1640] mb-2">Belum ada tutor terdaftar</p>
           <p className="text-sm text-[#7B78A8] mb-4">Tambahkan tutor untuk mulai membuat jadwal kelas</p>
-          <Link href="/admin/tutor/baru" className="inline-flex items-center gap-2 bg-[#5C4FE5] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+          <Link href="/admin/tutor/baru"
+            className="inline-flex items-center gap-2 bg-[#5C4FE5] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
             + Tambah Tutor Pertama
           </Link>
         </div>
@@ -47,42 +85,84 @@ export default async function TutorPage() {
               <div key={t.id} className={`bg-white rounded-2xl border p-5 transition-all hover:shadow-sm ${t.is_active ? 'border-[#E5E3FF]' : 'border-gray-200 opacity-60'}`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#5C4FE5] flex items-center justify-center text-white font-bold">
-                      {(t.profiles?.full_name ?? 'T').charAt(0).toUpperCase()}
+                    <div className="w-10 h-10 rounded-full bg-[#5C4FE5] flex items-center justify-center text-white font-bold text-sm">
+                      {(t.profiles?.full_name ?? 'T').split(' ').slice(0,2).map((n:string)=>n[0]).join('').toUpperCase()}
                     </div>
                     <div>
                       <div className="font-bold text-[#1A1640]">{t.profiles?.full_name ?? '—'}</div>
                       <div className="text-xs text-[#7B78A8]">{t.profiles?.phone ?? '—'}</div>
                     </div>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${t.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {t.is_active ? 'Aktif' : 'Nonaktif'}
-                  </span>
+                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${t.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {t.is_active ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                    <button onClick={() => { setDeleteId(t.id); setDeleteName(t.profiles?.full_name ?? 'Tutor') }}
+                      className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors" title="Hapus">
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
                 </div>
+
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {t.tutor_courses?.map((tc: any) => (
-                    <span key={tc.courses?.name} className="text-xs px-2 py-0.5 rounded-full font-semibold text-white"
-                      style={{ background: tc.courses?.color ?? '#5C4FE5' }}>
+                    <span key={tc.courses?.name}
+                      className="text-xs px-2 py-0.5 rounded-full font-semibold text-white"
+                      style={{background: tc.courses?.color ?? '#5C4FE5'}}>
                       {tc.courses?.name}
                     </span>
                   ))}
                 </div>
-                <div className="border-t border-[#F0EFFF] pt-3 flex items-center justify-between">
+
+                <div className="border-t border-[#F0EFFF] pt-3 flex items-center justify-between mb-3">
                   <div>
                     <div className="text-xs text-[#7B78A8]">Tarif per sesi</div>
-                    <div className="text-sm font-bold text-[#1A1640]">{formatRupiah(t.rate_per_session)}</div>
+                    <div className="text-sm font-bold text-[#1A1640]">{formatRp(t.rate_per_session)}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-xs text-[#7B78A8]">Kelas aktif</div>
                     <div className="text-sm font-bold text-[#1A1640]">{activeClasses.length} kelas</div>
                   </div>
                 </div>
-                <Link href={`/admin/tutor/${t.id}`} className="mt-3 w-full text-center block text-xs text-[#5C4FE5] font-semibold hover:underline">
-                  Lihat Detail →
-                </Link>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Link href={`/admin/tutor/${t.id}`}
+                    className="text-center py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition-colors">
+                    Detail
+                  </Link>
+                  <Link href={`/admin/tutor/${t.id}/edit`}
+                    className="text-center py-2 border border-[#E5E3FF] text-[#4A4580] text-xs font-bold rounded-lg hover:bg-[#F0EFFF] transition-colors">
+                    Edit
+                  </Link>
+                </div>
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Modal hapus */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+              <Trash2 size={22} className="text-red-500"/>
+            </div>
+            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Tutor?</h3>
+            <p className="text-sm text-[#7B78A8] mb-5">
+              Tutor <span className="font-semibold text-[#1A1640]">"{deleteName}"</span> akan dihapus permanen.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)} disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-gray-50 transition">
+                Batal
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-60">
+                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
