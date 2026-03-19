@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
-import { Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 
 interface Siswa {
   id: string
@@ -20,13 +20,30 @@ interface Siswa {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'active',   label: 'Aktif',        cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  { value: 'jeda',     label: 'Jeda',          cls: 'bg-[#FEF3E2] text-[#92400E]' },
-  { value: 'inactive', label: 'Tidak Aktif',   cls: 'bg-[#FEE9E9] text-[#991B1B]' },
+  { value: 'active',   label: 'Aktif',       cls: 'bg-[#E6F4EC] text-[#1A5C36]', dot: 'bg-[#27A05A]' },
+  { value: 'jeda',     label: 'Jeda',         cls: 'bg-[#FEF3E2] text-[#92400E]', dot: 'bg-[#D97706]' },
+  { value: 'inactive', label: 'Tidak Aktif',  cls: 'bg-[#FEE9E9] text-[#991B1B]', dot: 'bg-[#DC2626]' },
 ]
+
+const AVATAR_COLORS: Record<string, string> = {
+  active:   '#5C4FE5',
+  jeda:     '#D97706',
+  inactive: '#9CA3AF',
+}
 
 function getStatusStyle(status: string) {
   return STATUS_OPTIONS.find(s => s.value === status) ?? STATUS_OPTIONS[0]
+}
+
+function cycleStatus(current: string) {
+  const order = ['active', 'jeda', 'inactive']
+  const idx = order.indexOf(current)
+  return order[(idx + 1) % order.length]
+}
+
+function cycleLabel(current: string) {
+  const next = cycleStatus(current)
+  return getStatusStyle(next).label
 }
 
 export default function SiswaPage() {
@@ -39,7 +56,6 @@ export default function SiswaPage() {
   const [page,         setPage]         = useState(1)
   const [deleteId,     setDeleteId]     = useState<string | null>(null)
   const [deleting,     setDeleting]     = useState(false)
-  const [statusMenuId, setStatusMenuId] = useState<string | null>(null)
   const [updatingId,   setUpdatingId]   = useState<string | null>(null)
 
   const PER_PAGE = 10
@@ -65,13 +81,6 @@ export default function SiswaPage() {
     )
     setPage(1)
   }, [search, filterStatus, siswaList])
-
-  // Tutup dropdown status saat klik di luar
-  useEffect(() => {
-    function handleClickOutside() { setStatusMenuId(null) }
-    document.addEventListener('click', handleClickOutside)
-    return () => document.removeEventListener('click', handleClickOutside)
-  }, [])
 
   async function fetchSiswa() {
     setLoading(true); setError(null)
@@ -103,10 +112,11 @@ export default function SiswaPage() {
     }
   }
 
-  async function handleStatusChange(siswaId: string, newStatus: string) {
-    setUpdatingId(siswaId); setStatusMenuId(null)
-    await supabase.from('students').update({ status: newStatus }).eq('id', siswaId)
-    setSiswaList(prev => prev.map(s => s.id === siswaId ? { ...s, status: newStatus } : s))
+  async function handleStatusCycle(siswa: Siswa) {
+    const newStatus = cycleStatus(siswa.status)
+    setUpdatingId(siswa.id)
+    await supabase.from('students').update({ status: newStatus }).eq('id', siswa.id)
+    setSiswaList(prev => prev.map(s => s.id === siswa.id ? { ...s, status: newStatus } : s))
     setUpdatingId(null)
   }
 
@@ -124,7 +134,6 @@ export default function SiswaPage() {
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
   const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  // Summary counts
   const countActive   = siswaList.filter(s => s.status === 'active').length
   const countJeda     = siswaList.filter(s => s.status === 'jeda').length
   const countInactive = siswaList.filter(s => s.status === 'inactive').length
@@ -144,18 +153,19 @@ export default function SiswaPage() {
         </Link>
       </div>
 
-      {/* Summary status */}
+      {/* Summary cards */}
       {!loading && (
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
-            { label: 'Aktif',      count: countActive,   value: 'active',   cls: 'border-[#A7F3D0] bg-[#E6F4EC]', textCls: 'text-[#1A5C36]' },
-            { label: 'Jeda',       count: countJeda,     value: 'jeda',     cls: 'border-[#FCD34D] bg-[#FEF3E2]', textCls: 'text-[#92400E]' },
-            { label: 'Tidak Aktif',count: countInactive, value: 'inactive', cls: 'border-[#FCA5A5] bg-[#FEE9E9]', textCls: 'text-[#991B1B]' },
+            { label: 'Aktif',       count: countActive,   value: 'active',   border: 'border-[#A7F3D0]', bg: 'bg-[#E6F4EC]', text: 'text-[#1A5C36]' },
+            { label: 'Jeda',        count: countJeda,     value: 'jeda',     border: 'border-[#FCD34D]', bg: 'bg-[#FEF3E2]', text: 'text-[#92400E]' },
+            { label: 'Tidak Aktif', count: countInactive, value: 'inactive', border: 'border-[#FCA5A5]', bg: 'bg-[#FEE9E9]', text: 'text-[#991B1B]' },
           ].map(s => (
-            <button key={s.value} onClick={() => setFilterStatus(filterStatus === s.value ? 'all' : s.value)}
-              className={`rounded-xl border-2 p-3 text-left transition-all ${s.cls} ${filterStatus === s.value ? 'ring-2 ring-offset-1 ring-[#5C4FE5]' : 'hover:opacity-80'}`}>
-              <div className={`text-xl font-black ${s.textCls}`}>{s.count}</div>
-              <div className={`text-xs font-semibold ${s.textCls}`}>{s.label}</div>
+            <button key={s.value}
+              onClick={() => setFilterStatus(filterStatus === s.value ? 'all' : s.value)}
+              className={`rounded-xl border-2 p-3 text-left transition-all ${s.bg} ${s.border} ${filterStatus === s.value ? 'ring-2 ring-offset-1 ring-[#5C4FE5]' : 'hover:opacity-80'}`}>
+              <div className={`text-xl font-black ${s.text}`}>{s.count}</div>
+              <div className={`text-xs font-semibold ${s.text}`}>{s.label}</div>
             </button>
           ))}
         </div>
@@ -204,7 +214,7 @@ export default function SiswaPage() {
                   <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gray-200"/><div className="h-4 w-32 bg-gray-200 rounded"/></div></td>
                   <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 w-40 bg-gray-200 rounded"/></td>
                   <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 w-28 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4"><div className="h-4 w-20 bg-gray-200 rounded"/></td>
+                  <td className="px-5 py-4"><div className="h-5 w-20 bg-gray-200 rounded-full"/></td>
                   <td className="px-5 py-4"><div className="h-4 w-16 bg-gray-200 rounded ml-auto"/></td>
                 </tr>
               ))
@@ -224,32 +234,21 @@ export default function SiswaPage() {
               </tr>
             ) : (
               paginated.map((siswa, idx) => {
-                const nama    = siswa.profiles?.full_name ?? '—'
-                const email   = siswa.profiles?.email ?? '—'
-                const phone   = siswa.profiles?.phone ?? '—'
-                const tanggal = siswa.created_at
-                  ? new Date(siswa.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                  : '—'
-                const statusStyle = getStatusStyle(siswa.status)
-                const isMenuOpen  = statusMenuId === siswa.id
-                const isUpdating  = updatingId === siswa.id
-
+                const nama       = siswa.profiles?.full_name ?? '—'
+                const email      = siswa.profiles?.email ?? '—'
+                const phone      = siswa.profiles?.phone ?? '—'
+                const statusSt   = getStatusStyle(siswa.status)
+                const isUpdating = updatingId === siswa.id
                 return (
                   <tr key={siswa.id} className="bg-white hover:bg-[#F7F6FF] transition-colors">
                     <td className="px-5 py-4 text-[#7B78A8] text-xs font-medium">{(page-1)*PER_PAGE+idx+1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        {siswa.profiles?.avatar_url ? (
-                          <img src={siswa.profiles.avatar_url} alt={nama} className="w-9 h-9 rounded-full object-cover flex-shrink-0"/>
-                        ) : (
-                          <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                            style={{ backgroundColor: siswa.status === 'inactive' ? '#9CA3AF' : siswa.status === 'jeda' ? '#D97706' : '#5C4FE5' }}>
-                            {getInitials(nama)}
-                          </div>
-                        )}
-                        <div>
-                          <span className={`font-medium ${siswa.status === 'inactive' ? 'text-gray-400' : 'text-[#1A1640]'}`}>{nama}</span>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                          style={{ backgroundColor: AVATAR_COLORS[siswa.status] ?? '#5C4FE5' }}>
+                          {getInitials(nama)}
                         </div>
+                        <span className={`font-medium ${siswa.status === 'inactive' ? 'text-gray-400' : 'text-[#1A1640]'}`}>{nama}</span>
                       </div>
                     </td>
                     <td className="px-5 py-4 hidden md:table-cell">
@@ -264,30 +263,19 @@ export default function SiswaPage() {
                         <span>{phone}</span>
                       </div>
                     </td>
-                    {/* Status dropdown */}
+                    {/* Status — klik untuk cycle */}
                     <td className="px-5 py-4">
-                      <div className="relative" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => setStatusMenuId(isMenuOpen ? null : siswa.id)}
-                          disabled={isUpdating}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all hover:opacity-80 ${statusStyle.cls} ${isUpdating ? 'opacity-60' : ''}`}>
-                          {isUpdating ? '...' : statusStyle.label}
-                          <ChevronDown size={10} className={`transition-transform ${isMenuOpen ? 'rotate-180' : ''}`}/>
-                        </button>
-                        {isMenuOpen && (
-                          <div className="absolute left-0 top-8 z-30 bg-white rounded-xl border border-[#E5E3FF] shadow-lg overflow-hidden min-w-[130px]">
-                            {STATUS_OPTIONS.map(opt => (
-                              <button key={opt.value}
-                                onClick={() => handleStatusChange(siswa.id, opt.value)}
-                                className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-left hover:bg-[#F7F6FF] transition-colors ${siswa.status === opt.value ? 'bg-[#F0EEFF]' : ''}`}>
-                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.value === 'active' ? 'bg-[#27A05A]' : opt.value === 'jeda' ? 'bg-[#D97706]' : 'bg-[#DC2626]'}`}/>
-                                <span className="text-[#1A1640]">{opt.label}</span>
-                                {siswa.status === opt.value && <span className="ml-auto text-[#5C4FE5]">✓</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        onClick={() => handleStatusCycle(siswa)}
+                        disabled={isUpdating}
+                        title={`Ganti ke: ${cycleLabel(siswa.status)}`}
+                        className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all hover:opacity-75 active:scale-95 disabled:opacity-50 ${statusSt.cls}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusSt.dot}`}/>
+                        {isUpdating
+                          ? <RefreshCw size={10} className="animate-spin"/>
+                          : statusSt.label}
+                      </button>
+                      <p className="text-[9px] text-[#7B78A8] mt-0.5 pl-1">klik untuk ganti</p>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
@@ -348,10 +336,10 @@ export default function SiswaPage() {
               <Trash2 size={22} className="text-red-500"/>
             </div>
             <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Siswa?</h3>
-            <p className="text-sm text-[#7B78A8] mb-2">Data siswa akan dihapus permanen.</p>
-            <p className="text-xs text-[#7B78A8] mb-6 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
-              💡 Jika siswa kemungkinan kembali, gunakan status <strong>Jeda</strong> atau <strong>Tidak Aktif</strong> daripada menghapus.
-            </p>
+            <p className="text-sm text-[#7B78A8] mb-3">Data siswa akan dihapus permanen.</p>
+            <div className="px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 mb-5">
+              💡 Jika siswa kemungkinan kembali, gunakan status <strong>Jeda</strong> atau <strong>Tidak Aktif</strong> daripada hapus permanen.
+            </div>
             <div className="flex gap-3">
               <button onClick={() => setDeleteId(null)}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7B78A8] border transition-colors hover:bg-gray-50" style={{ borderColor: '#E5E3FF' }}>
