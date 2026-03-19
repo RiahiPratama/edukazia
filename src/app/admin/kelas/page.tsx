@@ -403,7 +403,7 @@ export default function KelasPage() {
                   <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
                   <span className="text-sm font-bold text-[#5C4FE5]">
                     {totalSesi} sesi
-                    {totalSesi >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.floor(totalSesi / 8)} periode)</span>}
+                    {totalSesi >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.ceil((totalSesi - 1) / 8)} periode)</span>}
                   </span>
                 </div>
               </div>

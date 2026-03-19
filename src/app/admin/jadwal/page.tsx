@@ -361,48 +361,69 @@ function JadwalContent() {
             const isLast     = idx === selectedSessions.length - 1
             return (
               <div key={s.id} className={!isLast || isExpanded ? 'border-b border-[#E5E3FF]' : ''}>
-                <div className={`flex items-center gap-3 px-5 py-4 transition-colors ${isExpanded?'bg-[#F0EEFF] border-l-4 border-l-[#5C4FE5]':'hover:bg-[#F7F6FF]'}`}>
-                  {/* Jam */}
-                  <div className="min-w-[44px] text-sm font-bold text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+                <div className={`px-4 py-3.5 transition-colors ${isExpanded?'bg-[#F0EEFF] border-l-4 border-l-[#5C4FE5]':'hover:bg-[#F7F6FF]'}`}>
+                  {/* Baris atas: jam + nama kelas + aksi */}
+                  <div className="flex items-center gap-2.5">
+                    {/* Jam */}
+                    <div className="min-w-[40px] text-sm font-bold text-[#5C4FE5] flex-shrink-0">{fmtTime(s.scheduled_at)}</div>
 
-                  {/* Warna dot */}
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{backgroundColor: s.class_group?.color ?? '#5C4FE5'}}/>
+                    {/* Dot warna */}
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor: s.class_group?.color ?? '#5C4FE5'}}/>
 
-                  {/* Info kelas */}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-[#1A1640] truncate">{s.class_group?.label ?? '—'}</div>
-                    <div className="text-xs text-[#7B78A8] mt-0.5">{s.class_group?.tutor_name} · {s.class_group?.course_name}</div>
+                    {/* Nama kelas — flex-1 agar makan sisa ruang */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-[#1A1640] truncate leading-tight">{s.class_group?.label ?? '—'}</div>
+                    </div>
+
+                    {/* Status pill */}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${st.pill}`}>{st.label}</span>
                   </div>
 
-                  {/* FIX isu 1: tombol expand siswa dipindah ke sini, sebelum zoom & status */}
-                  <button onClick={() => fetchSiswa(s)}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${isExpanded?'bg-[#5C4FE5] text-white':'bg-[#F0EEFF] text-[#5C4FE5] hover:bg-[#E0DCFF]'}`}
-                    title="Lihat siswa">
-                    <Users size={12}/>{isExpanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}
-                  </button>
+                  {/* Baris bawah: tutor · kursus + tombol aksi */}
+                  <div className="flex items-center justify-between mt-1.5 pl-[52px]">
+                    {/* Info tutor & kursus */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-[#7B78A8] truncate">{s.class_group?.tutor_name} · {s.class_group?.course_name}</span>
+                    </div>
 
-                  {s.zoom_link && (
-                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" className="text-[#5C4FE5] hover:opacity-70 transition flex-shrink-0"><ExternalLink size={14}/></a>
-                  )}
-
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.pill}`}>{st.label}</span>
-
-                  {/* FIX isu 1: tombol aksi dipisah dengan divider visual, gap lebih besar */}
-                  <div className="flex items-center gap-2 flex-shrink-0 pl-2 border-l border-[#E5E3FF]">
-                    {s.status === 'scheduled' && (
-                      <button onClick={() => markComplete(s.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
-                        <Check size={14}/>
+                    {/* Tombol aksi */}
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                      {/* Expand siswa */}
+                      <button onClick={() => fetchSiswa(s)}
+                        className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-xs font-semibold transition ${isExpanded?'bg-[#5C4FE5] text-white':'bg-[#F0EEFF] text-[#5C4FE5] hover:bg-[#E0DCFF]'}`}
+                        title="Lihat siswa">
+                        <Users size={11}/>{isExpanded?<ChevronUp size={11}/>:<ChevronDown size={11}/>}
                       </button>
-                    )}
-                    <button onClick={() => openEdit(s)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Edit">
-                      <Pencil size={14}/>
-                    </button>
-                    <button onClick={() => setDelConfirm(s.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
-                      <Trash2 size={14}/>
-                    </button>
+
+                      {/* Zoom */}
+                      {s.zoom_link && (
+                        <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex-shrink-0">
+                          <ExternalLink size={13}/>
+                        </a>
+                      )}
+
+                      {/* Divider */}
+                      <div className="w-px h-4 bg-[#E5E3FF] mx-0.5"/>
+
+                      {/* Tandai selesai */}
+                      {s.status === 'scheduled' && (
+                        <button onClick={() => markComplete(s.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
+                          <Check size={13}/>
+                        </button>
+                      )}
+                      {/* Edit */}
+                      <button onClick={() => openEdit(s)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Edit">
+                        <Pencil size={13}/>
+                      </button>
+                      {/* Hapus */}
+                      <button onClick={() => setDelConfirm(s.id)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
+                        <Trash2 size={13}/>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
