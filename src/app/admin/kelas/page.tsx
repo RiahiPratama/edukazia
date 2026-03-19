@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { Plus, X, Minus, Calendar } from 'lucide-react'
+import { Plus, X, Minus, Calendar, Trash2 } from 'lucide-react'
 
 type Kelas = {
   id: string
@@ -44,6 +44,12 @@ export default function KelasPage() {
   const [jadwalError,   setJadwalError]   = useState('')
   const [jadwalSuccess, setJadwalSuccess] = useState('')
 
+  // Modal hapus
+  const [deleteId,    setDeleteId]    = useState<string | null>(null)
+  const [deleteLabel, setDeleteLabel] = useState('')
+  const [deleting,    setDeleting]    = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
   function today() {
     const d = new Date()
     const offset = d.getTimezoneOffset()
@@ -69,10 +75,34 @@ export default function KelasPage() {
   function openJadwal(k: Kelas) {
     setSelectedKelas(k)
     setJadwalRows([{ date: today(), time: '08:00', repeat: 1 }])
-    setFZoom(''  )
+    setFZoom('')
     setJadwalError('')
     setJadwalSuccess('')
     setShowJadwal(true)
+  }
+
+  function openDelete(k: Kelas) {
+    setDeleteId(k.id)
+    setDeleteLabel(k.label)
+    setDeleteError('')
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return
+    setDeleting(true); setDeleteError('')
+
+    // Hapus sessions dulu
+    await supabase.from('sessions').delete().eq('class_group_id', deleteId)
+    // Hapus enrollments
+    await supabase.from('enrollments').delete().eq('class_group_id', deleteId)
+    // Hapus class_group
+    const { error } = await supabase.from('class_groups').delete().eq('id', deleteId)
+
+    if (error) { setDeleteError(error.message); setDeleting(false); return }
+
+    setDeleting(false)
+    setDeleteId(null)
+    fetchKelas()
   }
 
   function addRow() {
@@ -172,9 +202,17 @@ export default function KelasPage() {
                     <div className="font-bold text-[#1A1640] truncate">{k.label}</div>
                     <div className="text-xs text-[#7B78A8] mt-0.5">{k.courses?.name} · {k.class_types?.name}</div>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ml-2 flex-shrink-0 ${statusColor[k.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                    {statusLabel[k.status] ?? k.status}
-                  </span>
+                  <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor[k.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {statusLabel[k.status] ?? k.status}
+                    </span>
+                    {/* Tombol hapus di pojok kanan atas */}
+                    <button onClick={() => openDelete(k)}
+                      className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      title="Hapus Kelas">
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="text-sm text-[#4A4580] mb-3">
@@ -193,7 +231,6 @@ export default function KelasPage() {
                     style={{ width: `${Math.min((activeEnroll / k.max_participants) * 100, 100)}%` }}/>
                 </div>
 
-                {/* Tiga tombol */}
                 <div className="grid grid-cols-3 gap-2">
                   <Link href={`/admin/kelas/${k.id}/edit`}
                     className="text-center py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition-colors">
@@ -214,11 +251,42 @@ export default function KelasPage() {
         </div>
       )}
 
+      {/* MODAL HAPUS KELAS */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+              <Trash2 size={22} className="text-red-500"/>
+            </div>
+            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Kelas?</h3>
+            <p className="text-sm text-[#7B78A8] mb-1">
+              Kelas <span className="font-semibold text-[#1A1640]">"{deleteLabel}"</span> akan dihapus permanen beserta:
+            </p>
+            <ul className="text-sm text-[#7B78A8] mb-5 list-disc list-inside space-y-0.5">
+              <li>Semua jadwal/sesi kelas ini</li>
+              <li>Semua data enrollment siswa</li>
+            </ul>
+            {deleteError && (
+              <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{deleteError}</div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)} disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-gray-50 transition disabled:opacity-60">
+                Batal
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-60">
+                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL JADWALKAN */}
       {showJadwal && selectedKelas && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF] sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-base font-bold text-[#1A1640]">Jadwalkan Sesi</h2>
@@ -230,13 +298,11 @@ export default function KelasPage() {
             </div>
 
             <div className="px-6 py-5 space-y-4">
-              {/* Jadwal rows */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jadwal</label>
                   <span className="text-xs text-[#7B78A8]">{jadwalRows.length}/{MAX_ROWS} jadwal</span>
                 </div>
-
                 <div className="space-y-3">
                   {jadwalRows.map((row, idx) => (
                     <div key={idx} className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3">
@@ -275,14 +341,12 @@ export default function KelasPage() {
                     </div>
                   ))}
                 </div>
-
                 {jadwalRows.length < MAX_ROWS && (
                   <button onClick={addRow}
                     className="mt-3 w-full py-2.5 border-2 border-dashed border-[#C4BFFF] rounded-xl text-sm font-semibold text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex items-center justify-center gap-2">
                     <Plus size={14}/> Tambah Jadwal Lain
                   </button>
                 )}
-
                 <div className="mt-3 flex items-center justify-between px-4 py-2.5 bg-[#EEEDFE] rounded-xl">
                   <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
                   <span className="text-sm font-bold text-[#5C4FE5]">
@@ -292,7 +356,6 @@ export default function KelasPage() {
                 </div>
               </div>
 
-              {/* Zoom link */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
