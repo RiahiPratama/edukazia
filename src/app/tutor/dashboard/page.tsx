@@ -110,13 +110,13 @@ export default async function TutorDashboard() {
   }
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', {
-      hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Makassar'
+      hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jayapura'
     })
   }
   function formatTanggal(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-      timeZone: 'Asia/Makassar'
+      timeZone: 'Asia/Jayapura'
     })
   }
 
@@ -210,7 +210,7 @@ export default async function TutorDashboard() {
                 {/* Jam */}
                 <div className="w-14 text-center flex-shrink-0">
                   <div className="text-sm font-black text-[#5C4FE5]">{formatTime(s.scheduled_at)}</div>
-                  <div className="text-[10px] text-[#7B78A8] font-semibold">WITA</div>
+                  <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
                 </div>
 
                 {/* Info kelas */}

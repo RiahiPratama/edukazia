@@ -84,12 +84,12 @@ export default async function TutorKelasPage() {
 
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', {
-      day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Makassar'
+      day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jayapura'
     })
   }
   function fmtTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', {
-      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Makassar'
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura'
     })
   }
   function getInitials(name: string) {

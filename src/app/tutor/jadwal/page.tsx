@@ -83,12 +83,12 @@ export default async function TutorJadwalPage({
   }
   function fmtTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', {
-      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Makassar'
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura'
     })
   }
   function fmtHeaderDate(d: Date) {
     return d.toLocaleDateString('id-ID', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Makassar'
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura'
     })
   }
   function fmtMonthYear(d: Date) {
@@ -206,7 +206,7 @@ export default async function TutorJadwalPage({
                       {/* Jam */}
                       <div className="w-14 flex-shrink-0 text-center">
                         <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
-                        <div className="text-[10px] text-[#7B78A8] font-semibold">WITA</div>
+                        <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
                       </div>
 
                       {/* Garis vertikal */}
