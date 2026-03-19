@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus, ChevronDown, ChevronUp, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus, ChevronDown, ChevronUp, Users, CalendarDays } from 'lucide-react'
 
 type Session = {
   id: string
@@ -348,7 +348,9 @@ function JadwalContent() {
           <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Memuat jadwal...</div>
         ) : selectedSessions.length === 0 ? (
           <div className="px-5 py-14 text-center">
-            <div className="text-3xl mb-3">📅</div>
+            <div className="flex justify-center mb-3">
+              <CalendarDays size={40} strokeWidth={1.5} className="text-[#C4BFFF]"/>
+            </div>
             <p className="text-sm font-semibold text-[#7B78A8]">Tidak ada sesi pada hari ini</p>
             <button onClick={openAdd} className="mt-3 text-sm text-[#5C4FE5] font-semibold hover:underline">+ Tambah sesi baru</button>
           </div>

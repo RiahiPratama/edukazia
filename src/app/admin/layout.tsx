@@ -5,7 +5,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import Image from 'next/image'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2
@@ -97,13 +96,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   function Logo() {
     return (
       <Link href="/admin/dashboard" className="flex items-center gap-2.5 no-underline" style={{textDecoration:'none'}}>
-        <Image
+        <img
           src="/edukazia-logo-warna.png"
           alt="EduKazia"
-          width={110}
-          height={32}
-          style={{ objectFit: 'contain', objectPosition: 'left' }}
-          priority
+          style={{ height: '32px', width: 'auto', objectFit: 'contain' }}
         />
         <span style={{ fontSize: '11px', background: '#5C4FE5', color: 'white', padding: '2px 8px', borderRadius: '999px', fontWeight: 600, flexShrink: 0 }}>
           Admin
