@@ -15,7 +15,7 @@ const DAY_NAMES = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
 export default async function TutorJadwalPage({
   searchParams,
 }: {
-  searchParams: { week?: string }
+  searchParams: Promise<{ week?: string }>
 }) {
   const supabase = await createClient()
 
@@ -33,8 +33,9 @@ export default async function TutorJadwalPage({
   const tutorId = tutor?.id
 
   // ── Hitung minggu yang ditampilkan ──
+  const params = await searchParams
   const now = new Date()
-  const weekOffset = parseInt(searchParams.week ?? '0')
+  const weekOffset = parseInt(params.week ?? '0')
 
   // Senin minggu ini
   const monday = new Date(now)
