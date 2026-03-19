@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { Plus, X, Minus, Calendar, Trash2, Archive } from 'lucide-react'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 type Kelas = {
   id: string
@@ -278,62 +279,27 @@ export default function KelasPage() {
         </div>
       )}
 
-      {/* MODAL ARSIP KELAS */}
-      {archiveId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-full bg-[#EEEDFE] flex items-center justify-center mb-4">
-              <Archive size={22} className="text-[#5C4FE5]"/>
-            </div>
-            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Arsipkan Kelas?</h3>
-            <p className="text-sm text-[#7B78A8] mb-5">
-              Kelas <span className="font-semibold text-[#1A1640]">"{archiveLabel}"</span> akan diubah statusnya menjadi <span className="font-semibold text-blue-600">Selesai</span>. Kelas tidak akan muncul di jadwal aktif, tapi semua data siswa dan riwayat pembayaran tetap tersimpan.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setArchiveId(null)} disabled={archiving}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-gray-50 transition disabled:opacity-60">
-                Batal
-              </button>
-              <button onClick={handleArchive} disabled={archiving}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-[#5C4FE5] hover:bg-[#3D34C4] transition disabled:opacity-60">
-                {archiving ? 'Mengarsipkan...' : 'Ya, Arsipkan'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!archiveId}
+        title="Arsipkan Kelas?"
+        description={`Kelas "${archiveLabel}" akan diubah statusnya menjadi Selesai. Kelas tidak muncul di jadwal aktif, tapi semua data tetap tersimpan.`}
+        confirmText="Ya, Arsipkan"
+        cancelText="Batal"
+        loading={archiving}
+        variant="archive"
+        onConfirm={handleArchive}
+        onCancel={() => setArchiveId(null)}
+      />
 
-      {/* MODAL HAPUS KELAS */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <Trash2 size={22} className="text-red-500"/>
-            </div>
-            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Kelas?</h3>
-            <p className="text-sm text-[#7B78A8] mb-1">
-              Kelas <span className="font-semibold text-[#1A1640]">"{deleteLabel}"</span> akan dihapus permanen beserta:
-            </p>
-            <ul className="text-sm text-[#7B78A8] mb-5 list-disc list-inside space-y-0.5">
-              <li>Semua jadwal/sesi kelas ini</li>
-              <li>Semua data enrollment siswa</li>
-            </ul>
-            {deleteError && (
-              <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{deleteError}</div>
-            )}
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-gray-50 transition disabled:opacity-60">
-                Batal
-              </button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-60">
-                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!deleteId}
+        title="Hapus Kelas?"
+        description={`Kelas "${deleteLabel}" akan dihapus permanen beserta semua jadwal/sesi dan data enrollment siswa.`}
+        confirmText="Ya, Hapus"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteId(null)}
+      />
 
       {/* MODAL JADWALKAN */}
       {showJadwal && selectedKelas && (

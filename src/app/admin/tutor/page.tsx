@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { Plus, Trash2 } from 'lucide-react'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 export default function TutorPage() {
   const supabase = createClient()
@@ -141,30 +142,15 @@ export default function TutorPage() {
         </div>
       )}
 
-      {/* Modal hapus */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <Trash2 size={22} className="text-red-500"/>
-            </div>
-            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Tutor?</h3>
-            <p className="text-sm text-[#7B78A8] mb-5">
-              Tutor <span className="font-semibold text-[#1A1640]">"{deleteName}"</span> akan dihapus permanen.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-gray-50 transition">
-                Batal
-              </button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-60">
-                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!deleteId}
+        title="Hapus Tutor?"
+        description={`Tutor "${deleteName}" akan dihapus permanen beserta semua data kursusnya.`}
+        confirmText="Ya, Hapus"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   )
 }

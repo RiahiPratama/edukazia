@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
 import { Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 interface Siswa {
   id: string
@@ -328,31 +329,16 @@ export default function SiswaPage() {
         )}
       </div>
 
-      {/* Modal hapus */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <Trash2 size={22} className="text-red-500"/>
-            </div>
-            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Siswa?</h3>
-            <p className="text-sm text-[#7B78A8] mb-3">Data siswa akan dihapus permanen.</p>
-            <div className="px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 mb-5">
-              💡 Jika siswa kemungkinan kembali, gunakan status <strong>Jeda</strong> atau <strong>Tidak Aktif</strong> daripada hapus permanen.
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7B78A8] border transition-colors hover:bg-gray-50" style={{ borderColor: '#E5E3FF' }}>
-                Batal
-              </button>
-              <button onClick={() => handleDelete(deleteId)} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-70">
-                {deleting ? 'Menghapus...' : 'Ya, Hapus'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!deleteId}
+        title="Hapus Siswa?"
+        description="Data siswa akan dihapus permanen dan tidak dapat dikembalikan."
+        confirmText="Ya, Hapus"
+        loading={deleting}
+        note="Jika siswa kemungkinan kembali, gunakan status Jeda atau Tidak Aktif daripada hapus permanen."
+        onConfirm={() => deleteId && handleDelete(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   )
 }

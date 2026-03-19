@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus, ChevronDown, ChevronUp, Users, CalendarDays } from 'lucide-react'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 type Session = {
   id: string
@@ -594,20 +595,14 @@ function JadwalContent() {
         </div>
       )}
 
-      {/* Konfirmasi Hapus */}
-      {delConfirm && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4"><Trash2 size={22} className="text-red-500"/></div>
-            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Hapus Sesi?</h3>
-            <p className="text-sm text-[#7B78A8] mb-6">Data sesi ini akan dihapus permanen.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDelConfirm(null)} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-[#F7F6FF] transition">Batal</button>
-              <button onClick={() => handleDelete(delConfirm)} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition">Ya, Hapus</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!delConfirm}
+        title="Hapus Sesi?"
+        description="Data sesi ini akan dihapus permanen."
+        confirmText="Ya, Hapus"
+        onConfirm={() => delConfirm && handleDelete(delConfirm)}
+        onCancel={() => setDelConfirm(null)}
+      />
     </div>
   )
 }
