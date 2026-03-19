@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { Plus, X, Minus, Calendar, Trash2 } from 'lucide-react'
+import { Plus, X, Minus, Calendar, Trash2, Archive } from 'lucide-react'
 
 type Kelas = {
   id: string
@@ -34,6 +34,11 @@ export default function KelasPage() {
 
   const [kelasList, setKelasList] = useState<Kelas[]>([])
   const [loading,   setLoading]   = useState(true)
+
+  // Modal arsip
+  const [archiveId,    setArchiveId]    = useState<string | null>(null)
+  const [archiveLabel, setArchiveLabel] = useState('')
+  const [archiving,    setArchiving]    = useState(false)
 
   // Modal jadwal
   const [showJadwal,    setShowJadwal]    = useState(false)
@@ -79,6 +84,20 @@ export default function KelasPage() {
     setJadwalError('')
     setJadwalSuccess('')
     setShowJadwal(true)
+  }
+
+  function openArchive(k: Kelas) {
+    setArchiveId(k.id)
+    setArchiveLabel(k.label)
+  }
+
+  async function handleArchive() {
+    if (!archiveId) return
+    setArchiving(true)
+    await supabase.from('class_groups').update({ status: 'completed' }).eq('id', archiveId)
+    setArchiving(false)
+    setArchiveId(null)
+    fetchKelas()
   }
 
   function openDelete(k: Kelas) {
@@ -206,7 +225,15 @@ export default function KelasPage() {
                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor[k.status] ?? 'bg-gray-100 text-gray-500'}`}>
                       {statusLabel[k.status] ?? k.status}
                     </span>
-                    {/* Tombol hapus di pojok kanan atas */}
+                    {/* Tombol arsip */}
+                    {k.status !== 'completed' && (
+                      <button onClick={() => openArchive(k)}
+                        className="p-1 rounded-lg text-gray-300 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition-colors"
+                        title="Arsipkan Kelas">
+                        <Archive size={13}/>
+                      </button>
+                    )}
+                    {/* Tombol hapus */}
                     <button onClick={() => openDelete(k)}
                       className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
                       title="Hapus Kelas">
@@ -248,6 +275,31 @@ export default function KelasPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* MODAL ARSIP KELAS */}
+      {archiveId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
+            <div className="w-12 h-12 rounded-full bg-[#EEEDFE] flex items-center justify-center mb-4">
+              <Archive size={22} className="text-[#5C4FE5]"/>
+            </div>
+            <h3 className="text-lg font-bold text-[#1A1640] mb-1">Arsipkan Kelas?</h3>
+            <p className="text-sm text-[#7B78A8] mb-5">
+              Kelas <span className="font-semibold text-[#1A1640]">"{archiveLabel}"</span> akan diubah statusnya menjadi <span className="font-semibold text-blue-600">Selesai</span>. Kelas tidak akan muncul di jadwal aktif, tapi semua data siswa dan riwayat pembayaran tetap tersimpan.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setArchiveId(null)} disabled={archiving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#7B78A8] border border-[#E5E3FF] hover:bg-gray-50 transition disabled:opacity-60">
+                Batal
+              </button>
+              <button onClick={handleArchive} disabled={archiving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-[#5C4FE5] hover:bg-[#3D34C4] transition disabled:opacity-60">
+                {archiving ? 'Mengarsipkan...' : 'Ya, Arsipkan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
