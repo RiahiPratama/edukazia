@@ -10,10 +10,10 @@ type Course = { id: string; name: string; color: string | null }
 type Achievement = { name: string; category: string; issuer: string; year: string }
 
 const CATEGORIES = [
-  { value: 'pelatihan',    label: 'Pelatihan',    color: '#EEEDFE', textColor: '#3C3489' },
-  { value: 'sertifikasi',  label: 'Sertifikasi',  color: '#E6F4EC', textColor: '#1A5C36' },
-  { value: 'prestasi',     label: 'Prestasi',     color: '#FEF3E2', textColor: '#92400E' },
-  { value: 'komunitas',    label: 'Komunitas',    color: '#E6F1FB', textColor: '#185FA5' },
+  { value: 'pelatihan',   label: 'Pelatihan',   color: '#EEEDFE', textColor: '#3C3489' },
+  { value: 'sertifikasi', label: 'Sertifikasi', color: '#E6F4EC', textColor: '#1A5C36' },
+  { value: 'prestasi',    label: 'Prestasi',    color: '#FEF3E2', textColor: '#92400E' },
+  { value: 'komunitas',   label: 'Komunitas',   color: '#E6F1FB', textColor: '#185FA5' },
 ]
 
 const EDU_LEVELS = ['SMA/SMK', 'D3', 'S1', 'S2', 'S3']
@@ -29,26 +29,26 @@ export default function TambahTutorPage() {
   const [subjectInput,    setSubjectInput]    = useState('')
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState('')
+  const [success,         setSuccess]         = useState(false)
 
   const [form, setForm] = useState({
-    full_name:                  '',
-    phone:                      '',
-    email:                      '',
-    rate_per_session:            '',
-    bank_name:                  '',
-    bank_account:               '',
-    bank_holder:                '',
-    is_active:                  true,
-    education_level:            '',
-    education_major:            '',
-    education_university:       '',
-    education_year:             '',
-    teaching_experience_years:  '',
-    previous_workplaces:        '',
-    bio:                        '',
+    full_name:                 '',
+    phone:                     '',
+    email:                     '',
+    rate_per_session:          '',
+    bank_name:                 '',
+    bank_account:              '',
+    bank_holder:               '',
+    is_active:                 true,
+    education_level:           '',
+    education_major:           '',
+    education_university:      '',
+    education_year:            '',
+    teaching_experience_years: '',
+    previous_workplaces:       '',
+    bio:                       '',
   })
 
-  // Achievement form state
   const [newAch, setNewAch] = useState<Achievement>({ name: '', category: 'pelatihan', issuer: '', year: '' })
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function TambahTutorPage() {
 
   function addSubject() {
     const s = subjectInput.trim()
-    if (s && !subjects.includes(s)) { setSubjects(prev => [...prev, s]) }
+    if (s && !subjects.includes(s)) setSubjects(prev => [...prev, s])
     setSubjectInput('')
   }
 
@@ -87,61 +87,70 @@ export default function TambahTutorPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.full_name.trim()) { setError('Nama tutor wajib diisi.'); return }
-    if (!form.phone.trim()) { setError('Nomor HP wajib diisi.'); return }
+    if (!form.full_name.trim())  { setError('Nama tutor wajib diisi.'); return }
+    if (!form.phone.trim())      { setError('Nomor HP wajib diisi.'); return }
+    if (!form.email.trim())      { setError('Email wajib diisi — dipakai untuk login tutor.'); return }
     if (selectedCourses.length === 0) { setError('Pilih minimal 1 kursus.'); return }
 
     setLoading(true); setError('')
 
-    // 1. Buat profile
-    const { data: profile, error: profileErr } = await supabase
-      .from('profiles')
-      .insert({ id: crypto.randomUUID(), full_name: form.full_name.trim(), phone: form.phone.trim(), role: 'tutor' })
-      .select('id').single()
+    const res = await fetch('/api/tutor/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...form,
+        subjects,
+        achievements,
+        selectedCourses,
+      }),
+    })
 
-    if (profileErr || !profile) { setError(profileErr?.message ?? 'Gagal membuat profil.'); setLoading(false); return }
+    const result = await res.json()
 
-    // 2. Buat tutor dengan field baru
-    const { data: tutor, error: tutorErr } = await supabase
-      .from('tutors')
-      .insert({
-        profile_id:                 profile.id,
-        rate_per_session:           form.rate_per_session ? parseInt(form.rate_per_session) : 0,
-        bank_name:                  form.bank_name.trim() || null,
-        bank_account:               form.bank_account.trim() || null,
-        bank_holder:                form.bank_holder.trim() || null,
-        is_active:                  form.is_active,
-        education_level:            form.education_level || null,
-        education_major:            form.education_major.trim() || null,
-        education_university:       form.education_university.trim() || null,
-        education_year:             form.education_year ? parseInt(form.education_year) : null,
-        subjects:                   subjects.length > 0 ? subjects : null,
-        teaching_experience_years:  form.teaching_experience_years ? parseInt(form.teaching_experience_years) : null,
-        previous_workplaces:        form.previous_workplaces.trim() || null,
-        bio:                        form.bio.trim() || null,
-        achievements:               achievements.length > 0 ? achievements : [],
-      })
-      .select('id').single()
-
-    if (tutorErr || !tutor) { setError(tutorErr?.message ?? 'Gagal menyimpan tutor.'); setLoading(false); return }
-
-    // 3. Simpan kursus
-    if (selectedCourses.length > 0) {
-      await supabase.from('tutor_courses').insert(selectedCourses.map(courseId => ({ tutor_id: tutor.id, course_id: courseId })))
+    if (!res.ok || result.error) {
+      setError(result.error ?? 'Terjadi kesalahan.')
+      setLoading(false)
+      return
     }
 
-    router.push('/admin/tutor'); router.refresh()
+    // Berhasil — tampilkan notifikasi lalu redirect
+    setSuccess(true)
+    setTimeout(() => {
+      router.push('/admin/tutor')
+      router.refresh()
+    }, 2000)
   }
 
-  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
-  const labelCls = "block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5"
+  const inputCls   = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+  const labelCls   = "block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5"
   const sectionCls = "bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4"
+
+  // ── Tampilan sukses ──
+  if (success) {
+    return (
+      <div className="max-w-2xl">
+        <div className="bg-white rounded-2xl border border-green-200 p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <h2 className="text-lg font-black text-[#1A1640] mb-2">Tutor Berhasil Ditambahkan!</h2>
+          <p className="text-sm text-[#7B78A8]">
+            Email invite telah dikirim ke <span className="font-semibold text-[#5C4FE5]">{form.email}</span>.<br/>
+            Tutor perlu klik link di email untuk set password dan bisa login.
+          </p>
+          <p className="text-xs text-[#7B78A8] mt-3">Mengalihkan ke daftar tutor...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/admin/tutor" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">← Kembali</Link>
-        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Tambah Tutor</h1>
+        <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>Tambah Tutor</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -161,9 +170,16 @@ export default function TambahTutorPage() {
             </div>
           </div>
 
+          {/* Email sekarang WAJIB */}
           <div>
-            <label className={labelCls}>Email <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+            <label className={labelCls}>
+              Email <span className="text-red-500">*</span>
+              <span className="normal-case font-normal text-[#7B78A8] ml-1">— dipakai untuk login tutor</span>
+            </label>
             <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="email@contoh.com" className={inputCls}/>
+            <p className="text-xs text-[#7B78A8] mt-1">
+              Tutor akan menerima email invite untuk set password dan bisa login ke dashboard.
+            </p>
           </div>
 
           {/* Kursus */}
@@ -283,30 +299,28 @@ export default function TambahTutorPage() {
         {/* PELATIHAN, SERTIFIKASI & PRESTASI */}
         <div className={sectionCls}>
           <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Pelatihan, Sertifikasi & Prestasi <span className="normal-case font-normal">(opsional)</span></p>
-
-          {/* Form tambah achievement */}
           <div className="bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl p-4 space-y-3">
             <p className="text-xs font-bold text-[#7B78A8]">Tambah item baru</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Nama</label>
-                <input type="text" value={newAch.name} onChange={e => setNewAch(p => ({...p, name: e.target.value}))}
+                <input type="text" value={newAch.name} onChange={e => setNewAch(p => ({ ...p, name: e.target.value }))}
                   placeholder="Contoh: TOEFL Score 550" className={inputCls}/>
               </div>
               <div>
                 <label className={labelCls}>Kategori</label>
-                <select value={newAch.category} onChange={e => setNewAch(p => ({...p, category: e.target.value}))} className={inputCls}>
+                <select value={newAch.category} onChange={e => setNewAch(p => ({ ...p, category: e.target.value }))} className={inputCls}>
                   {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
               <div>
                 <label className={labelCls}>Lembaga/Penyelenggara</label>
-                <input type="text" value={newAch.issuer} onChange={e => setNewAch(p => ({...p, issuer: e.target.value}))}
-                  placeholder="ETS, Kemdikbud, AIESEC..." className={inputCls}/>
+                <input type="text" value={newAch.issuer} onChange={e => setNewAch(p => ({ ...p, issuer: e.target.value }))}
+                  placeholder="ETS, Kemdikbud..." className={inputCls}/>
               </div>
               <div>
                 <label className={labelCls}>Tahun</label>
-                <input type="text" value={newAch.year} onChange={e => setNewAch(p => ({...p, year: e.target.value}))}
+                <input type="text" value={newAch.year} onChange={e => setNewAch(p => ({ ...p, year: e.target.value }))}
                   placeholder="2021" className={inputCls}/>
               </div>
             </div>
@@ -315,8 +329,6 @@ export default function TambahTutorPage() {
               <Plus size={13}/> Tambah
             </button>
           </div>
-
-          {/* List achievements */}
           {achievements.length > 0 && (
             <div className="space-y-2 mt-2">
               {achievements.map((a, idx) => {
@@ -327,7 +339,7 @@ export default function TambahTutorPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-[#1A1640]">{a.name}</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                          style={{background: cat.color, color: cat.textColor}}>
+                          style={{ background: cat.color, color: cat.textColor }}>
                           {cat.label}
                         </span>
                       </div>
@@ -351,7 +363,7 @@ export default function TambahTutorPage() {
         <div className="flex gap-3">
           <button type="submit" disabled={loading}
             className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-            {loading ? 'Menyimpan...' : 'Simpan Tutor'}
+            {loading ? 'Menyimpan & Mengirim Invite...' : 'Simpan & Kirim Invite Email'}
           </button>
           <Link href="/admin/tutor"
             className="px-6 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition text-center">

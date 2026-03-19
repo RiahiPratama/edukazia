@@ -4,10 +4,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 // ─── Mapping role → route yang diizinkan ──────────────────
 const ROLE_ROUTES: Record<string, string> = {
   admin: '/admin',
-  tutor: '/tutor',
+  tutor: '/tutor/dashboard',
   student: '/siswa',
 }
-
 
 // Route yang butuh login
 const PROTECTED_PREFIXES = ['/admin', '/tutor', '/siswa']
@@ -44,10 +43,17 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  // Tambahkan setelah cek protected route
+  // ── Redirect /admin → /admin/dashboard ──
   if (pathname === '/admin') {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/admin/dashboard'
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // ── Redirect /tutor → /tutor/dashboard ──
+  if (pathname === '/tutor' || pathname === '/tutor/') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/tutor/dashboard'
     return NextResponse.redirect(redirectUrl)
   }
 
