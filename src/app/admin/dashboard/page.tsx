@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { CalendarDays, GraduationCap, Users, BookOpen, LayoutDashboard, CreditCard, Coins, FolderOpen, Globe, DollarSign } from 'lucide-react'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -66,10 +67,10 @@ export default async function AdminDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Pendapatan Bulan Ini', value: formatRupiah(totalBulanIni), icon: '💰', color: 'bg-purple-50 border-purple-100', iconBg: 'bg-[#5C4FE5]' },
-          { label: 'Siswa Aktif', value: String(totalSiswa ?? 0), icon: '👨‍🎓', color: 'bg-blue-50 border-blue-100', iconBg: 'bg-blue-500' },
-          { label: 'Tutor Aktif', value: String(totalTutor ?? 0), icon: '👨‍🏫', color: 'bg-green-50 border-green-100', iconBg: 'bg-green-500' },
-          { label: 'Kelas Berjalan', value: String(totalKelas ?? 0), icon: '🏫', color: 'bg-yellow-50 border-yellow-100', iconBg: 'bg-yellow-500' },
+          { label: 'Pendapatan Bulan Ini', value: formatRupiah(totalBulanIni), Icon: DollarSign, color: 'bg-purple-50 border-purple-100', iconBg: 'bg-[#5C4FE5]' },
+          { label: 'Siswa Aktif', value: String(totalSiswa ?? 0), Icon: GraduationCap, color: 'bg-blue-50 border-blue-100', iconBg: 'bg-blue-500' },
+          { label: 'Tutor Aktif', value: String(totalTutor ?? 0), Icon: Users, color: 'bg-green-50 border-green-100', iconBg: 'bg-green-500' },
+          { label: 'Kelas Berjalan', value: String(totalKelas ?? 0), Icon: BookOpen, color: 'bg-yellow-50 border-yellow-100', iconBg: 'bg-yellow-500' },
         ].map(m => (
           <div key={m.label} className={`bg-white rounded-2xl border p-4 ${m.color}`}>
             <div className={`w-10 h-10 rounded-xl ${m.iconBg} flex items-center justify-center text-lg mb-3`}>{m.icon}</div>
@@ -88,7 +89,7 @@ export default async function AdminDashboard() {
           </div>
           {!sesiHariIni || sesiHariIni.length === 0 ? (
             <div className="text-center py-8 text-[#7B78A8] text-sm">
-              <div className="text-3xl mb-2">📅</div>
+              <CalendarDays size={32} strokeWidth={1.5} className="text-[#C4BFFF] mb-2"/>
               Tidak ada sesi hari ini
             </div>
           ) : (
@@ -132,7 +133,7 @@ export default async function AdminDashboard() {
           </div>
           {!pembayaranTerbaru || pembayaranTerbaru.length === 0 ? (
             <div className="text-center py-8 text-[#7B78A8] text-sm">
-              <div className="text-3xl mb-2">💳</div>
+              <CreditCard size={32} strokeWidth={1.5} className="text-[#C4BFFF] mb-2"/>
               Belum ada pembayaran
             </div>
           ) : (
@@ -164,12 +165,12 @@ export default async function AdminDashboard() {
         <h2 className="font-bold text-[#1A1640] mb-4">Aksi Cepat</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { href: '/admin/siswa/baru',        icon: '👨‍🎓', label: 'Tambah Siswa' },
-            { href: '/admin/tutor/baru',         icon: '👨‍🏫', label: 'Tambah Tutor' },
-            { href: '/admin/kelas/baru',         icon: '🏫',  label: 'Buat Kelas' },
-            { href: '/admin/jadwal?new=1',       icon: '📅',  label: 'Buat Jadwal' },    // FIX
-            { href: '/admin/pembayaran?new=1',   icon: '💳',  label: 'Catat Bayar' },    // FIX
-            { href: '/admin/honor',              icon: '💰',  label: 'Honor Tutor' },
+            { href: '/admin/siswa/baru',        Icon: GraduationCap, label: 'Tambah Siswa' },
+            { href: '/admin/tutor/baru',         Icon: Users,         label: 'Tambah Tutor' },
+            { href: '/admin/kelas/baru',         Icon: BookOpen,      label: 'Buat Kelas' },
+            { href: '/admin/jadwal?new=1',       Icon: CalendarDays,  label: 'Buat Jadwal' },
+            { href: '/admin/pembayaran?new=1',   Icon: CreditCard,    label: 'Catat Bayar' },
+            { href: '/admin/honor',              Icon: Coins,         label: 'Honor Tutor' },
           ].map(a => (
             <Link key={a.href} href={a.href}
               className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
