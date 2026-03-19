@@ -18,7 +18,7 @@ type Kelas = {
 
 type JadwalRow = { date: string; time: string; repeat: number }
 
-const MAX_ROWS   = 5
+const MAX_ROWS = 5
 const MAX_REPEAT = 16
 
 function generateSessions(row: JadwalRow, classGroupId: string) {
@@ -33,21 +33,21 @@ export default function KelasPage() {
   const supabase = createClient()
 
   const [kelasList, setKelasList] = useState<Kelas[]>([])
-  const [loading,   setLoading]   = useState(true)
+  const [loading, setLoading] = useState(true)
 
   // Modal jadwal
-  const [showJadwal,    setShowJadwal]    = useState(false)
+  const [showJadwal, setShowJadwal] = useState(false)
   const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null)
-  const [jadwalRows,    setJadwalRows]    = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
-  const [fZoom,         setFZoom]         = useState('')
-  const [saving,        setSaving]        = useState(false)
-  const [jadwalError,   setJadwalError]   = useState('')
+  const [jadwalRows, setJadwalRows] = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
+  const [fZoom, setFZoom] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [jadwalError, setJadwalError] = useState('')
   const [jadwalSuccess, setJadwalSuccess] = useState('')
 
   function today() {
     const d = new Date()
     const offset = d.getTimezoneOffset()
-    const local  = new Date(d.getTime() - offset * 60 * 1000)
+    const local = new Date(d.getTime() - offset * 60 * 1000)
     return local.toISOString().split('T')[0]
   }
 
@@ -69,7 +69,7 @@ export default function KelasPage() {
   function openJadwal(k: Kelas) {
     setSelectedKelas(k)
     setJadwalRows([{ date: today(), time: '08:00', repeat: 1 }])
-    setFZoom(''  )
+    setFZoom('')
     setJadwalError('')
     setJadwalSuccess('')
     setShowJadwal(true)
@@ -81,7 +81,7 @@ export default function KelasPage() {
     const next = new Date(`${last.date}T00:00:00`)
     next.setDate(next.getDate() + 7)
     const offset = next.getTimezoneOffset()
-    const local  = new Date(next.getTime() - offset * 60 * 1000)
+    const local = new Date(next.getTime() - offset * 60 * 1000)
     setJadwalRows(prev => [...prev, { date: local.toISOString().split('T')[0], time: last.time, repeat: 1 }])
   }
 
@@ -116,8 +116,8 @@ export default function KelasPage() {
 
   const statusLabel: Record<string, string> = { active: 'Aktif', inactive: 'Nonaktif', completed: 'Selesai' }
   const statusColor: Record<string, string> = {
-    active:    'bg-green-100 text-green-700',
-    inactive:  'bg-gray-100 text-gray-500',
+    active: 'bg-green-100 text-green-700',
+    inactive: 'bg-gray-100 text-gray-500',
     completed: 'bg-blue-100 text-blue-700',
   }
   const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
@@ -126,7 +126,7 @@ export default function KelasPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Manajemen Kelas</h1>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora,sans-serif' }}>Manajemen Kelas</h1>
           <p className="text-sm text-[#7B78A8] mt-1">{kelasList.length} kelas terdaftar</p>
         </div>
         <Link href="/admin/kelas/baru"
@@ -137,15 +137,15 @@ export default function KelasPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({length: 3}).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="bg-white rounded-2xl border border-[#E5E3FF] p-5 animate-pulse">
-              <div className="h-4 w-32 bg-gray-200 rounded mb-2"/>
-              <div className="h-3 w-24 bg-gray-200 rounded mb-4"/>
-              <div className="h-3 w-full bg-gray-200 rounded mb-6"/>
+              <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
+              <div className="h-3 w-24 bg-gray-200 rounded mb-4" />
+              <div className="h-3 w-full bg-gray-200 rounded mb-6" />
               <div className="flex gap-2">
-                <div className="flex-1 h-8 bg-gray-200 rounded-lg"/>
-                <div className="flex-1 h-8 bg-gray-200 rounded-lg"/>
-                <div className="flex-1 h-8 bg-gray-200 rounded-lg"/>
+                <div className="flex-1 h-8 bg-gray-200 rounded-lg" />
+                <div className="flex-1 h-8 bg-gray-200 rounded-lg" />
+                <div className="flex-1 h-8 bg-gray-200 rounded-lg" />
               </div>
             </div>
           ))}
@@ -190,7 +190,7 @@ export default function KelasPage() {
 
                 <div className="w-full h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden mb-4">
                   <div className={`h-full rounded-full ${isFull ? 'bg-red-400' : 'bg-[#5C4FE5]'}`}
-                    style={{ width: `${Math.min((activeEnroll / k.max_participants) * 100, 100)}%` }}/>
+                    style={{ width: `${Math.min((activeEnroll / k.max_participants) * 100, 100)}%` }} />
                 </div>
 
                 {/* Tiga tombol */}
@@ -201,7 +201,7 @@ export default function KelasPage() {
                   </Link>
                   <button onClick={() => openJadwal(k)}
                     className="flex items-center justify-center gap-1 py-2 bg-[#E6B800] text-[#7A5C00] text-xs font-bold rounded-lg hover:bg-[#F5C800] transition-colors">
-                    <Calendar size={11}/> Jadwal
+                    <Calendar size={11} /> Jadwal
                   </button>
                   <Link href={`/admin/kelas/${k.id}`}
                     className="text-center py-2 border border-[#E5E3FF] text-[#4A4580] text-xs font-bold rounded-lg hover:bg-[#F0EFFF] transition-colors">
@@ -225,7 +225,7 @@ export default function KelasPage() {
                 <p className="text-xs text-[#7B78A8] mt-0.5">{selectedKelas.label}</p>
               </div>
               <button onClick={() => setShowJadwal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]">
-                <X size={16}/>
+                <X size={16} />
               </button>
             </div>
 
@@ -244,18 +244,18 @@ export default function KelasPage() {
                         <span className="text-xs font-semibold text-[#5C4FE5]">Jadwal {idx + 1}</span>
                         {jadwalRows.length > 1 && (
                           <button onClick={() => removeRow(idx)} className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition">
-                            <Minus size={13}/>
+                            <Minus size={13} />
                           </button>
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-2 mb-2">
                         <div>
                           <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tanggal</label>
-                          <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className={inputCls}/>
+                          <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className={inputCls} />
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jam Mulai</label>
-                          <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)} className={inputCls}/>
+                          <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)} className={inputCls} />
                         </div>
                       </div>
                       <div>
@@ -265,7 +265,7 @@ export default function KelasPage() {
                         <div className="flex items-center gap-3">
                           <input type="range" min={1} max={MAX_REPEAT} value={row.repeat}
                             onChange={e => updateRow(idx, 'repeat', Number(e.target.value))}
-                            className="flex-1 accent-[#5C4FE5]"/>
+                            className="flex-1 accent-[#5C4FE5]" />
                           <span className="text-sm font-bold text-[#5C4FE5] min-w-[60px] text-right">
                             {row.repeat}x
                             {row.repeat > 1 && <span className="text-[10px] font-normal text-[#7B78A8] block">≈ {Math.ceil(row.repeat / 4)} bln</span>}
@@ -279,7 +279,7 @@ export default function KelasPage() {
                 {jadwalRows.length < MAX_ROWS && (
                   <button onClick={addRow}
                     className="mt-3 w-full py-2.5 border-2 border-dashed border-[#C4BFFF] rounded-xl text-sm font-semibold text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex items-center justify-center gap-2">
-                    <Plus size={14}/> Tambah Jadwal Lain
+                    <Plus size={14} /> Tambah Jadwal Lain
                   </button>
                 )}
 
@@ -287,7 +287,7 @@ export default function KelasPage() {
                   <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
                   <span className="text-sm font-bold text-[#5C4FE5]">
                     {totalSesi} sesi
-                    {totalSesi >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.ceil(totalSesi / 8)} periode)</span>}
+                    {totalSesi >= >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.floor(totalSesi / 8)} periode)</span>}
                   </span>
                 </div>
               </div>
@@ -299,10 +299,10 @@ export default function KelasPage() {
                 </label>
                 <input type="url" placeholder="https://zoom.us/j/..." value={fZoom}
                   onChange={e => setFZoom(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                  className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] transition" />
               </div>
 
-              {jadwalError   && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{jadwalError}</div>}
+              {jadwalError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{jadwalError}</div>}
               {jadwalSuccess && <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-semibold">✅ {jadwalSuccess}</div>}
             </div>
 
