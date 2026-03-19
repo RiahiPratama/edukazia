@@ -65,7 +65,7 @@ export default function TutorEditPage() {
     setCourses(allCourses ?? [])
 
     // Fetch tutor
-    const { data: t } = await supabase
+    const { data: tRaw } = await supabase
       .from('tutors')
       .select(`id, profile_id, rate_per_session, bank_name, bank_account, bank_holder, is_active,
         education_level, education_major, education_university, education_year,
@@ -73,6 +73,7 @@ export default function TutorEditPage() {
         profiles:profile_id(full_name, phone, email),
         tutor_courses(course_id)`)
       .eq('id', tutorId).single()
+    const t = tRaw as any
 
     if (!t) { setLoading(false); return }
 
