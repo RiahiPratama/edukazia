@@ -266,7 +266,7 @@ export default async function TutorDashboard() {
             {kelasAktif.map((k: any) => (
               <Link
                 key={k.id}
-                href={`/tutor/kelas/${k.id}`}
+                href={`/tutor/kelas`}
                 className="flex items-center gap-3 p-3 rounded-xl border border-[#F0EFFF] hover:border-[#5C4FE5] hover:bg-[#F7F6FF] transition-all group"
               >
                 <div className="w-9 h-9 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors flex-shrink-0">
