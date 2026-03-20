@@ -118,12 +118,13 @@ export default async function DashboardPage() {
   })
 
 
-  // ── Step 2e: Hitung hadir per class_group untuk progress dinamis ──
+  // ── Step 2e: Hitung hadir dari sesi completed saja ──
   const { data: allSessionsForCG } = classGroupIds.length > 0
     ? await supabase
         .from('sessions')
         .select('id, class_group_id')
         .in('class_group_id', classGroupIds)
+        .eq('status', 'completed')
     : { data: [] }
 
   const allSessionIdsForProgress = (allSessionsForCG ?? []).map((s: any) => s.id)

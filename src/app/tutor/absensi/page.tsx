@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
+import { CalendarDays, Check, MessageCircle, AlertTriangle, Clock } from 'lucide-react'
 
 type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
 
@@ -35,25 +35,22 @@ function fmtTanggal() {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura'
   })
 }
-
-// FIX: hitung range UTC yang benar untuk hari ini WIT (UTC+9)
 function getTodayWITRangeUTC() {
   const now = new Date()
-  // en-CA menghasilkan format YYYY-MM-DD langsung dalam timezone WIT
   const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-
-  // WIT 00:00 = UTC hari sebelumnya jam 15:00
   const prevDateObj = new Date(today + 'T00:00:00+09:00')
   prevDateObj.setDate(prevDateObj.getDate() - 1)
   const prevDateStr = prevDateObj.toLocaleDateString('en-CA')
-
-  const startUtc = `${prevDateStr}T15:00:00+00:00`
-  const endUtc   = `${today}T14:59:59+00:00`
-
-  return { startUtc, endUtc }
+  return {
+    startUtc: `${prevDateStr}T15:00:00+00:00`,
+    endUtc:   `${today}T14:59:59+00:00`,
+  }
 }
-
-type ReportField = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string }
+function isSesiDimulai(scheduledAt: string): boolean {
+  const nowWIT  = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+  const sesiWIT = new Date(new Date(scheduledAt).toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+  return nowWIT >= sesiWIT
+}
 
 export default function TutorAbsensiPage() {
   const supabase   = createClient()
@@ -65,8 +62,6 @@ export default function TutorAbsensiPage() {
   const [siswaList,    setSiswaList]    = useState<any[]>([])
   const [absensiMap,   setAbsensiMap]   = useState<Record<string, StatusAbsen>>({})
   const [notesMap,     setNotesMap]     = useState<Record<string, string>>({})
-  const [reportMap,    setReportMap]    = useState<Record<string, ReportField>>({})
-  const [expandReport, setExpandReport] = useState<Record<string, boolean>>({})
   const [savedSesiIds, setSavedSesiIds] = useState<Set<string>>(new Set())
   const [loading,      setLoading]      = useState(true)
   const [loadingSiswa, setLoadingSiswa] = useState(false)
@@ -86,7 +81,6 @@ export default function TutorAbsensiPage() {
     if (!tutor?.id) { setLoading(false); return }
     setTutorId(tutor.id)
 
-    // FIX: pakai range UTC yang benar untuk WIT hari ini
     const { startUtc, endUtc } = getTodayWITRangeUTC()
 
     const { data: sesi } = await supabase
@@ -113,8 +107,6 @@ export default function TutorAbsensiPage() {
     setSelectedSesi(sesi)
     setAbsensiMap({})
     setNotesMap({})
-    setReportMap({})
-    setExpandReport({})
     setError('')
     setSuccess('')
     setLoadingSiswa(true)
@@ -145,9 +137,6 @@ export default function TutorAbsensiPage() {
 
     const { data: existAbsen } = await supabase
       .from('attendances').select('student_id, status, notes').eq('session_id', sesi.id)
-    const { data: existReports } = await supabase
-      .from('session_reports').select('student_id, materi, perkembangan, saran_siswa, saran_ortu')
-      .eq('session_id', sesi.id)
 
     const preAbsen: Record<string, StatusAbsen> = {}
     const preNotes: Record<string, string>      = {}
@@ -155,34 +144,19 @@ export default function TutorAbsensiPage() {
       preAbsen[a.student_id] = a.status
       preNotes[a.student_id] = a.notes ?? ''
     })
-
-    const preReports: Record<string, ReportField> = {}
-    ;(existReports ?? []).forEach((r: any) => {
-      preReports[r.student_id] = {
-        materi:       r.materi ?? '',
-        perkembangan: r.perkembangan ?? '',
-        saranSiswa:   r.saran_siswa ?? '',
-        saranOrtu:    r.saran_ortu ?? '',
-      }
-    })
-
     setAbsensiMap(preAbsen)
     setNotesMap(preNotes)
-    setReportMap(preReports)
 
-    // Hitung hadir per siswa secara dinamis
-    const { data: allSessForCG } = await supabase
-      .from('sessions')
-      .select('id')
+    // Hitung progress dari sesi completed saja
+    const { data: completedSess } = await supabase
+      .from('sessions').select('id')
       .eq('class_group_id', sesi.class_groups.id)
+      .eq('status', 'completed')
 
-    const allSessIds = (allSessForCG ?? []).map((s: any) => s.id)
-    const { data: hadirAtts } = allSessIds.length > 0
-      ? await supabase
-          .from('attendances')
-          .select('student_id')
-          .in('session_id', allSessIds)
-          .eq('status', 'hadir')
+    const completedIds = (completedSess ?? []).map((s: any) => s.id)
+    const { data: hadirAtts } = completedIds.length > 0
+      ? await supabase.from('attendances').select('student_id')
+          .in('session_id', completedIds).eq('status', 'hadir')
       : { data: [] }
 
     const hadirPerSiswa: Record<string, number> = {}
@@ -191,11 +165,11 @@ export default function TutorAbsensiPage() {
     })
 
     setSiswaList(enrollments.map((e: any) => ({
-      studentId:     e.student_id,
-      name:          studentMap[e.student_id]?.name ?? 'Siswa',
-      phone:         studentMap[e.student_id]?.phone ?? '',
-      sessionOffset: (e.session_start_offset ?? 0) + (hadirPerSiswa[e.student_id] ?? 0),
-      sessionTotal:  e.sessions_total ?? 8,
+      studentId:    e.student_id,
+      name:         studentMap[e.student_id]?.name ?? 'Siswa',
+      phone:        studentMap[e.student_id]?.phone ?? '',
+      sessionDone:  (e.session_start_offset ?? 0) + (hadirPerSiswa[e.student_id] ?? 0),
+      sessionTotal: e.sessions_total ?? 8,
     })))
 
     setLoadingSiswa(false)
@@ -207,23 +181,15 @@ export default function TutorAbsensiPage() {
   function setNotes(studentId: string, val: string) {
     setNotesMap(prev => ({ ...prev, [studentId]: val }))
   }
-  function setReport(studentId: string, field: keyof ReportField, val: string) {
-    setReportMap(prev => ({
-      ...prev,
-      [studentId]: {
-        ...(prev[studentId] ?? { materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' }),
-        [field]: val
-      }
-    }))
-  }
-  function toggleReport(studentId: string) {
-    setExpandReport(prev => ({ ...prev, [studentId]: !prev[studentId] }))
-  }
 
   async function handleSimpan() {
     if (!selectedSesi || !tutorId) return
     if (siswaList.some(s => !absensiMap[s.studentId])) {
       setError('Lengkapi status absensi semua siswa terlebih dahulu.')
+      return
+    }
+    if (!isSesiDimulai(selectedSesi.scheduled_at)) {
+      setError('Kelas belum dimulai. Absensi bisa dilakukan saat jam kelas.')
       return
     }
 
@@ -240,83 +206,37 @@ export default function TutorAbsensiPage() {
     const { data: absenData, error: absenErr } = await supabase
       .from('attendances').upsert(absenRecords, { onConflict: 'session_id,student_id' })
       .select()
-    if (absenErr) {
-      setError(`Attendance error: ${absenErr.message} | code: ${absenErr.code} | details: ${absenErr.details}`)
-      setSaving(false)
-      return
-    }
-    if (!absenData || absenData.length === 0) {
-      setError(`Attendance tersimpan 0 rows — tutorId: ${tutorId}, sessionId: ${selectedSesi.id}`)
-      setSaving(false)
-      return
-    }
+    if (absenErr) { setError(`Error: ${absenErr.message}`); setSaving(false); return }
+    if (!absenData || absenData.length === 0) { setError('Absensi gagal disimpan. Coba lagi.'); setSaving(false); return }
 
-    const reportRecords = siswaList
-      .filter(s => {
-        const r = reportMap[s.studentId]
-        return r && (r.materi || r.perkembangan || r.saranSiswa || r.saranOrtu)
-      })
-      .map(s => {
-        const r = reportMap[s.studentId]
-        return {
-          session_id:   selectedSesi.id,
-          student_id:   s.studentId,
-          materi:       r.materi || null,
-          perkembangan: r.perkembangan || null,
-          saran_siswa:  r.saranSiswa || null,
-          saran_ortu:   r.saranOrtu || null,
-          recorded_by:  tutorId,
-        }
-      })
-
-    if (reportRecords.length > 0) {
-      const { error: repErr } = await supabase
-        .from('session_reports').upsert(reportRecords, { onConflict: 'session_id,student_id' })
-      if (repErr) { setError(repErr.message); setSaving(false); return }
-    }
-
-    // Auto-complete session setelah absensi disimpan
-    await supabase
-      .from('sessions')
-      .update({ status: 'completed' })
-      .eq('id', selectedSesi.id)
+    await supabase.from('sessions').update({ status: 'completed' }).eq('id', selectedSesi.id)
 
     setSavedSesiIds(prev => new Set([...prev, selectedSesi.id]))
-    setSuccess('Absensi dan laporan berhasil disimpan!')
+    setSuccess('Absensi berhasil disimpan! Isi laporan belajar di menu Laporan Siswa.')
     setSaving(false)
   }
 
   function buildWAAdmin(siswaName: string) {
     const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
     const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
-    return encodeURIComponent(
-      `Halo Admin, siswa ${siswaName} belum hadir di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti.`
-    )
+    return encodeURIComponent(`Halo Admin, siswa ${siswaName} belum hadir di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti.`)
   }
-
   function buildWAOrtu(siswa: any) {
     const status     = absensiMap[siswa.studentId]
     const sesiLabel  = selectedSesi?.class_groups?.label ?? 'kelas'
     const waktu      = fmtTime(selectedSesi?.scheduled_at ?? '')
     const statusText = status === 'izin' ? 'izin' : status === 'sakit' ? 'sakit' : 'tidak hadir (tanpa keterangan)'
     const notes      = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
-    return encodeURIComponent(
-      `Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${sesiLabel} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`
-    )
+    return encodeURIComponent(`Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${sesiLabel} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`)
   }
 
   const statusColor: Record<string, string> = {
-    scheduled:   'bg-blue-50 text-blue-700',
-    completed:   'bg-green-50 text-green-700',
-    cancelled:   'bg-red-50 text-red-700',
-    rescheduled: 'bg-yellow-50 text-yellow-700',
+    scheduled: 'bg-blue-50 text-blue-700', completed: 'bg-green-50 text-green-700',
+    cancelled: 'bg-red-50 text-red-700', rescheduled: 'bg-yellow-50 text-yellow-700',
   }
   const statusSesiLabel: Record<string, string> = {
-    scheduled: 'Terjadwal', completed: 'Selesai',
-    cancelled: 'Dibatalkan', rescheduled: 'Reschedule'
+    scheduled: 'Terjadwal', completed: 'Selesai', cancelled: 'Dibatalkan', rescheduled: 'Reschedule'
   }
-
-  const textareaCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition resize-none"
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -327,13 +247,11 @@ export default function TutorAbsensiPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Absensi & Laporan</h1>
+        <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Absensi</h1>
         <p className="text-sm text-[#7B78A8] mt-1">{fmtTanggal()}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Kolom kiri */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E5E3FF]">
@@ -349,20 +267,14 @@ export default function TutorAbsensiPage() {
                 {sesiHariIni.map((s: any) => {
                   const isSelected = selectedSesi?.id === s.id
                   const isDone     = savedSesiIds.has(s.id)
+                  const sudahMulai = isSesiDimulai(s.scheduled_at)
                   return (
                     <button key={s.id} onClick={() => selectSesi(s)}
-                      className={[
-                        'w-full text-left px-4 py-3 transition-colors',
-                        isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'
-                      ].join(' ')}>
+                      className={['w-full text-left px-4 py-3 transition-colors', isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'].join(' ')}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#1A1640]'}`}>
-                            {s.class_groups?.label ?? '—'}
-                          </div>
-                          <div className={`text-xs mt-0.5 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>
-                            {fmtTime(s.scheduled_at)} WIT · {s.class_groups?.courses?.name ?? '—'}
-                          </div>
+                          <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#1A1640]'}`}>{s.class_groups?.label ?? '—'}</div>
+                          <div className={`text-xs mt-0.5 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>{fmtTime(s.scheduled_at)} WIT · {s.class_groups?.courses?.name ?? '—'}</div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {isDone && (
@@ -370,6 +282,7 @@ export default function TutorAbsensiPage() {
                               <Check size={11} className={isSelected ? 'text-white' : 'text-green-600'}/>
                             </div>
                           )}
+                          {!sudahMulai && !isDone && <Clock size={13} className={isSelected ? 'text-white/60' : 'text-[#9B97B2]'}/>}
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isSelected ? 'bg-white/20 text-white' : (statusColor[s.status] ?? 'bg-gray-50 text-gray-600')}`}>
                             {statusSesiLabel[s.status] ?? s.status}
                           </span>
@@ -383,34 +296,26 @@ export default function TutorAbsensiPage() {
           </div>
         </div>
 
-        {/* Kolom kanan */}
         <div className="lg:col-span-2">
           {!selectedSesi ? (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
               <CalendarDays size={36} strokeWidth={1.5} className="text-[#C4BFFF] mb-3"/>
               <p className="text-sm font-semibold text-[#7B78A8]">Pilih sesi di sebelah kiri</p>
-              <p className="text-xs text-[#7B78A8] mt-1">untuk mulai mencatat absensi dan laporan</p>
+              <p className="text-xs text-[#7B78A8] mt-1">untuk mulai mencatat absensi</p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-              {/* Header sesi */}
               <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="font-bold text-[#1A1640]">{selectedSesi.class_groups?.label}</h2>
-                    <p className="text-xs text-[#7B78A8] mt-0.5">
-                      {fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}
-                    </p>
+                    <p className="text-xs text-[#7B78A8] mt-0.5">{fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}</p>
                   </div>
                   {adminPhone && (
-                    <a
-                      href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] hover:bg-green-500 text-white rounded-xl text-xs font-semibold transition flex-shrink-0"
-                    >
-                      <AlertTriangle size={13}/><MessageCircle size={13}/>
-                      Laporkan ke Admin
+                    <a href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] hover:bg-green-500 text-white rounded-xl text-xs font-semibold transition flex-shrink-0">
+                      <AlertTriangle size={13}/><MessageCircle size={13}/> Laporkan ke Admin
                     </a>
                   )}
                 </div>
@@ -418,6 +323,16 @@ export default function TutorAbsensiPage() {
                   Gunakan tombol "Laporkan ke Admin" jika ada siswa yang belum hadir setelah 3 menit sesi dimulai.
                 </p>
               </div>
+
+              {!isSesiDimulai(selectedSesi.scheduled_at) && (
+                <div className="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+                  <Clock size={16} className="text-yellow-600 flex-shrink-0"/>
+                  <div>
+                    <p className="text-[12px] font-bold text-yellow-800">Kelas belum dimulai</p>
+                    <p className="text-[11px] text-yellow-600 mt-0.5">Absensi bisa dilakukan mulai pukul {fmtTime(selectedSesi.scheduled_at)} WIT</p>
+                  </div>
+                </div>
+              )}
 
               {loadingSiswa ? (
                 <div className="p-8 text-center text-sm text-[#7B78A8]">Memuat daftar siswa...</div>
@@ -430,92 +345,40 @@ export default function TutorAbsensiPage() {
                       const currentStatus = absensiMap[s.studentId]
                       const avatarColor   = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                       const isAbsen       = currentStatus && currentStatus !== 'hadir'
-                      const isReportOpen  = expandReport[s.studentId] ?? false
-                      const report        = reportMap[s.studentId] ?? { materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' }
-
+                      const canAbsen      = isSesiDimulai(selectedSesi.scheduled_at)
                       return (
                         <div key={s.studentId} className="px-5 py-4">
                           <div className="flex items-center gap-3 mb-3">
-                            <div
-                              className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                              style={{ background: avatarColor.bg, color: avatarColor.text }}
-                            >
+                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                              style={{ background: avatarColor.bg, color: avatarColor.text }}>
                               {getInitials(s.name)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
-                              <div className="text-xs text-[#7B78A8]">Sesi {s.sessionOffset}/{s.sessionTotal}</div>
+                              <div className="text-xs text-[#7B78A8]">Sesi {s.sessionDone}/{s.sessionTotal}</div>
                             </div>
-                            {isAbsen && s.phone && (
-                              <a
-                                href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0"
-                              >
+                            {isAbsen && s.phone && canAbsen && (
+                              <a href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0">
                                 <MessageCircle size={12}/> WA Ortu
                               </a>
                             )}
                           </div>
-
-                          <div className="flex gap-2 flex-wrap mb-3">
+                          <div className={`flex gap-2 flex-wrap mb-3 ${!canAbsen ? 'opacity-40 pointer-events-none' : ''}`}>
                             {STATUS_OPTIONS.map(opt => (
-                              <button
-                                key={opt.value}
-                                onClick={() => setStatus(s.studentId, opt.value)}
-                                className={[
-                                  'px-3 py-1.5 rounded-xl text-xs border transition-all',
-                                  currentStatus === opt.value ? opt.active : opt.color
-                                ].join(' ')}
-                              >
+                              <button key={opt.value} onClick={() => setStatus(s.studentId, opt.value)} disabled={!canAbsen}
+                                className={['px-3 py-1.5 rounded-xl text-xs border transition-all', currentStatus === opt.value ? opt.active : opt.color].join(' ')}>
                                 {opt.label}
                               </button>
                             ))}
                           </div>
-
-                          {isAbsen && (
-                            <input
-                              type="text"
-                              placeholder="Catatan absensi (opsional)..."
+                          {isAbsen && canAbsen && (
+                            <input type="text" placeholder="Catatan absensi (opsional)..."
                               value={notesMap[s.studentId] ?? ''}
                               onChange={e => setNotes(s.studentId, e.target.value)}
-                              className="mb-3 w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
                             />
-                          )}
-
-                          <button
-                            onClick={() => toggleReport(s.studentId)}
-                            className="flex items-center gap-2 text-xs font-semibold text-[#5C4FE5] hover:underline transition"
-                          >
-                            {isReportOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-                            {isReportOpen ? 'Sembunyikan' : 'Isi'} Laporan Belajar
-                          </button>
-
-                          {isReportOpen && (
-                            <div className="mt-3 space-y-3 bg-[#F7F6FF] rounded-xl p-4 border border-[#E5E3FF]">
-                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-widest">
-                                Laporan Belajar Sesi Ini
-                              </p>
-                              {[
-                                { field: 'materi' as keyof ReportField, label: 'Materi yang Diajarkan', placeholder: 'Contoh: Phonics level 3, blending CVC words...' },
-                                { field: 'perkembangan' as keyof ReportField, label: 'Perkembangan & Pemahaman Siswa', placeholder: 'Contoh: Sudah bisa membaca 3 huruf...' },
-                                { field: 'saranSiswa' as keyof ReportField, label: 'Saran untuk Siswa', placeholder: 'Contoh: Rajin membaca buku cerita bergambar...' },
-                                { field: 'saranOrtu' as keyof ReportField, label: 'Saran untuk Orang Tua', placeholder: 'Contoh: Mohon dampingi latihan membaca 10 menit setiap hari...' },
-                              ].map(({ field, label, placeholder }) => (
-                                <div key={field}>
-                                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                    {label}
-                                  </label>
-                                  <textarea
-                                    rows={2}
-                                    placeholder={placeholder}
-                                    value={report[field]}
-                                    onChange={e => setReport(s.studentId, field, e.target.value)}
-                                    className={textareaCls}
-                                  />
-                                </div>
-                              ))}
-                            </div>
                           )}
                         </div>
                       )
@@ -525,13 +388,16 @@ export default function TutorAbsensiPage() {
                   <div className="px-5 py-4 border-t border-[#E5E3FF] bg-[#F7F6FF]">
                     {error   && <p className="text-xs text-red-600 font-semibold mb-3">{error}</p>}
                     {success && <p className="text-xs text-green-600 font-semibold mb-3">✅ {success}</p>}
-                    <button
-                      onClick={handleSimpan}
-                      disabled={saving}
-                      className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60"
-                    >
-                      {saving ? 'Menyimpan...' : 'Simpan Absensi & Laporan'}
+                    <button onClick={handleSimpan} disabled={saving || !isSesiDimulai(selectedSesi.scheduled_at)}
+                      className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
+                      {saving ? 'Menyimpan...' : 'Simpan Absensi'}
                     </button>
+                    {!isSesiDimulai(selectedSesi.scheduled_at) && (
+                      <p className="text-[11px] text-[#9B97B2] text-center mt-2">Tombol aktif saat kelas dimulai pukul {fmtTime(selectedSesi.scheduled_at)} WIT</p>
+                    )}
+                    <p className="text-[11px] text-[#9B97B2] text-center mt-2">
+                      Laporan belajar dapat diisi di menu <span className="font-semibold text-[#5C4FE5]">Laporan Siswa</span>
+                    </p>
                   </div>
                 </>
               )}
