@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, BookOpen,
   FolderOpen, Coins, LogOut, Menu, Globe2,
-  ClipboardList, BarChart2
+  ClipboardList, BarChart2, UserCircle
 } from 'lucide-react'
 
 const navItems = [
@@ -23,6 +23,9 @@ const navItems = [
   ]},
   { group: 'Keuangan', items: [
     { href: '/tutor/honor',     label: 'Honor Saya',      icon: Coins },
+  ]},
+  { group: 'Akun', items: [
+    { href: '/tutor/profil',    label: 'Profil Saya',     icon: UserCircle },
   ]},
 ]
 

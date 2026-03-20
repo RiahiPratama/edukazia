@@ -1,43 +1,38 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import {
-  CalendarDays, BookOpen, Users, Coins, Clock
-} from 'lucide-react'
+import { CalendarDays, BookOpen, Users, Coins, Clock } from 'lucide-react'
 
 export default async function TutorDashboard() {
   const supabase = await createClient()
 
-  // ── Ambil user yang sedang login ──
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // ── Ambil data tutor berdasarkan profile_id ──
-  // ⚠️ Sesuaikan nama kolom FK jika berbeda (misal: user_id, profiles_id, dst)
   const { data: tutor } = await supabase
-    .from('tutors')
-    .select('id')
-    .eq('profile_id', user.id)
-    .single()
+    .from('tutors').select('id').eq('profile_id', user.id).single()
 
-  // ── Ambil nama tutor dari profiles ──
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single()
+    .from('profiles').select('full_name').eq('id', user.id).single()
 
-  const tutorId = tutor?.id
+  const tutorId   = tutor?.id
   const tutorName = profile?.full_name ?? 'Tutor'
   const firstName = tutorName.split(' ')[0]
 
-  // ── Tanggal & waktu ──
   const now = new Date()
+
+  // Hari ini WIT
   const todayStart = now.toISOString().split('T')[0] + 'T00:00:00'
   const todayEnd   = now.toISOString().split('T')[0] + 'T23:59:59'
 
-  // Awal & akhir minggu ini (Senin–Minggu)
-  const day = now.getDay() === 0 ? 6 : now.getDay() - 1 // 0=Senin
+  // Besok WIT
+  const tomorrow = new Date(now)
+  tomorrow.setDate(now.getDate() + 1)
+  const tomorrowStart = tomorrow.toISOString().split('T')[0] + 'T00:00:00'
+  const tomorrowEnd   = tomorrow.toISOString().split('T')[0] + 'T23:59:59'
+
+  // Minggu ini
+  const day = now.getDay() === 0 ? 6 : now.getDay() - 1
   const weekStart = new Date(now)
   weekStart.setDate(now.getDate() - day)
   weekStart.setHours(0, 0, 0, 0)
@@ -45,24 +40,21 @@ export default async function TutorDashboard() {
   weekEnd.setDate(weekStart.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
 
-  // Awal bulan ini
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-  // ── Query paralel ──
   const [
     { data: kelasAktif },
     { data: sesiHariIni },
     { data: sesiMingguIni },
+    { data: sesiHariEsok },
     { data: honorBulanIni },
   ] = await Promise.all([
-    // Kelas aktif milik tutor ini
     supabase
       .from('class_groups')
       .select('id, label, status, zoom_link, courses(name), class_types(name)')
       .eq('tutor_id', tutorId)
       .eq('status', 'active'),
 
-    // Sesi hari ini
     supabase
       .from('sessions')
       .select(`id, scheduled_at, zoom_link, status, class_groups!inner(label, tutor_id, courses(name))`)
@@ -71,7 +63,6 @@ export default async function TutorDashboard() {
       .lte('scheduled_at', todayEnd)
       .order('scheduled_at'),
 
-    // Sesi minggu ini (untuk summary card)
     supabase
       .from('sessions')
       .select(`id, scheduled_at, class_groups!inner(tutor_id)`)
@@ -80,7 +71,14 @@ export default async function TutorDashboard() {
       .lte('scheduled_at', weekEnd.toISOString())
       .neq('status', 'cancelled'),
 
-    // Honor bulan ini
+    supabase
+      .from('sessions')
+      .select(`id, scheduled_at, zoom_link, status, class_groups!inner(label, tutor_id, courses(name))`)
+      .eq('class_groups.tutor_id', tutorId)
+      .gte('scheduled_at', tomorrowStart)
+      .lte('scheduled_at', tomorrowEnd)
+      .order('scheduled_at'),
+
     supabase
       .from('tutor_payments')
       .select('amount')
@@ -88,21 +86,16 @@ export default async function TutorDashboard() {
       .gte('paid_at', firstOfMonth),
   ])
 
-  // ── Hitung jumlah siswa unik dari kelas aktif ──
   const kelasIds = kelasAktif?.map(k => k.id) ?? []
   const { data: enrollments } = kelasIds.length > 0
-    ? await supabase
-        .from('enrollments')
-        .select('student_id')
-        .in('class_group_id', kelasIds)
+    ? await supabase.from('enrollments').select('student_id').in('class_group_id', kelasIds)
     : { data: [] }
 
-  const totalSiswa  = new Set(enrollments?.map(e => e.student_id)).size
-  const totalKelas  = kelasAktif?.length ?? 0
+  const totalSiswa         = new Set(enrollments?.map(e => e.student_id)).size
+  const totalKelas         = kelasAktif?.length ?? 0
   const totalSesiMingguIni = sesiMingguIni?.length ?? 0
-  const totalHonor  = honorBulanIni?.reduce((sum, h) => sum + h.amount, 0) ?? 0
+  const totalHonor         = honorBulanIni?.reduce((sum, h) => sum + h.amount, 0) ?? 0
 
-  // ── Helper ──
   function formatRupiah(n: number) {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency', currency: 'IDR', maximumFractionDigits: 0
@@ -110,13 +103,17 @@ export default async function TutorDashboard() {
   }
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', {
-      hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jayapura'
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura'
     })
   }
   function formatTanggal(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-      timeZone: 'Asia/Jayapura'
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura'
+    })
+  }
+  function formatTanggalPendek(iso: string) {
+    return new Date(iso).toLocaleDateString('id-ID', {
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jayapura'
     })
   }
 
@@ -140,49 +137,80 @@ export default async function TutorDashboard() {
         <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">
           Halo, {firstName} 👋
         </h1>
-        <p className="text-sm text-[#7B78A8] mt-1">
-          {formatTanggal(now.toISOString())}
-        </p>
+        <p className="text-sm text-[#7B78A8] mt-1">{formatTanggal(now.toISOString())}</p>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* Sesi minggu ini */}
         <div className="bg-white rounded-2xl border border-purple-100 p-4">
           <div className="w-10 h-10 rounded-xl bg-[#5C4FE5] flex items-center justify-center mb-3">
-            <CalendarDays size={20} color="white" strokeWidth={2} />
+            <CalendarDays size={20} color="white" strokeWidth={2}/>
           </div>
           <div className="text-2xl font-black text-[#1A1640]">{totalSesiMingguIni}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Sesi Minggu Ini</div>
         </div>
-
-        {/* Kelas aktif */}
         <div className="bg-white rounded-2xl border border-blue-100 p-4">
           <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center mb-3">
-            <BookOpen size={20} color="white" strokeWidth={2} />
+            <BookOpen size={20} color="white" strokeWidth={2}/>
           </div>
           <div className="text-2xl font-black text-[#1A1640]">{totalKelas}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Kelas Aktif</div>
         </div>
-
-        {/* Jumlah siswa */}
         <div className="bg-white rounded-2xl border border-green-100 p-4">
           <div className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center mb-3">
-            <Users size={20} color="white" strokeWidth={2} />
+            <Users size={20} color="white" strokeWidth={2}/>
           </div>
           <div className="text-2xl font-black text-[#1A1640]">{totalSiswa}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Siswa Diajar</div>
         </div>
-
-        {/* Honor bulan ini */}
         <div className="bg-white rounded-2xl border border-yellow-100 p-4">
           <div className="w-10 h-10 rounded-xl bg-yellow-500 flex items-center justify-center mb-3">
-            <Coins size={20} color="white" strokeWidth={2} />
+            <Coins size={20} color="white" strokeWidth={2}/>
           </div>
           <div className="text-2xl font-black text-[#1A1640]">{formatRupiah(totalHonor)}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Honor Bulan Ini</div>
         </div>
       </div>
+
+      {/* Notifikasi Sesi Besok — muncul kalau ada */}
+      {sesiHariEsok && sesiHariEsok.length > 0 && (
+        <div className="bg-[#EEEDFE] border border-[#C4BFFF] rounded-2xl p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-[#5C4FE5]"/>
+              <span className="text-sm font-bold text-[#3C3489]">
+                Besok — {formatTanggalPendek(tomorrowStart)}
+              </span>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#5C4FE5] text-white">
+              {sesiHariEsok.length} sesi
+            </span>
+          </div>
+          <div className="space-y-2">
+            {sesiHariEsok.map((s: any) => (
+              <div key={s.id} className="flex items-center gap-3 bg-white rounded-xl px-3 py-2">
+                <div className="text-sm font-black text-[#5C4FE5] flex-shrink-0 w-12 text-center">
+                  {formatTime(s.scheduled_at)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-[#1A1640] truncate">
+                    {s.class_groups?.label ?? '—'}
+                  </div>
+                  <div className="text-[10px] text-[#7B78A8]">
+                    {s.class_groups?.courses?.name ?? '—'}
+                  </div>
+                </div>
+                {s.zoom_link && (
+                  <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                    className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition flex-shrink-0">
+                    Zoom
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sesi Hari Ini */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5 mb-4">
@@ -196,24 +224,19 @@ export default async function TutorDashboard() {
         {!sesiHariIni || sesiHariIni.length === 0 ? (
           <div className="text-center py-8 text-[#7B78A8] text-sm">
             <div className="flex justify-center mb-2">
-              <CalendarDays size={32} strokeWidth={1.5} className="text-[#C4BFFF]" />
+              <CalendarDays size={32} strokeWidth={1.5} className="text-[#C4BFFF]"/>
             </div>
             Tidak ada sesi mengajar hari ini
           </div>
         ) : (
           <div className="space-y-3">
             {sesiHariIni.map((s: any) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]"
-              >
-                {/* Jam */}
+              <div key={s.id}
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]">
                 <div className="w-14 text-center flex-shrink-0">
                   <div className="text-sm font-black text-[#5C4FE5]">{formatTime(s.scheduled_at)}</div>
                   <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
                 </div>
-
-                {/* Info kelas */}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-[#1A1640] truncate">
                     {s.class_groups?.label ?? '—'}
@@ -222,16 +245,10 @@ export default async function TutorDashboard() {
                     {s.class_groups?.courses?.name ?? '—'}
                   </div>
                 </div>
-
-                {/* Aksi */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {s.zoom_link && (
-                    <a
-                      href={s.zoom_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors"
-                    >
+                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                      className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
                       Buka Zoom
                     </a>
                   )}
@@ -257,20 +274,17 @@ export default async function TutorDashboard() {
         {!kelasAktif || kelasAktif.length === 0 ? (
           <div className="text-center py-8 text-[#7B78A8] text-sm">
             <div className="flex justify-center mb-2">
-              <BookOpen size={32} strokeWidth={1.5} className="text-[#C4BFFF]" />
+              <BookOpen size={32} strokeWidth={1.5} className="text-[#C4BFFF]"/>
             </div>
             Belum ada kelas aktif
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {kelasAktif.map((k: any) => (
-              <Link
-                key={k.id}
-                href={`/tutor/kelas`}
-                className="flex items-center gap-3 p-3 rounded-xl border border-[#F0EFFF] hover:border-[#5C4FE5] hover:bg-[#F7F6FF] transition-all group"
-              >
+              <Link key={k.id} href="/tutor/kelas"
+                className="flex items-center gap-3 p-3 rounded-xl border border-[#F0EFFF] hover:border-[#5C4FE5] hover:bg-[#F7F6FF] transition-all group">
                 <div className="w-9 h-9 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors flex-shrink-0">
-                  <BookOpen size={16} className="text-[#5C4FE5] group-hover:text-white transition-colors" />
+                  <BookOpen size={16} className="text-[#5C4FE5] group-hover:text-white transition-colors"/>
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-[#1A1640] truncate">{k.label}</div>
