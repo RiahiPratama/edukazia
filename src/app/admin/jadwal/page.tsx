@@ -186,17 +186,19 @@ function JadwalContent() {
       nameMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
     }
 
-    // FIX: hitung hadir per siswa secara dinamis
+    // FIX: hitung hadir per siswa hanya dari sesi SEBELUM sesi ini
     const { data: allSessForCG } = await supabase
-      .from('sessions').select('id')
+      .from('sessions').select('id, scheduled_at')
       .eq('class_group_id', session.class_group_id)
+      .eq('status', 'completed')
+      .lt('scheduled_at', session.scheduled_at)  // hanya sesi sebelum ini
 
-    const allSessIds = (allSessForCG ?? []).map((s: any) => s.id)
-    const { data: hadirAtts } = allSessIds.length > 0
+    const prevSessIds = (allSessForCG ?? []).map((s: any) => s.id)
+    const { data: hadirAtts } = prevSessIds.length > 0
       ? await supabase
           .from('attendances')
           .select('student_id')
-          .in('session_id', allSessIds)
+          .in('session_id', prevSessIds)
           .eq('status', 'hadir')
       : { data: [] }
 
