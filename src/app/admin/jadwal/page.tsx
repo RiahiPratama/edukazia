@@ -20,7 +20,7 @@ type ClassGroup = {
   label: string
   tutor_id: string
   course_id: string
-  zoom_link: string | null  // FIX isu 3: tambah zoom_link
+  zoom_link: string | null
 }
 
 type SiswaItem = {
@@ -107,7 +107,6 @@ function JadwalContent() {
 
   useEffect(() => { fetchAll() }, [])
 
-  // Auto-open modal jika ?new=1
   useEffect(() => {
     if (searchParams.get('new') === '1' && classGroups.length > 0) {
       openAdd()
@@ -126,7 +125,6 @@ function JadwalContent() {
       .lte('scheduled_at', end.toISOString())
       .order('scheduled_at', { ascending: true })
 
-    // FIX isu 3: fetch zoom_link dari class_groups
     const { data: cg } = await supabase
       .from('class_groups')
       .select('id, label, tutor_id, course_id, zoom_link')
@@ -170,13 +168,6 @@ function JadwalContent() {
     if (siswaMap[sid]) { setExpandedId(prev => prev === sid ? null : sid); return }
     setLoadingSiswa(sid); setExpandedId(sid)
 
-    const { data: allSessions } = await supabase
-      .from('sessions').select('id, scheduled_at')
-      .eq('class_group_id', session.class_group_id)
-      .order('scheduled_at', { ascending: true })
-
-    const sessionOrder = (allSessions ?? []).findIndex((s: any) => s.id === sid) + 1
-
     const { data: enrollments } = await supabase
       .from('enrollments').select('id, student_id, sessions_total, session_start_offset')
       .eq('class_group_id', session.class_group_id)
@@ -195,14 +186,33 @@ function JadwalContent() {
       nameMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
     }
 
-    const merged: SiswaItem[] = enrollments.map((e: any) => {
-      const offset     = e.session_start_offset ?? 1
-      // offset=0: sesi ke-1→0/8, sesi ke-2→1/8 (siswa baru, ada perkenalan bonus)
-      // offset=1: sesi ke-1→1/8, sesi ke-2→2/8 (normal)
-      // offset=N: sesi ke-1→N/8 (lanjutan paket)
-      const sessionNum = (sessionOrder - 1) + offset
-      return { id: e.student_id, name: nameMap[e.student_id] ?? 'Siswa', sessionsTotal: e.sessions_total ?? 8, sessionStartOffset: offset, sessionNumber: sessionNum }
+    // FIX: hitung hadir per siswa secara dinamis
+    const { data: allSessForCG } = await supabase
+      .from('sessions').select('id')
+      .eq('class_group_id', session.class_group_id)
+
+    const allSessIds = (allSessForCG ?? []).map((s: any) => s.id)
+    const { data: hadirAtts } = allSessIds.length > 0
+      ? await supabase
+          .from('attendances')
+          .select('student_id')
+          .in('session_id', allSessIds)
+          .eq('status', 'hadir')
+      : { data: [] }
+
+    const hadirPerSiswa: Record<string, number> = {}
+    ;(hadirAtts ?? []).forEach((a: any) => {
+      hadirPerSiswa[a.student_id] = (hadirPerSiswa[a.student_id] ?? 0) + 1
     })
+
+    const merged: SiswaItem[] = enrollments.map((e: any) => ({
+      id:                 e.student_id,
+      name:               nameMap[e.student_id] ?? 'Siswa',
+      sessionsTotal:      e.sessions_total ?? 8,
+      sessionStartOffset: e.session_start_offset ?? 0,
+      // FIX: progress = session_start_offset + jumlah hadir
+      sessionNumber:      (e.session_start_offset ?? 0) + (hadirPerSiswa[e.student_id] ?? 0),
+    }))
 
     setSiswaMap(prev => ({ ...prev, [sid]: merged })); setLoadingSiswa(null)
   }
@@ -226,14 +236,12 @@ function JadwalContent() {
     const defaultCg = classGroups[0]?.id ?? ''
     setFClassGroup(defaultCg)
     setFStatus('scheduled')
-    // FIX isu 3: auto-fill zoom dari kelas pertama
     setFZoom(classGroups[0]?.zoom_link ?? '')
     setJadwalRows([{ date: selectedDate, time: '08:00', repeat: 1 }])
     setFormError('')
     setShowModal(true)
   }
 
-  // FIX isu 3: auto-fill zoom saat ganti kelas di dropdown
   function handleClassGroupChange(id: string) {
     setFClassGroup(id)
     const cg = classGroups.find(c => c.id === id)
@@ -243,7 +251,6 @@ function JadwalContent() {
   function openEdit(s: Session) {
     setEditSession(s)
     setFClassGroup(s.class_group_id)
-    // FIX isu 2: parse tanggal dengan benar menggunakan timezone lokal
     const dt     = new Date(s.scheduled_at)
     const offset = dt.getTimezoneOffset()
     const local  = new Date(dt.getTime() - offset * 60 * 1000)
@@ -261,11 +268,9 @@ function JadwalContent() {
     if (!fClassGroup) { setFormError('Pilih kelas terlebih dahulu.'); return }
     setSaving(true); setFormError('')
 
-    // Fallback zoom dari classGroups jika fZoom kosong
     const zoomToSave = fZoom || classGroups.find(c => c.id === fClassGroup)?.zoom_link || null
 
     if (isEditMode && editSession) {
-      // FIX isu 2: build ISO string dengan benar
       const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
       const { error } = await supabase.from('sessions').update({
         class_group_id: fClassGroup,
@@ -365,63 +370,41 @@ function JadwalContent() {
             return (
               <div key={s.id} className={!isLast || isExpanded ? 'border-b border-[#E5E3FF]' : ''}>
                 <div className={`px-4 py-3.5 transition-colors ${isExpanded?'bg-[#F0EEFF] border-l-4 border-l-[#5C4FE5]':'hover:bg-[#F7F6FF]'}`}>
-                  {/* Baris atas: jam + nama kelas + aksi */}
                   <div className="flex items-center gap-2.5">
-                    {/* Jam */}
                     <div className="min-w-[40px] text-sm font-bold text-[#5C4FE5] flex-shrink-0">{fmtTime(s.scheduled_at)}</div>
-
-                    {/* Dot warna */}
                     <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor: s.class_group?.color ?? '#5C4FE5'}}/>
-
-                    {/* Nama kelas — flex-1 agar makan sisa ruang */}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-[#1A1640] truncate leading-tight">{s.class_group?.label ?? '—'}</div>
                     </div>
-
-                    {/* Status pill */}
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${st.pill}`}>{st.label}</span>
                   </div>
-
-                  {/* Baris bawah: tutor · kursus + tombol aksi */}
                   <div className="flex items-center justify-between mt-1.5 pl-[52px]">
-                    {/* Info tutor & kursus */}
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs text-[#7B78A8] truncate">{s.class_group?.tutor_name} · {s.class_group?.course_name}</span>
                     </div>
-
-                    {/* Tombol aksi */}
                     <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                      {/* Expand siswa */}
                       <button onClick={() => fetchSiswa(s)}
                         className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-xs font-semibold transition ${isExpanded?'bg-[#5C4FE5] text-white':'bg-[#F0EEFF] text-[#5C4FE5] hover:bg-[#E0DCFF]'}`}
                         title="Lihat siswa">
                         <Users size={11}/>{isExpanded?<ChevronUp size={11}/>:<ChevronDown size={11}/>}
                       </button>
-
-                      {/* Zoom */}
                       {s.zoom_link && (
                         <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
                           className="p-1.5 rounded-lg text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex-shrink-0">
                           <ExternalLink size={13}/>
                         </a>
                       )}
-
-                      {/* Divider */}
                       <div className="w-px h-4 bg-[#E5E3FF] mx-0.5"/>
-
-                      {/* Tandai selesai */}
                       {s.status === 'scheduled' && (
                         <button onClick={() => markComplete(s.id)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
                           <Check size={13}/>
                         </button>
                       )}
-                      {/* Edit */}
                       <button onClick={() => openEdit(s)}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Edit">
                         <Pencil size={13}/>
                       </button>
-                      {/* Hapus */}
                       <button onClick={() => setDelConfirm(s.id)}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
                         <Trash2 size={13}/>
@@ -430,7 +413,6 @@ function JadwalContent() {
                   </div>
                 </div>
 
-                {/* Expand panel siswa */}
                 {isExpanded && (
                   <div className="px-5 py-4 bg-[#F7F6FF] border-t border-[#E5E3FF]">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[#7B78A8] mb-3">
@@ -479,7 +461,6 @@ function JadwalContent() {
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              {/* Kelas — FIX isu 3: pakai handleClassGroupChange */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas <span className="text-red-500">*</span></label>
                 <select value={fClassGroup} onChange={e => handleClassGroupChange(e.target.value)} className={inputCls}>
@@ -487,8 +468,6 @@ function JadwalContent() {
                   {classGroups.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
-
-              {/* Edit: tanggal & jam */}
               {isEditMode && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -501,8 +480,6 @@ function JadwalContent() {
                   </div>
                 </div>
               )}
-
-              {/* Tambah: multi rows */}
               {!isEditMode && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -558,7 +535,6 @@ function JadwalContent() {
                   </div>
                 </div>
               )}
-
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Status</label>
                 <select value={fStatus} onChange={e => setFStatus(e.target.value)} className={inputCls}>
@@ -568,8 +544,6 @@ function JadwalContent() {
                   <option value="rescheduled">Dijadwal Ulang</option>
                 </select>
               </div>
-
-              {/* FIX isu 3: zoom sudah auto-fill, tambah keterangan */}
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
                   Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(otomatis dari kelas, bisa diubah)</span>
@@ -577,10 +551,8 @@ function JadwalContent() {
                 <input type="url" placeholder="https://zoom.us/j/..." value={fZoom}
                   onChange={e => setFZoom(e.target.value)} className={inputCls}/>
               </div>
-
               {formError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{formError}</div>}
             </div>
-
             <div className="px-6 pb-5 flex gap-3 sticky bottom-0 bg-white border-t border-[#E5E3FF] pt-4">
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
