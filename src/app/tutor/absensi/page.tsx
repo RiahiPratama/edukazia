@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 
 type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
 
 const STATUS_OPTIONS: { value: StatusAbsen; label: string; color: string; active: string }[] = [
-  { value: 'hadir', label: 'Hadir', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-green-400 hover:text-green-600',   active: 'border-green-500 bg-green-50 text-green-700 font-bold' },
-  { value: 'izin',  label: 'Izin',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-blue-400 hover:text-blue-600',    active: 'border-blue-500 bg-blue-50 text-blue-700 font-bold' },
+  { value: 'hadir', label: 'Hadir', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-green-400 hover:text-green-600',    active: 'border-green-500 bg-green-50 text-green-700 font-bold' },
+  { value: 'izin',  label: 'Izin',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-blue-400 hover:text-blue-600',     active: 'border-blue-500 bg-blue-50 text-blue-700 font-bold' },
   { value: 'sakit', label: 'Sakit', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-yellow-400 hover:text-yellow-600', active: 'border-yellow-500 bg-yellow-50 text-yellow-700 font-bold' },
-  { value: 'alpha', label: 'Alpha', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-red-400 hover:text-red-600',      active: 'border-red-500 bg-red-50 text-red-700 font-bold' },
+  { value: 'alpha', label: 'Alpha', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-red-400 hover:text-red-600',       active: 'border-red-500 bg-red-50 text-red-700 font-bold' },
 ]
 
 const AVATAR_COLORS = [
@@ -42,6 +42,8 @@ export default function TutorAbsensiPage() {
   const supabase = createClient()
 
   const [tutorId,      setTutorId]      = useState<string | null>(null)
+  const [tutorName,    setTutorName]    = useState<string>('')
+  const [adminPhone,   setAdminPhone]   = useState<string>(process.env.NEXT_PUBLIC_WA_NUMBER?.replace(/\D/g, '') ?? '')
   const [sesiHariIni,  setSesiHariIni]  = useState<any[]>([])
   const [selectedSesi, setSelectedSesi] = useState<any | null>(null)
   const [siswaList,    setSiswaList]    = useState<any[]>([])
@@ -63,10 +65,15 @@ export default function TutorAbsensiPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
+    // Ambil tutor + nama
     const { data: tutor } = await supabase
-      .from('tutors').select('id').eq('profile_id', user.id).single()
+      .from('tutors').select('id, profile_id').eq('profile_id', user.id).single()
     if (!tutor?.id) { setLoading(false); return }
     setTutorId(tutor.id)
+
+    const { data: profile } = await supabase
+      .from('profiles').select('full_name').eq('id', user.id).single()
+    setTutorName(profile?.full_name ?? 'Tutor')
 
     const now    = new Date()
     const offset = 9 * 60
@@ -87,8 +94,7 @@ export default function TutorAbsensiPage() {
       const sesiIds = sesi.map((s: any) => s.id)
       const { data: existing } = await supabase
         .from('attendances').select('session_id').in('session_id', sesiIds)
-      const doneIds = new Set((existing ?? []).map((a: any) => a.session_id))
-      setSavedSesiIds(doneIds as Set<string>)
+      setSavedSesiIds(new Set((existing ?? []).map((a: any) => a.session_id)) as Set<string>)
     }
 
     setLoading(false)
@@ -114,7 +120,6 @@ export default function TutorAbsensiPage() {
     }
 
     const studentIds = enrollments.map((e: any) => e.student_id)
-
     const { data: students } = await supabase
       .from('students').select('id, profile_id, relation_phone').in('id', studentIds)
 
@@ -129,29 +134,21 @@ export default function TutorAbsensiPage() {
       phone: s.relation_phone ?? '',
     }]))
 
-    // Load existing absensi
     const { data: existAbsen } = await supabase
       .from('attendances').select('student_id, status, notes').eq('session_id', sesi.id)
-
-    const preAbsen: Record<string, StatusAbsen> = {}
-    const preNotes: Record<string, string>      = {}
-    ;(existAbsen ?? []).forEach((a: any) => {
-      preAbsen[a.student_id] = a.status
-      preNotes[a.student_id] = a.notes ?? ''
-    })
-
-    // Load existing reports
     const { data: existReports } = await supabase
       .from('session_reports').select('student_id, materi, perkembangan, saran_siswa, saran_ortu')
       .eq('session_id', sesi.id)
 
+    const preAbsen: Record<string, StatusAbsen> = {}
+    const preNotes: Record<string, string>      = {}
+    ;(existAbsen ?? []).forEach((a: any) => { preAbsen[a.student_id] = a.status; preNotes[a.student_id] = a.notes ?? '' })
+
     const preReports: Record<string, ReportField> = {}
     ;(existReports ?? []).forEach((r: any) => {
       preReports[r.student_id] = {
-        materi:       r.materi ?? '',
-        perkembangan: r.perkembangan ?? '',
-        saranSiswa:   r.saran_siswa ?? '',
-        saranOrtu:    r.saran_ortu ?? '',
+        materi: r.materi ?? '', perkembangan: r.perkembangan ?? '',
+        saranSiswa: r.saran_siswa ?? '', saranOrtu: r.saran_ortu ?? '',
       }
     })
 
@@ -195,7 +192,6 @@ export default function TutorAbsensiPage() {
 
     setSaving(true); setError(''); setSuccess('')
 
-    // Upsert absensi
     const absenRecords = siswaList.map(s => ({
       session_id:  selectedSesi.id,
       student_id:  s.studentId,
@@ -203,11 +199,11 @@ export default function TutorAbsensiPage() {
       notes:       notesMap[s.studentId] || null,
       recorded_by: tutorId,
     }))
+
     const { error: absenErr } = await supabase
       .from('attendances').upsert(absenRecords, { onConflict: 'session_id,student_id' })
     if (absenErr) { setError(absenErr.message); setSaving(false); return }
 
-    // Upsert laporan (hanya kalau ada yang diisi)
     const reportRecords = siswaList
       .filter(s => {
         const r = reportMap[s.studentId]
@@ -216,13 +212,10 @@ export default function TutorAbsensiPage() {
       .map(s => {
         const r = reportMap[s.studentId]
         return {
-          session_id:   selectedSesi.id,
-          student_id:   s.studentId,
-          materi:       r.materi || null,
-          perkembangan: r.perkembangan || null,
-          saran_siswa:  r.saranSiswa || null,
-          saran_ortu:   r.saranOrtu || null,
-          recorded_by:  tutorId,
+          session_id: selectedSesi.id, student_id: s.studentId,
+          materi: r.materi || null, perkembangan: r.perkembangan || null,
+          saran_siswa: r.saranSiswa || null, saran_ortu: r.saranOrtu || null,
+          recorded_by: tutorId,
         }
       })
 
@@ -237,14 +230,24 @@ export default function TutorAbsensiPage() {
     setSaving(false)
   }
 
-  function buildWAMessage(siswa: any) {
-    const status   = absensiMap[siswa.studentId]
-    const label    = selectedSesi?.class_groups?.label ?? 'kelas'
-    const waktu    = fmtTime(selectedSesi?.scheduled_at ?? '')
+  // WA ke ortu (kalau siswa absen)
+  function buildWAOrtu(siswa: any) {
+    const status     = absensiMap[siswa.studentId]
+    const sesiLabel  = selectedSesi?.class_groups?.label ?? 'kelas'
+    const waktu      = fmtTime(selectedSesi?.scheduled_at ?? '')
     const statusText = status === 'izin' ? 'izin' : status === 'sakit' ? 'sakit' : 'tidak hadir (tanpa keterangan)'
-    const notes    = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
+    const notes      = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
     return encodeURIComponent(
-      `Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${label} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`
+      `Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${sesiLabel} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`
+    )
+  }
+
+  // WA ke admin (selalu tersedia saat sesi dipilih)
+  function buildWAAdmin(siswaName: string) {
+    const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
+    const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
+    return encodeURIComponent(
+      `Halo Admin, siswa ${siswaName} belum hadir di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti.`
     )
   }
 
@@ -332,11 +335,32 @@ export default function TutorAbsensiPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-              {/* Header */}
+              {/* Header sesi */}
               <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
-                <h2 className="font-bold text-[#1A1640]">{selectedSesi.class_groups?.label}</h2>
-                <p className="text-xs text-[#7B78A8] mt-0.5">
-                  {fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="font-bold text-[#1A1640]">{selectedSesi.class_groups?.label}</h2>
+                    <p className="text-xs text-[#7B78A8] mt-0.5">
+                      {fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}
+                    </p>
+                  </div>
+
+                  {/* Tombol WA Admin — SELALU MUNCUL */}
+                  {adminPhone && (
+                    <a
+                      href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-semibold hover:bg-orange-100 transition flex-shrink-0"
+                    >
+                      <AlertTriangle size={13}/>
+                      Laporkan ke Admin
+                    </a>
+                  )}
+                </div>
+
+                {/* Info cara pakai tombol admin */}
+                <p className="text-[10px] text-[#7B78A8] mt-2 italic">
+                  Gunakan tombol "Laporkan ke Admin" jika ada siswa yang belum hadir setelah 3 menit sesi dimulai.
                 </p>
               </div>
 
@@ -366,13 +390,28 @@ export default function TutorAbsensiPage() {
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionOffset}/{s.sessionTotal}</div>
                             </div>
-                            {isAbsen && s.phone && (
-                              <a href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAMessage(s)}`}
-                                target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0">
-                                <MessageCircle size={12}/> WA Ortu
-                              </a>
-                            )}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {/* WA ke Admin per siswa */}
+                              {adminPhone && (
+                                <a
+                                  href={`https://wa.me/${adminPhone}?text=${buildWAAdmin(s.name)}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  title="Laporkan ke Admin"
+                                  className="flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-[10px] font-semibold hover:bg-orange-100 transition">
+                                  <AlertTriangle size={11}/> Admin
+                                </a>
+                              )}
+                              {/* WA ke Ortu (kalau absen) */}
+                              {isAbsen && s.phone && (
+                                <a
+                                  href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  title="Kirim WA ke Ortu"
+                                  className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-lg text-[10px] font-semibold hover:bg-green-100 transition">
+                                  <MessageCircle size={11}/> Ortu
+                                </a>
+                              )}
+                            </div>
                           </div>
 
                           {/* Status absensi */}
@@ -387,7 +426,7 @@ export default function TutorAbsensiPage() {
                             ))}
                           </div>
 
-                          {/* Catatan absensi (kalau absen) */}
+                          {/* Catatan absensi */}
                           {isAbsen && (
                             <input type="text" placeholder="Catatan absensi (opsional)..."
                               value={notesMap[s.studentId] ?? ''}
@@ -409,39 +448,27 @@ export default function TutorAbsensiPage() {
                                 Laporan Belajar Sesi Ini
                               </p>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Materi yang Diajarkan
-                                </label>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Materi yang Diajarkan</label>
                                 <textarea rows={2} placeholder="Contoh: Phonics level 3, blending CVC words..."
-                                  value={report.materi}
-                                  onChange={e => setReport(s.studentId, 'materi', e.target.value)}
+                                  value={report.materi} onChange={e => setReport(s.studentId, 'materi', e.target.value)}
                                   className={textareaCls}/>
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Perkembangan & Pemahaman Siswa
-                                </label>
-                                <textarea rows={2} placeholder="Contoh: Sudah bisa membaca 3 huruf, perlu latihan lebih untuk vokal..."
-                                  value={report.perkembangan}
-                                  onChange={e => setReport(s.studentId, 'perkembangan', e.target.value)}
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Perkembangan & Pemahaman Siswa</label>
+                                <textarea rows={2} placeholder="Contoh: Sudah bisa membaca 3 huruf..."
+                                  value={report.perkembangan} onChange={e => setReport(s.studentId, 'perkembangan', e.target.value)}
                                   className={textareaCls}/>
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Saran untuk Siswa
-                                </label>
-                                <textarea rows={2} placeholder="Contoh: Rajin membaca buku cerita bergambar di rumah..."
-                                  value={report.saranSiswa}
-                                  onChange={e => setReport(s.studentId, 'saranSiswa', e.target.value)}
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Saran untuk Siswa</label>
+                                <textarea rows={2} placeholder="Contoh: Rajin membaca buku cerita bergambar..."
+                                  value={report.saranSiswa} onChange={e => setReport(s.studentId, 'saranSiswa', e.target.value)}
                                   className={textareaCls}/>
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Saran untuk Orang Tua
-                                </label>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Saran untuk Orang Tua</label>
                                 <textarea rows={2} placeholder="Contoh: Mohon dampingi latihan membaca 10 menit setiap hari..."
-                                  value={report.saranOrtu}
-                                  onChange={e => setReport(s.studentId, 'saranOrtu', e.target.value)}
+                                  value={report.saranOrtu} onChange={e => setReport(s.studentId, 'saranOrtu', e.target.value)}
                                   className={textareaCls}/>
                               </div>
                             </div>
