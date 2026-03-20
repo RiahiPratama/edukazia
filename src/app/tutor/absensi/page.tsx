@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
+import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'
 
 type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
 
@@ -350,9 +350,9 @@ export default function TutorAbsensiPage() {
                     <a
                       href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-semibold hover:bg-orange-100 transition flex-shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition flex-shrink-0"
                     >
-                      <AlertTriangle size={13}/>
+                      <MessageCircle size={13}/>
                       Laporkan ke Admin
                     </a>
                   )}
@@ -390,17 +390,7 @@ export default function TutorAbsensiPage() {
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionOffset}/{s.sessionTotal}</div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {/* WA ke Admin per siswa */}
-                              {adminPhone && (
-                                <a
-                                  href={`https://wa.me/${adminPhone}?text=${buildWAAdmin(s.name)}`}
-                                  target="_blank" rel="noopener noreferrer"
-                                  title="Laporkan ke Admin"
-                                  className="flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-[10px] font-semibold hover:bg-orange-100 transition">
-                                  <AlertTriangle size={11}/> Admin
-                                </a>
-                              )}
+                            <div className="flex items-center gap-2 flex-shrink-0">}
                               {/* WA ke Ortu (kalau absen) */}
                               {isAbsen && s.phone && (
                                 <a
