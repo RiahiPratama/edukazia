@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CalendarDays, Check, MessageCircle } from 'lucide-react'
+import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'
 
 type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
 
 const STATUS_OPTIONS: { value: StatusAbsen; label: string; color: string; active: string }[] = [
-  { value: 'hadir', label: 'Hadir',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-green-400 hover:text-green-600', active: 'border-green-500 bg-green-50 text-green-700 font-bold' },
-  { value: 'izin',  label: 'Izin',   color: 'border-[#E5E3FF] text-[#4A4580] hover:border-blue-400 hover:text-blue-600',   active: 'border-blue-500 bg-blue-50 text-blue-700 font-bold' },
-  { value: 'sakit', label: 'Sakit',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-yellow-400 hover:text-yellow-600', active: 'border-yellow-500 bg-yellow-50 text-yellow-700 font-bold' },
-  { value: 'alpha', label: 'Alpha',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-red-400 hover:text-red-600',     active: 'border-red-500 bg-red-50 text-red-700 font-bold' },
+  { value: 'hadir', label: 'Hadir', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-green-400 hover:text-green-600',   active: 'border-green-500 bg-green-50 text-green-700 font-bold' },
+  { value: 'izin',  label: 'Izin',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-blue-400 hover:text-blue-600',    active: 'border-blue-500 bg-blue-50 text-blue-700 font-bold' },
+  { value: 'sakit', label: 'Sakit', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-yellow-400 hover:text-yellow-600', active: 'border-yellow-500 bg-yellow-50 text-yellow-700 font-bold' },
+  { value: 'alpha', label: 'Alpha', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-red-400 hover:text-red-600',      active: 'border-red-500 bg-red-50 text-red-700 font-bold' },
 ]
 
 const AVATAR_COLORS = [
@@ -36,23 +36,25 @@ function fmtTanggal() {
   })
 }
 
+type ReportField = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string }
+
 export default function TutorAbsensiPage() {
   const supabase = createClient()
 
-  const [tutorId,       setTutorId]       = useState<string | null>(null)
-  const [sesiHariIni,   setSesiHariIni]   = useState<any[]>([])
-  const [selectedSesi,  setSelectedSesi]  = useState<any | null>(null)
-  const [siswaList,     setSiswaList]     = useState<any[]>([])
-  const [absensiMap,    setAbsensiMap]    = useState<Record<string, StatusAbsen>>({})
-  const [existingMap,   setExistingMap]   = useState<Record<string, string>>({})
-  const [notesMap,      setNotesMap]      = useState<Record<string, string>>({})
-  const [relPhoneMap,   setRelPhoneMap]   = useState<Record<string, string>>({})
-  const [loading,       setLoading]       = useState(true)
-  const [loadingSiswa,  setLoadingSiswa]  = useState(false)
-  const [saving,        setSaving]        = useState(false)
-  const [savedSesiIds,  setSavedSesiIds]  = useState<Set<string>>(new Set())
-  const [error,         setError]         = useState('')
-  const [success,       setSuccess]       = useState('')
+  const [tutorId,      setTutorId]      = useState<string | null>(null)
+  const [sesiHariIni,  setSesiHariIni]  = useState<any[]>([])
+  const [selectedSesi, setSelectedSesi] = useState<any | null>(null)
+  const [siswaList,    setSiswaList]    = useState<any[]>([])
+  const [absensiMap,   setAbsensiMap]   = useState<Record<string, StatusAbsen>>({})
+  const [notesMap,     setNotesMap]     = useState<Record<string, string>>({})
+  const [reportMap,    setReportMap]    = useState<Record<string, ReportField>>({})
+  const [expandReport, setExpandReport] = useState<Record<string, boolean>>({})
+  const [savedSesiIds, setSavedSesiIds] = useState<Set<string>>(new Set())
+  const [loading,      setLoading]      = useState(true)
+  const [loadingSiswa, setLoadingSiswa] = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState('')
+  const [success,      setSuccess]      = useState('')
 
   useEffect(() => { fetchSesiHariIni() }, [])
 
@@ -66,9 +68,8 @@ export default function TutorAbsensiPage() {
     if (!tutor?.id) { setLoading(false); return }
     setTutorId(tutor.id)
 
-    // Sesi hari ini WIT (Asia/Jayapura = UTC+9)
     const now    = new Date()
-    const offset = 9 * 60 // WIT = UTC+9
+    const offset = 9 * 60
     const witNow = new Date(now.getTime() + (offset - now.getTimezoneOffset()) * 60000)
     const today  = witNow.toISOString().split('T')[0]
 
@@ -82,14 +83,10 @@ export default function TutorAbsensiPage() {
 
     setSesiHariIni(sesi ?? [])
 
-    // Cek sesi mana yang sudah diabsen
     if (sesi && sesi.length > 0) {
       const sesiIds = sesi.map((s: any) => s.id)
       const { data: existing } = await supabase
-        .from('attendances')
-        .select('session_id')
-        .in('session_id', sesiIds)
-
+        .from('attendances').select('session_id').in('session_id', sesiIds)
       const doneIds = new Set((existing ?? []).map((a: any) => a.session_id))
       setSavedSesiIds(doneIds as Set<string>)
     }
@@ -101,133 +98,165 @@ export default function TutorAbsensiPage() {
     setSelectedSesi(sesi)
     setAbsensiMap({})
     setNotesMap({})
+    setReportMap({})
+    setExpandReport({})
     setError('')
     setSuccess('')
     setLoadingSiswa(true)
 
-    // Ambil siswa di kelas ini
     const { data: enrollments } = await supabase
       .from('enrollments')
       .select('id, student_id, session_start_offset, sessions_total')
       .eq('class_group_id', sesi.class_groups.id)
 
     if (!enrollments || enrollments.length === 0) {
-      setSiswaList([])
-      setLoadingSiswa(false)
-      return
+      setSiswaList([]); setLoadingSiswa(false); return
     }
 
     const studentIds = enrollments.map((e: any) => e.student_id)
+
     const { data: students } = await supabase
-      .from('students')
-      .select('id, profile_id, relation_phone, relation_name')
-      .in('id', studentIds)
+      .from('students').select('id, profile_id, relation_phone').in('id', studentIds)
 
     const profileIds = (students ?? []).map((s: any) => s.profile_id).filter(Boolean)
     const { data: profiles } = profileIds.length > 0
       ? await supabase.from('profiles').select('id, full_name').in('id', profileIds)
       : { data: [] }
 
-    const profMap   = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p.full_name]))
-    const phoneMap: Record<string, string> = {}
-    const studentMap = Object.fromEntries((students ?? []).map((s: any) => {
-      phoneMap[s.id] = s.relation_phone ?? ''
-      return [s.id, { name: profMap[s.profile_id] ?? 'Siswa', phone: s.relation_phone ?? '' }]
-    }))
-    setRelPhoneMap(phoneMap)
+    const profMap    = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p.full_name]))
+    const studentMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, {
+      name:  profMap[s.profile_id] ?? 'Siswa',
+      phone: s.relation_phone ?? '',
+    }]))
 
-    // Cek absensi yang sudah ada untuk sesi ini
-    const { data: existing } = await supabase
-      .from('attendances')
-      .select('id, student_id, status, notes')
-      .eq('session_id', sesi.id)
+    // Load existing absensi
+    const { data: existAbsen } = await supabase
+      .from('attendances').select('student_id, status, notes').eq('session_id', sesi.id)
 
-    const existMap: Record<string, string> = {}
     const preAbsen: Record<string, StatusAbsen> = {}
-    const preNotes: Record<string, string> = {}
-
-    ;(existing ?? []).forEach((a: any) => {
-      existMap[a.student_id]  = a.id
-      preAbsen[a.student_id]  = a.status
-      preNotes[a.student_id]  = a.notes ?? ''
+    const preNotes: Record<string, string>      = {}
+    ;(existAbsen ?? []).forEach((a: any) => {
+      preAbsen[a.student_id] = a.status
+      preNotes[a.student_id] = a.notes ?? ''
     })
 
-    setExistingMap(existMap)
+    // Load existing reports
+    const { data: existReports } = await supabase
+      .from('session_reports').select('student_id, materi, perkembangan, saran_siswa, saran_ortu')
+      .eq('session_id', sesi.id)
+
+    const preReports: Record<string, ReportField> = {}
+    ;(existReports ?? []).forEach((r: any) => {
+      preReports[r.student_id] = {
+        materi:       r.materi ?? '',
+        perkembangan: r.perkembangan ?? '',
+        saranSiswa:   r.saran_siswa ?? '',
+        saranOrtu:    r.saran_ortu ?? '',
+      }
+    })
+
     setAbsensiMap(preAbsen)
     setNotesMap(preNotes)
+    setReportMap(preReports)
 
-    const siswa = enrollments.map((e: any) => ({
-      enrollId:   e.id,
-      studentId:  e.student_id,
-      name:       studentMap[e.student_id]?.name ?? 'Siswa',
-      phone:      studentMap[e.student_id]?.phone ?? '',
+    setSiswaList(enrollments.map((e: any) => ({
+      studentId:     e.student_id,
+      name:          studentMap[e.student_id]?.name ?? 'Siswa',
+      phone:         studentMap[e.student_id]?.phone ?? '',
       sessionOffset: e.session_start_offset ?? 1,
       sessionTotal:  e.sessions_total ?? 8,
-    }))
+    })))
 
-    setSiswaList(siswa)
     setLoadingSiswa(false)
   }
 
   function setStatus(studentId: string, status: StatusAbsen) {
     setAbsensiMap(prev => ({ ...prev, [studentId]: status }))
   }
-
-  function setNotes(studentId: string, notes: string) {
-    setNotesMap(prev => ({ ...prev, [studentId]: notes }))
+  function setNotes(studentId: string, val: string) {
+    setNotesMap(prev => ({ ...prev, [studentId]: val }))
+  }
+  function setReport(studentId: string, field: keyof ReportField, val: string) {
+    setReportMap(prev => ({
+      ...prev,
+      [studentId]: { ...(prev[studentId] ?? { materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' }), [field]: val }
+    }))
+  }
+  function toggleReport(studentId: string) {
+    setExpandReport(prev => ({ ...prev, [studentId]: !prev[studentId] }))
   }
 
   async function handleSimpan() {
     if (!selectedSesi || !tutorId) return
     if (siswaList.some(s => !absensiMap[s.studentId])) {
-      setError('Lengkapi absensi semua siswa terlebih dahulu.')
+      setError('Lengkapi status absensi semua siswa terlebih dahulu.')
       return
     }
 
     setSaving(true); setError(''); setSuccess('')
 
-    const records = siswaList.map(s => ({
-      session_id:   selectedSesi.id,
-      student_id:   s.studentId,
-      status:       absensiMap[s.studentId],
-      notes:        notesMap[s.studentId] || null,
-      recorded_by:  tutorId,
+    // Upsert absensi
+    const absenRecords = siswaList.map(s => ({
+      session_id:  selectedSesi.id,
+      student_id:  s.studentId,
+      status:      absensiMap[s.studentId],
+      notes:       notesMap[s.studentId] || null,
+      recorded_by: tutorId,
     }))
+    const { error: absenErr } = await supabase
+      .from('attendances').upsert(absenRecords, { onConflict: 'session_id,student_id' })
+    if (absenErr) { setError(absenErr.message); setSaving(false); return }
 
-    // Upsert — update jika sudah ada, insert jika belum
-    const { error: err } = await supabase
-      .from('attendances')
-      .upsert(records, { onConflict: 'session_id,student_id' })
+    // Upsert laporan (hanya kalau ada yang diisi)
+    const reportRecords = siswaList
+      .filter(s => {
+        const r = reportMap[s.studentId]
+        return r && (r.materi || r.perkembangan || r.saranSiswa || r.saranOrtu)
+      })
+      .map(s => {
+        const r = reportMap[s.studentId]
+        return {
+          session_id:   selectedSesi.id,
+          student_id:   s.studentId,
+          materi:       r.materi || null,
+          perkembangan: r.perkembangan || null,
+          saran_siswa:  r.saranSiswa || null,
+          saran_ortu:   r.saranOrtu || null,
+          recorded_by:  tutorId,
+        }
+      })
 
-    if (err) { setError(err.message); setSaving(false); return }
+    if (reportRecords.length > 0) {
+      const { error: repErr } = await supabase
+        .from('session_reports').upsert(reportRecords, { onConflict: 'session_id,student_id' })
+      if (repErr) { setError(repErr.message); setSaving(false); return }
+    }
 
     setSavedSesiIds(prev => new Set([...prev, selectedSesi.id]))
-    setExistingMap(Object.fromEntries(siswaList.map(s => [s.studentId, 'saved'])))
-    setSuccess('Absensi berhasil disimpan!')
+    setSuccess('Absensi dan laporan berhasil disimpan!')
     setSaving(false)
   }
 
   function buildWAMessage(siswa: any) {
     const status   = absensiMap[siswa.studentId]
-    const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
+    const label    = selectedSesi?.class_groups?.label ?? 'kelas'
     const waktu    = fmtTime(selectedSesi?.scheduled_at ?? '')
     const statusText = status === 'izin' ? 'izin' : status === 'sakit' ? 'sakit' : 'tidak hadir (tanpa keterangan)'
     const notes    = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
-
     return encodeURIComponent(
-      `Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${sesiLabel} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`
+      `Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${label} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`
     )
   }
 
   const statusColor: Record<string, string> = {
-    scheduled:   'bg-blue-50 text-blue-700',
-    completed:   'bg-green-50 text-green-700',
-    cancelled:   'bg-red-50 text-red-700',
-    rescheduled: 'bg-yellow-50 text-yellow-700',
+    scheduled: 'bg-blue-50 text-blue-700', completed: 'bg-green-50 text-green-700',
+    cancelled: 'bg-red-50 text-red-700',   rescheduled: 'bg-yellow-50 text-yellow-700',
   }
   const statusSesiLabel: Record<string, string> = {
     scheduled: 'Terjadwal', completed: 'Selesai', cancelled: 'Dibatalkan', rescheduled: 'Reschedule'
   }
+
+  const textareaCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition resize-none"
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -237,21 +266,19 @@ export default function TutorAbsensiPage() {
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Absensi</h1>
+        <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Absensi & Laporan</h1>
         <p className="text-sm text-[#7B78A8] mt-1">{fmtTanggal()}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* Kolom kiri — daftar sesi */}
+        {/* Kolom kiri — sesi hari ini */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E5E3FF]">
               <h2 className="font-bold text-sm text-[#1A1640]">Sesi Hari Ini</h2>
             </div>
-
             {sesiHariIni.length === 0 ? (
               <div className="p-6 text-center">
                 <CalendarDays size={28} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
@@ -264,8 +291,7 @@ export default function TutorAbsensiPage() {
                   const isDone     = savedSesiIds.has(s.id)
                   return (
                     <button key={s.id} onClick={() => selectSesi(s)}
-                      className={[
-                        'w-full text-left px-4 py-3 transition-colors',
+                      className={['w-full text-left px-4 py-3 transition-colors',
                         isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'
                       ].join(' ')}>
                       <div className="flex items-center justify-between gap-2">
@@ -296,17 +322,17 @@ export default function TutorAbsensiPage() {
           </div>
         </div>
 
-        {/* Kolom kanan — form absensi */}
+        {/* Kolom kanan — form absensi + laporan */}
         <div className="lg:col-span-2">
           {!selectedSesi ? (
-            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center h-full flex flex-col items-center justify-center">
+            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
               <CalendarDays size={36} strokeWidth={1.5} className="text-[#C4BFFF] mb-3"/>
               <p className="text-sm font-semibold text-[#7B78A8]">Pilih sesi di sebelah kiri</p>
-              <p className="text-xs text-[#7B78A8] mt-1">untuk mulai mencatat absensi</p>
+              <p className="text-xs text-[#7B78A8] mt-1">untuk mulai mencatat absensi dan laporan</p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-              {/* Header form */}
+              {/* Header */}
               <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
                 <h2 className="font-bold text-[#1A1640]">{selectedSesi.class_groups?.label}</h2>
                 <p className="text-xs text-[#7B78A8] mt-0.5">
@@ -320,12 +346,13 @@ export default function TutorAbsensiPage() {
                 <div className="p-8 text-center text-sm text-[#7B78A8]">Belum ada siswa terdaftar di kelas ini</div>
               ) : (
                 <>
-                  {/* Daftar siswa */}
                   <div className="divide-y divide-[#F0EFFF]">
                     {siswaList.map((s, idx) => {
                       const currentStatus = absensiMap[s.studentId]
                       const avatarColor   = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                       const isAbsen       = currentStatus && currentStatus !== 'hadir'
+                      const isReportOpen  = expandReport[s.studentId] ?? false
+                      const report        = reportMap[s.studentId] ?? { materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' }
 
                       return (
                         <div key={s.studentId} className="px-5 py-4">
@@ -339,61 +366,98 @@ export default function TutorAbsensiPage() {
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionOffset}/{s.sessionTotal}</div>
                             </div>
-                            {/* Tombol WA kalau absen */}
                             {isAbsen && s.phone && (
-                              <a
-                                href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAMessage(s)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0"
-                              >
-                                <MessageCircle size={12}/>
-                                WA Ortu
+                              <a href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAMessage(s)}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0">
+                                <MessageCircle size={12}/> WA Ortu
                               </a>
                             )}
                           </div>
 
-                          {/* Pilihan status */}
-                          <div className="flex gap-2 flex-wrap">
+                          {/* Status absensi */}
+                          <div className="flex gap-2 flex-wrap mb-3">
                             {STATUS_OPTIONS.map(opt => (
-                              <button
-                                key={opt.value}
-                                onClick={() => setStatus(s.studentId, opt.value)}
-                                className={[
-                                  'px-3 py-1.5 rounded-xl text-xs border transition-all',
+                              <button key={opt.value} onClick={() => setStatus(s.studentId, opt.value)}
+                                className={['px-3 py-1.5 rounded-xl text-xs border transition-all',
                                   currentStatus === opt.value ? opt.active : opt.color
-                                ].join(' ')}
-                              >
+                                ].join(' ')}>
                                 {opt.label}
                               </button>
                             ))}
                           </div>
 
-                          {/* Catatan (muncul kalau tidak hadir) */}
+                          {/* Catatan absensi (kalau absen) */}
                           {isAbsen && (
-                            <input
-                              type="text"
-                              placeholder="Catatan (opsional)..."
+                            <input type="text" placeholder="Catatan absensi (opsional)..."
                               value={notesMap[s.studentId] ?? ''}
                               onChange={e => setNotes(s.studentId, e.target.value)}
-                              className="mt-2 w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
-                            />
+                              className="mb-3 w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                          )}
+
+                          {/* Toggle laporan belajar */}
+                          <button onClick={() => toggleReport(s.studentId)}
+                            className="flex items-center gap-2 text-xs font-semibold text-[#5C4FE5] hover:underline transition">
+                            {isReportOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+                            {isReportOpen ? 'Sembunyikan' : 'Isi'} Laporan Belajar
+                          </button>
+
+                          {/* Form laporan belajar */}
+                          {isReportOpen && (
+                            <div className="mt-3 space-y-3 bg-[#F7F6FF] rounded-xl p-4 border border-[#E5E3FF]">
+                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-widest">
+                                Laporan Belajar Sesi Ini
+                              </p>
+                              <div>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Materi yang Diajarkan
+                                </label>
+                                <textarea rows={2} placeholder="Contoh: Phonics level 3, blending CVC words..."
+                                  value={report.materi}
+                                  onChange={e => setReport(s.studentId, 'materi', e.target.value)}
+                                  className={textareaCls}/>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Perkembangan & Pemahaman Siswa
+                                </label>
+                                <textarea rows={2} placeholder="Contoh: Sudah bisa membaca 3 huruf, perlu latihan lebih untuk vokal..."
+                                  value={report.perkembangan}
+                                  onChange={e => setReport(s.studentId, 'perkembangan', e.target.value)}
+                                  className={textareaCls}/>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Saran untuk Siswa
+                                </label>
+                                <textarea rows={2} placeholder="Contoh: Rajin membaca buku cerita bergambar di rumah..."
+                                  value={report.saranSiswa}
+                                  onChange={e => setReport(s.studentId, 'saranSiswa', e.target.value)}
+                                  className={textareaCls}/>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Saran untuk Orang Tua
+                                </label>
+                                <textarea rows={2} placeholder="Contoh: Mohon dampingi latihan membaca 10 menit setiap hari..."
+                                  value={report.saranOrtu}
+                                  onChange={e => setReport(s.studentId, 'saranOrtu', e.target.value)}
+                                  className={textareaCls}/>
+                              </div>
+                            </div>
                           )}
                         </div>
                       )
                     })}
                   </div>
 
-                  {/* Footer */}
+                  {/* Footer simpan */}
                   <div className="px-5 py-4 border-t border-[#E5E3FF] bg-[#F7F6FF]">
                     {error   && <p className="text-xs text-red-600 font-semibold mb-3">{error}</p>}
                     {success && <p className="text-xs text-green-600 font-semibold mb-3">✅ {success}</p>}
-                    <button
-                      onClick={handleSimpan}
-                      disabled={saving}
-                      className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60"
-                    >
-                      {saving ? 'Menyimpan...' : 'Simpan Absensi'}
+                    <button onClick={handleSimpan} disabled={saving}
+                      className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                      {saving ? 'Menyimpan...' : 'Simpan Absensi & Laporan'}
                     </button>
                   </div>
                 </>
