@@ -132,13 +132,19 @@ export default async function LaporanPage() {
     attendance: attendances?.find((a: any) => a.session_id === l.session_id) ?? null,
   }))
 
+  // FIX: flatten profile di childrenList sebelum di-pass ke client
+  const childrenListFlat = (childrenList ?? []).map((c: any) => ({
+    ...c,
+    profile: Array.isArray(c.profile) ? c.profile[0] ?? null : c.profile,
+  }))
+
   return (
     <LaporanClient
       laporan={laporanWithAtt}
       courses={allCourses}
       summary={summary}
       studentName={activeChild.profile.full_name}
-      childrenList={childrenList ?? []}
+      childrenList={childrenListFlat}
       activeChildId={activeChild.id}
       isParent={isParent}
     />
