@@ -172,11 +172,31 @@ export default function TutorAbsensiPage() {
     setNotesMap(preNotes)
     setReportMap(preReports)
 
+    // Hitung hadir per siswa secara dinamis
+    const { data: allSessForCG } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('class_group_id', sesi.class_groups.id)
+
+    const allSessIds = (allSessForCG ?? []).map((s: any) => s.id)
+    const { data: hadirAtts } = allSessIds.length > 0
+      ? await supabase
+          .from('attendances')
+          .select('student_id')
+          .in('session_id', allSessIds)
+          .eq('status', 'hadir')
+      : { data: [] }
+
+    const hadirPerSiswa: Record<string, number> = {}
+    ;(hadirAtts ?? []).forEach((a: any) => {
+      hadirPerSiswa[a.student_id] = (hadirPerSiswa[a.student_id] ?? 0) + 1
+    })
+
     setSiswaList(enrollments.map((e: any) => ({
       studentId:     e.student_id,
       name:          studentMap[e.student_id]?.name ?? 'Siswa',
       phone:         studentMap[e.student_id]?.phone ?? '',
-      sessionOffset: e.session_start_offset ?? 1,
+      sessionOffset: (e.session_start_offset ?? 0) + (hadirPerSiswa[e.student_id] ?? 0),
       sessionTotal:  e.sessions_total ?? 8,
     })))
 

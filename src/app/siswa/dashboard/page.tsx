@@ -117,9 +117,38 @@ export default async function DashboardPage() {
     }
   })
 
+
+  // ── Step 2e: Hitung hadir per class_group untuk progress dinamis ──
+  const { data: allSessionsForCG } = classGroupIds.length > 0
+    ? await supabase
+        .from('sessions')
+        .select('id, class_group_id')
+        .in('class_group_id', classGroupIds)
+    : { data: [] }
+
+  const allSessionIdsForProgress = (allSessionsForCG ?? []).map((s: any) => s.id)
+
+  const { data: hadirAttendances } = allSessionIdsForProgress.length > 0
+    ? await supabase
+        .from('attendances')
+        .select('session_id')
+        .eq('student_id', activeChild.id)
+        .eq('status', 'hadir')
+        .in('session_id', allSessionIdsForProgress)
+    : { data: [] }
+
+  const hadirCountPerCG: Record<string, number> = {}
+  ;(hadirAttendances ?? []).forEach((a: any) => {
+    const sess = (allSessionsForCG ?? []).find((s: any) => s.id === a.session_id)
+    if (sess) {
+      hadirCountPerCG[sess.class_group_id] = (hadirCountPerCG[sess.class_group_id] ?? 0) + 1
+    }
+  })
+
   const activeEnrollmentsWithCG = activeEnrollments.map((e: any) => ({
     ...e,
-    class_groups: cgMap[e.class_group_id] ?? null
+    class_groups: cgMap[e.class_group_id] ?? null,
+    done: (e.session_start_offset ?? 0) + (hadirCountPerCG[e.class_group_id] ?? 0),
   }))
 
   // ── Step 3: Jadwal hari ini (WIT) ──
@@ -317,7 +346,7 @@ export default async function DashboardPage() {
               const cg     = e.class_groups
               const course = cg?.courses
               const total  = e.sessions_total ?? 0
-              const done   = e.session_start_offset ?? 0
+              const done   = e.done ?? 0
               const pct   = total > 0 ? Math.round((done / total) * 100) : 0
               const color = course?.color ?? '#5C4FE5'
               return (
