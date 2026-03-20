@@ -30,11 +30,16 @@ function fmtTanggal() {
 export default async function AdminAbsensiPage() {
   const supabase = await createClient()
 
-  // Tanggal hari ini WIT
-  const now    = new Date()
-  const offset = 9 * 60
-  const witNow = new Date(now.getTime() + (offset - now.getTimezoneOffset()) * 60000)
-  const today  = witNow.toISOString().split('T')[0]
+  // FIX: Tanggal hari ini WIT (bukan UTC)
+  const nowWIT = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+  const today  = `${nowWIT.getFullYear()}-${String(nowWIT.getMonth()+1).padStart(2,'0')}-${String(nowWIT.getDate()).padStart(2,'0')}`
+
+  // Range UTC untuk hari ini WIT: WIT 00:00 = UTC hari sebelumnya 15:00
+  const prevDay = new Date(nowWIT)
+  prevDay.setDate(prevDay.getDate() - 1)
+  const prevDate = `${prevDay.getFullYear()}-${String(prevDay.getMonth()+1).padStart(2,'0')}-${String(prevDay.getDate()).padStart(2,'0')}`
+  const startUtc = `${prevDate}T15:00:00+00:00`
+  const endUtc   = `${today}T14:59:59+00:00`
 
   // Ambil semua sesi hari ini
   const { data: sessions } = await supabase
@@ -46,8 +51,8 @@ export default async function AdminAbsensiPage() {
         tutors(profile_id, profiles(full_name))
       )
     `)
-    .gte('scheduled_at', `${today}T00:00:00`)
-    .lte('scheduled_at', `${today}T23:59:59`)
+    .gte('scheduled_at', startUtc)
+    .lte('scheduled_at', endUtc)
     .order('scheduled_at')
 
   const sessionIds = (sessions ?? []).map((s: any) => s.id)

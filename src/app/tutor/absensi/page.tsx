@@ -267,6 +267,12 @@ export default function TutorAbsensiPage() {
       if (repErr) { setError(repErr.message); setSaving(false); return }
     }
 
+    // Auto-complete session setelah absensi disimpan
+    await supabase
+      .from('sessions')
+      .update({ status: 'completed' })
+      .eq('id', selectedSesi.id)
+
     setSavedSesiIds(prev => new Set([...prev, selectedSesi.id]))
     setSuccess('Absensi dan laporan berhasil disimpan!')
     setSaving(false)
