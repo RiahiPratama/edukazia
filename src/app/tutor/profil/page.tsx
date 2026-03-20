@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Camera, Plus, Trash2, Save, Mail } from 'lucide-react'
 
-const EDU_LEVELS = ['SMA/SMK', 'D3', 'S1', 'S2', 'S3']
-
 type Achievement = { name: string; category: string; issuer: string; year: string }
+
+const EDU_LEVELS = ['SMA/SMK', 'D3', 'S1', 'S2', 'S3']
 
 const CATEGORIES = [
   { value: 'pelatihan',   label: 'Pelatihan',   color: '#EEEDFE', textColor: '#3C3489' },
@@ -27,15 +27,17 @@ export default function TutorProfilPage() {
   const [successEmail,  setSuccessEmail]  = useState('')
   const [errorEmail,    setErrorEmail]    = useState('')
 
-  const [tutorId,       setTutorId]       = useState('')
-  const [profileId,     setProfileId]     = useState('')
-  const [avatarUrl,     setAvatarUrl]     = useState<string | null>(null)
-  const [currentEmail,  setCurrentEmail]  = useState('')
-  const [newEmail,      setNewEmail]      = useState('')
-  const [courses,       setCourses]       = useState<any[]>([])
+  const [tutorId,         setTutorId]         = useState('')
+  const [profileId,       setProfileId]       = useState('')
+  const [avatarUrl,       setAvatarUrl]       = useState<string | null>(null)
+  const [currentEmail,    setCurrentEmail]    = useState('')
+  const [newEmail,        setNewEmail]        = useState('')
+  const [courses,         setCourses]         = useState<any[]>([])
   const [selectedCourses, setSelectedCourses] = useState<string[]>([])
-  const [subjects,      setSubjects]      = useState<string[]>([])
-  const [subjectInput,  setSubjectInput]  = useState('')
+  const [subjects,        setSubjects]        = useState<string[]>([])
+  const [subjectInput,    setSubjectInput]    = useState('')
+  const [achievements,    setAchievements]    = useState<Achievement[]>([])
+  const [newAch,          setNewAch]          = useState<Achievement>({ name: '', category: 'pelatihan', issuer: '', year: '' })
 
   const [form, setForm] = useState({
     full_name:                 '',
@@ -70,7 +72,7 @@ export default function TutorProfilPage() {
       { data: allCourses },
     ] = await Promise.all([
       supabase.from('profiles').select('full_name, phone, avatar_url').eq('id', user.id).single(),
-      supabase.from('tutors').select('id, bio, bank_name, bank_account, bank_holder, education_level, education_major, education_university, education_year, teaching_experience_years, previous_workplaces, subjects').eq('profile_id', user.id).single(),
+      supabase.from('tutors').select('id, bio, bank_name, bank_account, bank_holder, education_level, education_major, education_university, education_year, teaching_experience_years, previous_workplaces, subjects, achievements').eq('profile_id', user.id).single(),
       supabase.from('courses').select('id, name, color').eq('is_active', true),
     ])
 
@@ -82,7 +84,6 @@ export default function TutorProfilPage() {
       setSubjects(tutor.subjects ?? [])
       setAchievements(tutor.achievements ?? [])
 
-      // Ambil kursus tutor
       const { data: tutorCourses } = await supabase
         .from('tutor_courses').select('course_id').eq('tutor_id', tutor.id)
       setSelectedCourses((tutorCourses ?? []).map((tc: any) => tc.course_id))
@@ -121,6 +122,16 @@ export default function TutorProfilPage() {
     setSubjectInput('')
   }
 
+  function addAchievement() {
+    if (!newAch.name.trim()) return
+    setAchievements(prev => [...prev, { ...newAch }])
+    setNewAch({ name: '', category: 'pelatihan', issuer: '', year: '' })
+  }
+
+  function removeAchievement(idx: number) {
+    setAchievements(prev => prev.filter((_, i) => i !== idx))
+  }
+
   async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -130,16 +141,13 @@ export default function TutorProfilPage() {
     const fileName = `tutor-${profileId}-${Date.now()}.${ext}`
 
     const { error: upErr } = await supabase.storage
-      .from('avatars')
-      .upload(fileName, file, { upsert: true })
+      .from('avatars').upload(fileName, file, { upsert: true })
 
     if (upErr) { setError('Gagal upload foto: ' + upErr.message); setUploadingFoto(false); return }
 
     const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
-    const publicUrl = urlData.publicUrl
-
-    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', profileId)
-    setAvatarUrl(publicUrl)
+    await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', profileId)
+    setAvatarUrl(urlData.publicUrl)
     setUploadingFoto(false)
   }
 
@@ -147,14 +155,12 @@ export default function TutorProfilPage() {
     if (!form.full_name.trim()) { setError('Nama lengkap wajib diisi.'); return }
     setSaving(true); setError(''); setSuccess('')
 
-    // Update profiles
     const { error: profErr } = await supabase
       .from('profiles')
       .update({ full_name: form.full_name.trim(), phone: form.phone.trim() || null })
       .eq('id', profileId)
     if (profErr) { setError(profErr.message); setSaving(false); return }
 
-    // Update tutors
     const { error: tutorErr } = await supabase
       .from('tutors')
       .update({
@@ -174,7 +180,6 @@ export default function TutorProfilPage() {
       .eq('id', tutorId)
     if (tutorErr) { setError(tutorErr.message); setSaving(false); return }
 
-    // Update kursus
     await supabase.from('tutor_courses').delete().eq('tutor_id', tutorId)
     if (selectedCourses.length > 0) {
       await supabase.from('tutor_courses').insert(
@@ -194,9 +199,7 @@ export default function TutorProfilPage() {
     const { error } = await supabase.auth.updateUser({ email: newEmail.trim() })
     if (error) { setErrorEmail(error.message); setSavingEmail(false); return }
 
-    // Update juga di tabel profiles
     await supabase.from('profiles').update({ email: newEmail.trim() }).eq('id', profileId)
-
     setSuccessEmail(`Link verifikasi dikirim ke ${newEmail}. Cek email untuk konfirmasi.`)
     setNewEmail('')
     setSavingEmail(false)
@@ -251,8 +254,7 @@ export default function TutorProfilPage() {
                 {uploadingFoto ? 'Mengupload...' : 'Ganti foto'}
               </button>
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={handleUploadFoto}/>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUploadFoto}/>
           </div>
         </div>
 
@@ -381,7 +383,9 @@ export default function TutorProfilPage() {
 
         {/* PELATIHAN, SERTIFIKASI & PRESTASI */}
         <div className={sectionCls}>
-          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Pelatihan, Sertifikasi & Prestasi <span className="normal-case font-normal">(opsional)</span></p>
+          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">
+            Pelatihan, Sertifikasi & Prestasi <span className="normal-case font-normal">(opsional)</span>
+          </p>
 
           {/* Form tambah */}
           <div className="bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl p-4 space-y-3">
@@ -414,12 +418,7 @@ export default function TutorProfilPage() {
                   placeholder="2021" className={inputCls}/>
               </div>
             </div>
-            <button type="button"
-              onClick={() => {
-                if (!newAch.name.trim()) return
-                setAchievements(prev => [...prev, { ...newAch }])
-                setNewAch({ name: '', category: 'pelatihan', issuer: '', year: '' })
-              }}
+            <button type="button" onClick={addAchievement}
               className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-xl text-sm font-bold hover:bg-[#3D34C4] transition">
               <Plus size={13}/> Tambah
             </button>
@@ -440,10 +439,11 @@ export default function TutorProfilPage() {
                           {cat.label}
                         </span>
                       </div>
-                      <div className="text-xs text-[#7B78A8] mt-0.5">{a.issuer}{a.year ? ` · ${a.year}` : ''}</div>
+                      <div className="text-xs text-[#7B78A8] mt-0.5">
+                        {a.issuer}{a.year ? ` · ${a.year}` : ''}
+                      </div>
                     </div>
-                    <button type="button"
-                      onClick={() => setAchievements(prev => prev.filter((_, i) => i !== idx))}
+                    <button type="button" onClick={() => removeAchievement(idx)}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition flex-shrink-0">
                       <Trash2 size={13}/>
                     </button>
