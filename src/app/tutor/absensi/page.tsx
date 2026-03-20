@@ -39,11 +39,10 @@ function fmtTanggal() {
 type ReportField = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string }
 
 export default function TutorAbsensiPage() {
-  const supabase = createClient()
+  const supabase   = createClient()
+  const adminPhone = (process.env.NEXT_PUBLIC_WA_NUMBER ?? '').replace(/\D/g, '')
 
   const [tutorId,      setTutorId]      = useState<string | null>(null)
-  const [tutorName,    setTutorName]    = useState<string>('')
-  const [adminPhone,   setAdminPhone]   = useState<string>(process.env.NEXT_PUBLIC_WA_NUMBER?.replace(/\D/g, '') ?? '')
   const [sesiHariIni,  setSesiHariIni]  = useState<any[]>([])
   const [selectedSesi, setSelectedSesi] = useState<any | null>(null)
   const [siswaList,    setSiswaList]    = useState<any[]>([])
@@ -65,15 +64,10 @@ export default function TutorAbsensiPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    // Ambil tutor + nama
     const { data: tutor } = await supabase
-      .from('tutors').select('id, profile_id').eq('profile_id', user.id).single()
+      .from('tutors').select('id').eq('profile_id', user.id).single()
     if (!tutor?.id) { setLoading(false); return }
     setTutorId(tutor.id)
-
-    const { data: profile } = await supabase
-      .from('profiles').select('full_name').eq('id', user.id).single()
-    setTutorName(profile?.full_name ?? 'Tutor')
 
     const now    = new Date()
     const offset = 9 * 60
@@ -142,13 +136,18 @@ export default function TutorAbsensiPage() {
 
     const preAbsen: Record<string, StatusAbsen> = {}
     const preNotes: Record<string, string>      = {}
-    ;(existAbsen ?? []).forEach((a: any) => { preAbsen[a.student_id] = a.status; preNotes[a.student_id] = a.notes ?? '' })
+    ;(existAbsen ?? []).forEach((a: any) => {
+      preAbsen[a.student_id] = a.status
+      preNotes[a.student_id] = a.notes ?? ''
+    })
 
     const preReports: Record<string, ReportField> = {}
     ;(existReports ?? []).forEach((r: any) => {
       preReports[r.student_id] = {
-        materi: r.materi ?? '', perkembangan: r.perkembangan ?? '',
-        saranSiswa: r.saran_siswa ?? '', saranOrtu: r.saran_ortu ?? '',
+        materi:       r.materi ?? '',
+        perkembangan: r.perkembangan ?? '',
+        saranSiswa:   r.saran_siswa ?? '',
+        saranOrtu:    r.saran_ortu ?? '',
       }
     })
 
@@ -176,7 +175,10 @@ export default function TutorAbsensiPage() {
   function setReport(studentId: string, field: keyof ReportField, val: string) {
     setReportMap(prev => ({
       ...prev,
-      [studentId]: { ...(prev[studentId] ?? { materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' }), [field]: val }
+      [studentId]: {
+        ...(prev[studentId] ?? { materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' }),
+        [field]: val
+      }
     }))
   }
   function toggleReport(studentId: string) {
@@ -212,10 +214,13 @@ export default function TutorAbsensiPage() {
       .map(s => {
         const r = reportMap[s.studentId]
         return {
-          session_id: selectedSesi.id, student_id: s.studentId,
-          materi: r.materi || null, perkembangan: r.perkembangan || null,
-          saran_siswa: r.saranSiswa || null, saran_ortu: r.saranOrtu || null,
-          recorded_by: tutorId,
+          session_id:   selectedSesi.id,
+          student_id:   s.studentId,
+          materi:       r.materi || null,
+          perkembangan: r.perkembangan || null,
+          saran_siswa:  r.saranSiswa || null,
+          saran_ortu:   r.saranOrtu || null,
+          recorded_by:  tutorId,
         }
       })
 
@@ -230,7 +235,14 @@ export default function TutorAbsensiPage() {
     setSaving(false)
   }
 
-  // WA ke ortu (kalau siswa absen)
+  function buildWAAdmin(siswaName: string) {
+    const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
+    const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
+    return encodeURIComponent(
+      `Halo Admin, siswa ${siswaName} belum hadir di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti.`
+    )
+  }
+
   function buildWAOrtu(siswa: any) {
     const status     = absensiMap[siswa.studentId]
     const sesiLabel  = selectedSesi?.class_groups?.label ?? 'kelas'
@@ -242,21 +254,15 @@ export default function TutorAbsensiPage() {
     )
   }
 
-  // WA ke admin (selalu tersedia saat sesi dipilih)
-  function buildWAAdmin(siswaName: string) {
-    const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
-    const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
-    return encodeURIComponent(
-      `Halo Admin, siswa ${siswaName} belum hadir di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti.`
-    )
-  }
-
   const statusColor: Record<string, string> = {
-    scheduled: 'bg-blue-50 text-blue-700', completed: 'bg-green-50 text-green-700',
-    cancelled: 'bg-red-50 text-red-700',   rescheduled: 'bg-yellow-50 text-yellow-700',
+    scheduled:   'bg-blue-50 text-blue-700',
+    completed:   'bg-green-50 text-green-700',
+    cancelled:   'bg-red-50 text-red-700',
+    rescheduled: 'bg-yellow-50 text-yellow-700',
   }
   const statusSesiLabel: Record<string, string> = {
-    scheduled: 'Terjadwal', completed: 'Selesai', cancelled: 'Dibatalkan', rescheduled: 'Reschedule'
+    scheduled: 'Terjadwal', completed: 'Selesai',
+    cancelled: 'Dibatalkan', rescheduled: 'Reschedule'
   }
 
   const textareaCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition resize-none"
@@ -276,7 +282,7 @@ export default function TutorAbsensiPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* Kolom kiri — sesi hari ini */}
+        {/* Kolom kiri */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E5E3FF]">
@@ -294,7 +300,8 @@ export default function TutorAbsensiPage() {
                   const isDone     = savedSesiIds.has(s.id)
                   return (
                     <button key={s.id} onClick={() => selectSesi(s)}
-                      className={['w-full text-left px-4 py-3 transition-colors',
+                      className={[
+                        'w-full text-left px-4 py-3 transition-colors',
                         isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'
                       ].join(' ')}>
                       <div className="flex items-center justify-between gap-2">
@@ -312,7 +319,7 @@ export default function TutorAbsensiPage() {
                               <Check size={11} className={isSelected ? 'text-white' : 'text-green-600'}/>
                             </div>
                           )}
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isSelected ? 'bg-white/20 text-white' : statusColor[s.status] ?? 'bg-gray-50 text-gray-600'}`}>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isSelected ? 'bg-white/20 text-white' : (statusColor[s.status] ?? 'bg-gray-50 text-gray-600')}`}>
                             {statusSesiLabel[s.status] ?? s.status}
                           </span>
                         </div>
@@ -325,7 +332,7 @@ export default function TutorAbsensiPage() {
           </div>
         </div>
 
-        {/* Kolom kanan — form absensi + laporan */}
+        {/* Kolom kanan */}
         <div className="lg:col-span-2">
           {!selectedSesi ? (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
@@ -344,12 +351,12 @@ export default function TutorAbsensiPage() {
                       {fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}
                     </p>
                   </div>
-
-                  {/* Tombol WA Admin — SELALU MUNCUL */}
+                  {/* Tombol WA Admin — 1 tombol, hijau, di header */}
                   {adminPhone && (
                     <a
                       href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
-                      target="_blank" rel="noopener noreferrer"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition flex-shrink-0"
                     >
                       <MessageCircle size={13}/>
@@ -357,8 +364,6 @@ export default function TutorAbsensiPage() {
                     </a>
                   )}
                 </div>
-
-                {/* Info cara pakai tombol admin */}
                 <p className="text-[10px] text-[#7B78A8] mt-2 italic">
                   Gunakan tombol "Laporkan ke Admin" jika ada siswa yang belum hadir setelah 3 menit sesi dimulai.
                 </p>
@@ -382,35 +387,40 @@ export default function TutorAbsensiPage() {
                         <div key={s.studentId} className="px-5 py-4">
                           {/* Info siswa */}
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                              style={{ background: avatarColor.bg, color: avatarColor.text }}>
+                            <div
+                              className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                              style={{ background: avatarColor.bg, color: avatarColor.text }}
+                            >
                               {getInitials(s.name)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionOffset}/{s.sessionTotal}</div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">}
-                              {/* WA ke Ortu (kalau absen) */}
-                              {isAbsen && s.phone && (
-                                <a
-                                  href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
-                                  target="_blank" rel="noopener noreferrer"
-                                  title="Kirim WA ke Ortu"
-                                  className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-lg text-[10px] font-semibold hover:bg-green-100 transition">
-                                  <MessageCircle size={11}/> Ortu
-                                </a>
-                              )}
-                            </div>
+                            {/* Tombol WA Ortu — hanya muncul kalau siswa absen */}
+                            {isAbsen && s.phone && (
+                              <a
+                                href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0"
+                              >
+                                <MessageCircle size={12}/> WA Ortu
+                              </a>
+                            )}
                           </div>
 
                           {/* Status absensi */}
                           <div className="flex gap-2 flex-wrap mb-3">
                             {STATUS_OPTIONS.map(opt => (
-                              <button key={opt.value} onClick={() => setStatus(s.studentId, opt.value)}
-                                className={['px-3 py-1.5 rounded-xl text-xs border transition-all',
+                              <button
+                                key={opt.value}
+                                onClick={() => setStatus(s.studentId, opt.value)}
+                                className={[
+                                  'px-3 py-1.5 rounded-xl text-xs border transition-all',
                                   currentStatus === opt.value ? opt.active : opt.color
-                                ].join(' ')}>
+                                ].join(' ')}
+                              >
                                 {opt.label}
                               </button>
                             ))}
@@ -418,15 +428,20 @@ export default function TutorAbsensiPage() {
 
                           {/* Catatan absensi */}
                           {isAbsen && (
-                            <input type="text" placeholder="Catatan absensi (opsional)..."
+                            <input
+                              type="text"
+                              placeholder="Catatan absensi (opsional)..."
                               value={notesMap[s.studentId] ?? ''}
                               onChange={e => setNotes(s.studentId, e.target.value)}
-                              className="mb-3 w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                              className="mb-3 w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+                            />
                           )}
 
                           {/* Toggle laporan belajar */}
-                          <button onClick={() => toggleReport(s.studentId)}
-                            className="flex items-center gap-2 text-xs font-semibold text-[#5C4FE5] hover:underline transition">
+                          <button
+                            onClick={() => toggleReport(s.studentId)}
+                            className="flex items-center gap-2 text-xs font-semibold text-[#5C4FE5] hover:underline transition"
+                          >
                             {isReportOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
                             {isReportOpen ? 'Sembunyikan' : 'Isi'} Laporan Belajar
                           </button>
@@ -438,28 +453,52 @@ export default function TutorAbsensiPage() {
                                 Laporan Belajar Sesi Ini
                               </p>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Materi yang Diajarkan</label>
-                                <textarea rows={2} placeholder="Contoh: Phonics level 3, blending CVC words..."
-                                  value={report.materi} onChange={e => setReport(s.studentId, 'materi', e.target.value)}
-                                  className={textareaCls}/>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Materi yang Diajarkan
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Contoh: Phonics level 3, blending CVC words..."
+                                  value={report.materi}
+                                  onChange={e => setReport(s.studentId, 'materi', e.target.value)}
+                                  className={textareaCls}
+                                />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Perkembangan & Pemahaman Siswa</label>
-                                <textarea rows={2} placeholder="Contoh: Sudah bisa membaca 3 huruf..."
-                                  value={report.perkembangan} onChange={e => setReport(s.studentId, 'perkembangan', e.target.value)}
-                                  className={textareaCls}/>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Perkembangan & Pemahaman Siswa
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Contoh: Sudah bisa membaca 3 huruf..."
+                                  value={report.perkembangan}
+                                  onChange={e => setReport(s.studentId, 'perkembangan', e.target.value)}
+                                  className={textareaCls}
+                                />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Saran untuk Siswa</label>
-                                <textarea rows={2} placeholder="Contoh: Rajin membaca buku cerita bergambar..."
-                                  value={report.saranSiswa} onChange={e => setReport(s.studentId, 'saranSiswa', e.target.value)}
-                                  className={textareaCls}/>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Saran untuk Siswa
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Contoh: Rajin membaca buku cerita bergambar..."
+                                  value={report.saranSiswa}
+                                  onChange={e => setReport(s.studentId, 'saranSiswa', e.target.value)}
+                                  className={textareaCls}
+                                />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Saran untuk Orang Tua</label>
-                                <textarea rows={2} placeholder="Contoh: Mohon dampingi latihan membaca 10 menit setiap hari..."
-                                  value={report.saranOrtu} onChange={e => setReport(s.studentId, 'saranOrtu', e.target.value)}
-                                  className={textareaCls}/>
+                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                  Saran untuk Orang Tua
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Contoh: Mohon dampingi latihan membaca 10 menit setiap hari..."
+                                  value={report.saranOrtu}
+                                  onChange={e => setReport(s.studentId, 'saranOrtu', e.target.value)}
+                                  className={textareaCls}
+                                />
                               </div>
                             </div>
                           )}
@@ -472,8 +511,11 @@ export default function TutorAbsensiPage() {
                   <div className="px-5 py-4 border-t border-[#E5E3FF] bg-[#F7F6FF]">
                     {error   && <p className="text-xs text-red-600 font-semibold mb-3">{error}</p>}
                     {success && <p className="text-xs text-green-600 font-semibold mb-3">✅ {success}</p>}
-                    <button onClick={handleSimpan} disabled={saving}
-                      className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                    <button
+                      onClick={handleSimpan}
+                      disabled={saving}
+                      className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60"
+                    >
                       {saving ? 'Menyimpan...' : 'Simpan Absensi & Laporan'}
                     </button>
                   </div>
