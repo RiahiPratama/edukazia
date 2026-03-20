@@ -15,7 +15,9 @@ export default async function JadwalPage() {
       cookies: {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          } catch {}
         },
       },
     }
@@ -40,7 +42,15 @@ export default async function JadwalPage() {
     `)
     .eq(isParent ? 'parent_profile_id' : 'profile_id', session.user.id)
 
-  const activeChild = getActiveChild((childrenList ?? []).map(c => ({ ...c, enrollments: [] })))
+  // FIX: flatten profile array + cast any
+  const activeChild = getActiveChild(
+    (childrenList ?? []).map((c: any) => ({
+      ...c,
+      enrollments: [],
+      profile: Array.isArray(c.profile) ? c.profile[0] ?? null : c.profile,
+    }))
+  )
+
   if (!activeChild) {
     return (
       <div className="px-4 pt-6 text-center">
@@ -55,8 +65,9 @@ export default async function JadwalPage() {
     .select('id, status, end_date, expired_at, status_override, class_group_id')
     .eq('student_id', activeChild.id)
 
-  const isExpired = (enrollments ?? []).length > 0 && (enrollments ?? []).every(e => getEnrollmentStatus(e) === 'expired')
-  const activeEnrollments = (enrollments ?? []).filter(e => getEnrollmentStatus(e) === 'active')
+  // FIX: cast (e: any)
+  const isExpired = (enrollments ?? []).length > 0 && (enrollments ?? []).every((e: any) => getEnrollmentStatus(e) === 'expired')
+  const activeEnrollments = (enrollments ?? []).filter((e: any) => getEnrollmentStatus(e) === 'active')
   const classGroupIds = activeEnrollments.map((e: any) => e.class_group_id).filter(Boolean)
 
   // Step 3: Ambil sesi
