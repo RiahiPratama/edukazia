@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, ChevronDown, ChevronUp, Users, FileText } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronUp, Users, FileText, Pencil, Save, X } from 'lucide-react'
 
 const STATUS_COLOR: Record<string, string> = {
   hadir: 'bg-green-100 text-green-700',
@@ -23,6 +23,8 @@ const AVATAR_COLORS = [
   { bg: '#FBEAF0', text: '#72243E' },
 ]
 
+type ReportForm = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string }
+
 function getInitials(name: string) {
   return name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
 }
@@ -37,15 +39,22 @@ function fmtTime(iso: string) {
   })
 }
 
+const textareaCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition resize-none"
+
 export default function TutorLaporanPage() {
   const supabase = createClient()
 
-  const [kelasList,     setKelasList]     = useState<any[]>([])
-  const [selectedKelas, setSelectedKelas] = useState<any | null>(null)
-  const [laporanData,   setLaporanData]   = useState<any[]>([])
-  const [expandedSiswa, setExpandedSiswa] = useState<Record<string, boolean>>({})
-  const [expandedSesi,  setExpandedSesi]  = useState<Record<string, boolean>>({})
-  const [loading,       setLoading]       = useState(true)
+  const [tutorId,        setTutorId]        = useState<string | null>(null)
+  const [kelasList,      setKelasList]      = useState<any[]>([])
+  const [selectedKelas,  setSelectedKelas]  = useState<any | null>(null)
+  const [laporanData,    setLaporanData]    = useState<any[]>([])
+  const [expandedSiswa,  setExpandedSiswa]  = useState<Record<string, boolean>>({})
+  const [expandedSesi,   setExpandedSesi]   = useState<Record<string, boolean>>({})
+  const [editingKey,     setEditingKey]     = useState<string | null>(null)
+  const [editForm,       setEditForm]       = useState<ReportForm>({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' })
+  const [savingKey,      setSavingKey]      = useState<string | null>(null)
+  const [saveSuccess,    setSaveSuccess]    = useState<string | null>(null)
+  const [loading,        setLoading]        = useState(true)
   const [loadingLaporan, setLoadingLaporan] = useState(false)
 
   useEffect(() => { fetchKelas() }, [])
@@ -58,6 +67,7 @@ export default function TutorLaporanPage() {
     const { data: tutor } = await supabase
       .from('tutors').select('id').eq('profile_id', user.id).single()
     if (!tutor?.id) { setLoading(false); return }
+    setTutorId(tutor.id)
 
     const { data: kelas } = await supabase
       .from('class_groups')
@@ -73,6 +83,7 @@ export default function TutorLaporanPage() {
     setSelectedKelas(k)
     setExpandedSiswa({})
     setExpandedSesi({})
+    setEditingKey(null)
     setLoadingLaporan(true)
 
     const { data: enrollments } = await supabase
@@ -86,11 +97,12 @@ export default function TutorLaporanPage() {
 
     const studentIds = enrollments.map((e: any) => e.student_id)
 
+    // Hanya ambil sesi completed
     const { data: sessions } = await supabase
       .from('sessions')
       .select('id, scheduled_at, status')
       .eq('class_group_id', k.id)
-      .in('status', ['completed', 'scheduled'])
+      .eq('status', 'completed')
       .order('scheduled_at')
 
     const sessionIds = (sessions ?? []).map((s: any) => s.id)
@@ -117,7 +129,6 @@ export default function TutorLaporanPage() {
     const profMap    = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p.full_name]))
     const studentMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
 
-    // Build maps
     const attMap: Record<string, Record<string, any>> = {}
     ;(attendances ?? []).forEach((a: any) => {
       if (!attMap[a.student_id]) attMap[a.student_id] = {}
@@ -136,27 +147,27 @@ export default function TutorLaporanPage() {
     })
 
     const laporan = enrollments.map((e: any) => {
-      const nama      = studentMap[e.student_id] ?? 'Siswa'
-      const siswaAtt  = attMap[e.student_id] ?? {}
-      const siswaRep  = repMap[e.student_id] ?? {}
+      const nama     = studentMap[e.student_id] ?? 'Siswa'
+      const siswaAtt = attMap[e.student_id] ?? {}
+      const siswaRep = repMap[e.student_id] ?? {}
       const totalSesi = (sessions ?? []).length
-      const hadir     = Object.values(siswaAtt).filter((a: any) => a.status === 'hadir').length
-      const izin      = Object.values(siswaAtt).filter((a: any) => a.status === 'izin').length
-      const sakit     = Object.values(siswaAtt).filter((a: any) => a.status === 'sakit').length
-      const alpha     = Object.values(siswaAtt).filter((a: any) => a.status === 'alpha').length
+      const hadir  = Object.values(siswaAtt).filter((a: any) => a.status === 'hadir').length
+      const izin   = Object.values(siswaAtt).filter((a: any) => a.status === 'izin').length
+      const sakit  = Object.values(siswaAtt).filter((a: any) => a.status === 'sakit').length
+      const alpha  = Object.values(siswaAtt).filter((a: any) => a.status === 'alpha').length
       const diabsen   = hadir + izin + sakit + alpha
       const pctHadir  = totalSesi > 0 ? Math.round((hadir / totalSesi) * 100) : 0
 
       const detailSesi = (sessions ?? []).map((s: any) => ({
-        sessionId:     s.id,
-        scheduledAt:   s.scheduled_at,
-        absenStatus:   siswaAtt[s.id]?.status ?? null,
-        absenNotes:    siswaAtt[s.id]?.notes ?? '',
-        materi:        siswaRep[s.id]?.materi ?? '',
-        perkembangan:  siswaRep[s.id]?.perkembangan ?? '',
-        saranSiswa:    siswaRep[s.id]?.saranSiswa ?? '',
-        saranOrtu:     siswaRep[s.id]?.saranOrtu ?? '',
-        hasReport:     !!siswaRep[s.id],
+        sessionId:    s.id,
+        scheduledAt:  s.scheduled_at,
+        absenStatus:  siswaAtt[s.id]?.status ?? null,
+        absenNotes:   siswaAtt[s.id]?.notes ?? '',
+        materi:       siswaRep[s.id]?.materi ?? '',
+        perkembangan: siswaRep[s.id]?.perkembangan ?? '',
+        saranSiswa:   siswaRep[s.id]?.saranSiswa ?? '',
+        saranOrtu:    siswaRep[s.id]?.saranOrtu ?? '',
+        hasReport:    !!siswaRep[s.id],
       }))
 
       return {
@@ -176,6 +187,60 @@ export default function TutorLaporanPage() {
   }
   function toggleSesi(id: string) {
     setExpandedSesi(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  function startEdit(key: string, existing: ReportForm) {
+    setEditingKey(key)
+    setEditForm({ ...existing })
+    setExpandedSesi(prev => ({ ...prev, [key]: false }))
+  }
+  function cancelEdit() {
+    setEditingKey(null)
+    setEditForm({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' })
+  }
+
+  async function saveReport(studentId: string, sessionId: string, key: string) {
+    if (!tutorId) return
+    setSavingKey(key)
+
+    const record = {
+      session_id:   sessionId,
+      student_id:   studentId,
+      materi:       editForm.materi || null,
+      perkembangan: editForm.perkembangan || null,
+      saran_siswa:  editForm.saranSiswa || null,
+      saran_ortu:   editForm.saranOrtu || null,
+      recorded_by:  tutorId,
+    }
+
+    const { error } = await supabase
+      .from('session_reports')
+      .upsert(record, { onConflict: 'session_id,student_id' })
+
+    if (!error) {
+      // Update local state
+      setLaporanData(prev => prev.map(siswa => {
+        if (siswa.studentId !== studentId) return siswa
+        return {
+          ...siswa,
+          detailSesi: siswa.detailSesi.map((s: any) => {
+            if (s.sessionId !== sessionId) return s
+            return {
+              ...s,
+              materi:       editForm.materi,
+              perkembangan: editForm.perkembangan,
+              saranSiswa:   editForm.saranSiswa,
+              saranOrtu:    editForm.saranOrtu,
+              hasReport:    true,
+            }
+          })
+        }
+      }))
+      setSaveSuccess(key)
+      setTimeout(() => setSaveSuccess(null), 3000)
+      setEditingKey(null)
+    }
+    setSavingKey(null)
   }
 
   if (loading) return (
@@ -250,6 +315,7 @@ export default function TutorLaporanPage() {
               {laporanData.map((siswa: any, idx: number) => {
                 const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                 const isOpen      = expandedSiswa[siswa.studentId] ?? false
+                const laporanBelumDiisi = siswa.detailSesi.filter((s: any) => s.absenStatus && !s.hasReport).length
 
                 return (
                   <div key={siswa.studentId} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
@@ -270,21 +336,20 @@ export default function TutorLaporanPage() {
                         </div>
                       </div>
 
-                      {/* Summary pills */}
                       <div className="flex gap-2 flex-wrap mb-3">
                         <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-green-50 text-green-700">✓ {siswa.hadir} Hadir</span>
                         <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700">{siswa.izin} Izin</span>
                         <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700">{siswa.sakit} Sakit</span>
                         <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-700">{siswa.alpha} Alpha</span>
-                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#F0EFFF] text-[#7B78A8]">
-                          {siswa.totalSesi - siswa.diabsen} Belum diabsen
-                        </span>
+                        {laporanBelumDiisi > 0 && (
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700">
+                            ✏ {laporanBelumDiisi} laporan belum diisi
+                          </span>
+                        )}
                       </div>
 
-                      {/* Progress bar */}
                       <div className="w-full h-2 bg-[#E5E3FF] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-[#5C4FE5] transition-all"
-                          style={{ width: `${siswa.pctHadir}%` }}/>
+                        <div className="h-full rounded-full bg-[#5C4FE5] transition-all" style={{ width: `${siswa.pctHadir}%` }}/>
                       </div>
                     </div>
 
@@ -302,8 +367,12 @@ export default function TutorLaporanPage() {
                     {isOpen && (
                       <div className="border-t border-[#F0EFFF] divide-y divide-[#F0EFFF]">
                         {siswa.detailSesi.map((sesi: any, i: number) => {
-                          const isSesiOpen = expandedSesi[`${siswa.studentId}-${sesi.sessionId}`] ?? false
-                          const hasAnyReport = sesi.materi || sesi.perkembangan || sesi.saranSiswa || sesi.saranOrtu
+                          const key        = `${siswa.studentId}-${sesi.sessionId}`
+                          const isSesiOpen = expandedSesi[key] ?? false
+                          const isEditing  = editingKey === key
+                          const isSaving   = savingKey === key
+                          const justSaved  = saveSuccess === key
+                          const hasReport  = sesi.hasReport
 
                           return (
                             <div key={sesi.sessionId}>
@@ -329,19 +398,39 @@ export default function TutorLaporanPage() {
                                       Belum diabsen
                                     </span>
                                   )}
-                                  {hasAnyReport && (
+
+                                  {/* Tombol laporan — hanya muncul kalau sudah diabsen */}
+                                  {sesi.absenStatus && !isEditing && (
                                     <button
-                                      onClick={() => toggleSesi(`${siswa.studentId}-${sesi.sessionId}`)}
+                                      onClick={() => hasReport
+                                        ? toggleSesi(key)
+                                        : startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu })
+                                      }
                                       className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
-                                      <FileText size={11}/>
-                                      {isSesiOpen ? 'Tutup' : 'Laporan'}
+                                      {hasReport
+                                        ? <><FileText size={11}/>{isSesiOpen ? 'Tutup' : 'Lihat'}</>
+                                        : <><Pencil size={11}/>Isi Laporan</>
+                                      }
                                     </button>
+                                  )}
+
+                                  {/* Tombol edit kalau laporan sudah ada */}
+                                  {hasReport && isSesiOpen && !isEditing && (
+                                    <button
+                                      onClick={() => startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu })}
+                                      className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
+                                      <Pencil size={11}/> Edit
+                                    </button>
+                                  )}
+
+                                  {justSaved && (
+                                    <span className="text-[10px] font-bold text-green-600">✓ Tersimpan</span>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Laporan belajar sesi ini */}
-                              {isSesiOpen && hasAnyReport && (
+                              {/* View laporan */}
+                              {isSesiOpen && hasReport && !isEditing && (
                                 <div className="mx-5 mb-3 bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-4 space-y-3">
                                   {sesi.materi && (
                                     <div>
@@ -367,6 +456,44 @@ export default function TutorLaporanPage() {
                                       <p className="text-xs text-[#1A1640]">{sesi.saranOrtu}</p>
                                     </div>
                                   )}
+                                </div>
+                              )}
+
+                              {/* Form edit/input inline */}
+                              {isEditing && (
+                                <div className="mx-5 mb-3 bg-[#F7F6FF] rounded-xl border border-[#5C4FE5] p-4 space-y-3">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <p className="text-[11px] font-bold text-[#5C4FE5] uppercase tracking-wide">
+                                      {hasReport ? 'Edit Laporan' : 'Isi Laporan Belajar'}
+                                    </p>
+                                    <button onClick={cancelEdit} className="text-[#9B97B2] hover:text-red-500 transition">
+                                      <X size={14}/>
+                                    </button>
+                                  </div>
+
+                                  {[
+                                    { field: 'materi' as keyof ReportForm, label: 'Materi yang Diajarkan', placeholder: 'Contoh: Phonics level 3, blending CVC words...' },
+                                    { field: 'perkembangan' as keyof ReportForm, label: 'Perkembangan & Pemahaman Siswa', placeholder: 'Contoh: Sudah bisa membaca 3 huruf...' },
+                                    { field: 'saranSiswa' as keyof ReportForm, label: 'Saran untuk Siswa', placeholder: 'Contoh: Rajin membaca buku cerita bergambar...' },
+                                    { field: 'saranOrtu' as keyof ReportForm, label: 'Saran untuk Orang Tua', placeholder: 'Contoh: Mohon dampingi latihan membaca 10 menit setiap hari...' },
+                                  ].map(({ field, label, placeholder }) => (
+                                    <div key={field}>
+                                      <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">{label}</label>
+                                      <textarea rows={2} placeholder={placeholder}
+                                        value={editForm[field]}
+                                        onChange={e => setEditForm(prev => ({ ...prev, [field]: e.target.value }))}
+                                        className={textareaCls}
+                                      />
+                                    </div>
+                                  ))}
+
+                                  <button
+                                    onClick={() => saveReport(siswa.studentId, sesi.sessionId, key)}
+                                    disabled={isSaving}
+                                    className="w-full py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-xs transition disabled:opacity-60 flex items-center justify-center gap-2">
+                                    <Save size={13}/>
+                                    {isSaving ? 'Menyimpan...' : 'Simpan Laporan'}
+                                  </button>
                                 </div>
                               )}
                             </div>
