@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { CheckCircle, XCircle, Clock, AlertCircle, MessageCircle } from 'lucide-react'
+import { CheckCircle, Clock, AlertCircle, MessageCircle } from 'lucide-react'
+
+export const dynamic = 'force-dynamic'
 
 const STATUS_COLOR: Record<string, string> = {
   hadir: 'bg-green-50 text-green-700 border-green-200',
@@ -23,9 +25,6 @@ function fmtTanggal() {
   return new Date().toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura'
   })
-}
-function formatRp(n: number) {
-  return new Intl.NumberFormat('id-ID').format(n)
 }
 
 export default async function AdminAbsensiPage() {
@@ -109,7 +108,7 @@ export default async function AdminAbsensiPage() {
     const sesAtt   = attMap[s.id] ?? {}
     siswaIds.forEach((sid: string) => {
       const a = sesAtt[sid]
-      if (!a)                    totalBelum++
+      if (!a)                        totalBelum++
       else if (a.status === 'hadir') totalHadir++
       else if (a.status === 'izin')  totalIzin++
       else if (a.status === 'sakit') totalSakit++
@@ -178,8 +177,6 @@ export default async function AdminAbsensiPage() {
             const waktu      = fmtTime(s.scheduled_at)
 
             const alphaList = siswaIds.filter((sid: string) => sesAtt[sid]?.status === 'alpha')
-            const izinList  = siswaIds.filter((sid: string) => sesAtt[sid]?.status === 'izin')
-            const sakitList = siswaIds.filter((sid: string) => sesAtt[sid]?.status === 'sakit')
 
             return (
               <div key={s.id} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
@@ -218,7 +215,7 @@ export default async function AdminAbsensiPage() {
                   {siswaIds.length === 0 ? (
                     <div className="px-5 py-3 text-xs text-[#7B78A8]">Belum ada siswa terdaftar</div>
                   ) : (
-                    siswaIds.map((sid: string, idx: number) => {
+                    siswaIds.map((sid: string) => {
                       const siswa  = studentMap[sid] ?? { name: 'Siswa', phone: '' }
                       const att    = sesAtt[sid]
                       const status = att?.status ?? null
@@ -227,19 +224,14 @@ export default async function AdminAbsensiPage() {
 
                       return (
                         <div key={sid} className="flex items-center gap-3 px-5 py-3 hover:bg-[#F7F6FF] transition-colors">
-                          {/* Avatar */}
                           <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
                             style={{ background: '#EEEDFE', color: '#3C3489' }}>
                             {getInitials(siswa.name)}
                           </div>
-
-                          {/* Info */}
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-semibold text-[#1A1640] truncate">{siswa.name}</div>
                             {notes && <div className="text-xs text-[#7B78A8] italic">"{notes}"</div>}
                           </div>
-
-                          {/* Status */}
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {status ? (
                               <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${STATUS_COLOR[status]}`}>
@@ -250,8 +242,6 @@ export default async function AdminAbsensiPage() {
                                 Belum diabsen
                               </span>
                             )}
-
-                            {/* Tombol WA ke Ortu (kalau absen + ada nomor) */}
                             {isAbsen && siswa.phone && (
                               <a
                                 href={`https://wa.me/${siswa.phone.replace(/\D/g, '')}?text=${buildWAOrtu(siswa.name, kelasLabel, waktu, status, notes)}`}
