@@ -27,6 +27,17 @@ interface Props {
   children: React.ReactNode
 }
 
+interface NavContentProps {
+  activeChild: any
+  canSwitch: boolean
+  expired: boolean
+  waNumber: string
+  pathname: string
+  onClose?: () => void
+  onSwitchClick: () => void
+  onLogout: () => void
+}
+
 const navGroups = [
   { group: 'Menu Siswa', items: [
     { href: '/siswa/dashboard', label: 'Dashboard',      icon: LayoutDashboard },
@@ -38,6 +49,88 @@ const navGroups = [
     { href: '/siswa/profil',    label: 'Profil',          icon: User },
   ]},
 ]
+
+function isActive(pathname: string, href: string) {
+  if (href === '/siswa/dashboard') return pathname === '/siswa/dashboard'
+  return pathname.startsWith(href)
+}
+
+function NavContent({ activeChild, canSwitch, expired, waNumber, pathname, onClose, onSwitchClick, onLogout }: NavContentProps) {
+  return (
+    <>
+      {/* Child switcher */}
+      <div className="px-3 pt-4 pb-2">
+        <button
+          onClick={() => canSwitch && onSwitchClick()}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
+        >
+          <div className="w-8 h-8 rounded-full bg-[#E6B800] flex items-center justify-center text-[11px] font-bold text-[#7A5900] flex-shrink-0">
+            {activeChild ? getInitials(activeChild.profile.full_name) : '??'}
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-[13px] font-bold text-white leading-none truncate">
+              {activeChild?.profile.full_name ?? 'Pilih Siswa'}
+            </p>
+            <p className="text-[10px] text-white/60 mt-0.5">
+              {activeChild?.grade ? `Kelas ${activeChild.grade}` : '—'} · {expired ? 'Expired' : 'Aktif'}
+            </p>
+          </div>
+          {canSwitch && <ChevronDown size={14} className="text-white/60 flex-shrink-0" />}
+        </button>
+      </div>
+
+      {/* Nav items */}
+      <nav className="flex-1 overflow-y-auto py-2 px-3">
+        {navGroups.map(group => (
+          <div key={group.group} className="mb-3">
+            <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
+              {group.group}
+            </div>
+            {group.items.map(item => {
+              const Icon   = item.icon
+              const active = isActive(pathname, item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onClose}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold mb-0.5 transition-all',
+                    active ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  ].join(' ')}
+                >
+                  <Icon size={16} strokeWidth={active ? 2.5 : 2} className="flex-shrink-0" />
+                  <span>{item.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-3 border-t border-white/10 space-y-1">
+        <a
+          href={`https://wa.me/${waNumber}?text=Halo Admin EduKazia`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-white/70 hover:bg-white/10 hover:text-white transition-all"
+        >
+          <MessageCircle size={16} className="flex-shrink-0" />
+          <span>Hubungi Admin</span>
+          <span className="w-2 h-2 rounded-full bg-green-400 ml-auto flex-shrink-0" />
+        </a>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-all"
+        >
+          <LogOut size={16} className="flex-shrink-0" />
+          <span>Keluar</span>
+        </button>
+      </div>
+    </>
+  )
+}
 
 export default function SiswaLayoutClient({ profile, childrenList, activeChild, isParent, children }: Props) {
   const pathname  = usePathname()
@@ -55,86 +148,14 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
     router.push('/login')
   }
 
-  function isActive(href: string) {
-    if (href === '/siswa/dashboard') return pathname === '/siswa/dashboard'
-    return pathname.startsWith(href)
-  }
-
-  function NavContent({ onClose }: { onClose?: () => void }) {
-    return (
-      <>
-        {/* Child switcher */}
-        <div className="px-3 pt-4 pb-2">
-          <button
-            onClick={() => canSwitch && setShowSwitcher(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#E6B800] flex items-center justify-center text-[11px] font-bold text-[#7A5900] flex-shrink-0">
-              {activeChild ? getInitials(activeChild.profile.full_name) : '??'}
-            </div>
-            <div className="flex-1 text-left min-w-0">
-              <p className="text-[13px] font-bold text-white leading-none truncate">
-                {activeChild?.profile.full_name ?? 'Pilih Siswa'}
-              </p>
-              <p className="text-[10px] text-white/60 mt-0.5">
-                {activeChild?.grade ? `Kelas ${activeChild.grade}` : '—'} · {expired ? 'Expired' : 'Aktif'}
-              </p>
-            </div>
-            {canSwitch && <ChevronDown size={14} className="text-white/60 flex-shrink-0" />}
-          </button>
-        </div>
-
-        {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto py-2 px-3">
-          {navGroups.map(group => (
-            <div key={group.group} className="mb-3">
-              <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                {group.group}
-              </div>
-              {group.items.map(item => {
-                const Icon   = item.icon
-                const active = isActive(item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClose}
-                    className={[
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold mb-0.5 transition-all',
-                      active ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
-                    ].join(' ')}
-                  >
-                    <Icon size={16} strokeWidth={active ? 2.5 : 2} className="flex-shrink-0" />
-                    <span>{item.label}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          ))}
-        </nav>
-
-        {/* Footer */}
-        <div className="p-3 border-t border-white/10 space-y-1">
-          <a
-            href={`https://wa.me/${waNumber}?text=Halo Admin EduKazia`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-white/70 hover:bg-white/10 hover:text-white transition-all"
-          >
-            <MessageCircle size={16} className="flex-shrink-0" />
-            <span>Hubungi Admin</span>
-            <span className="w-2 h-2 rounded-full bg-green-400 ml-auto flex-shrink-0" />
-          </a>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-all"
-          >
-            <LogOut size={16} className="flex-shrink-0" />
-            <span>Keluar</span>
-          </button>
-        </div>
-      </>
-    )
+  const navProps: NavContentProps = {
+    activeChild,
+    canSwitch,
+    expired,
+    waNumber,
+    pathname,
+    onSwitchClick: () => setShowSwitcher(true),
+    onLogout: handleLogout,
   }
 
   const witTime = new Date().toLocaleTimeString('id-ID', {
@@ -158,7 +179,7 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
           </Link>
         </div>
         <div className="flex flex-col flex-1 overflow-hidden">
-          <NavContent />
+          <NavContent {...navProps} />
         </div>
       </div>
 
@@ -181,7 +202,7 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
           </Link>
         </div>
         <div className="flex flex-col flex-1 overflow-hidden">
-          <NavContent onClose={() => setSidebarOpen(false)} />
+          <NavContent {...navProps} onClose={() => setSidebarOpen(false)} />
         </div>
       </div>
 
