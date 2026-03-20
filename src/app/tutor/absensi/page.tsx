@@ -36,6 +36,25 @@ function fmtTanggal() {
   })
 }
 
+// FIX: hitung range UTC yang benar untuk hari ini WIT (UTC+9)
+function getTodayWITRangeUTC() {
+  const now = new Date()
+  // Konversi ke WIT
+  const witNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+  const today  = witNow.toISOString().split('T')[0] // YYYY-MM-DD WIT
+
+  // WIT 00:00:00 = UTC hari sebelumnya jam 15:00:00
+  // WIT 23:59:59 = UTC hari ini jam 14:59:59
+  const prevDay = new Date(witNow)
+  prevDay.setDate(prevDay.getDate() - 1)
+  const prevDate = prevDay.toISOString().split('T')[0]
+
+  const startUtc = `${prevDate}T15:00:00+00:00`
+  const endUtc   = `${today}T14:59:59+00:00`
+
+  return { startUtc, endUtc }
+}
+
 type ReportField = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string }
 
 export default function TutorAbsensiPage() {
@@ -69,17 +88,15 @@ export default function TutorAbsensiPage() {
     if (!tutor?.id) { setLoading(false); return }
     setTutorId(tutor.id)
 
-    const now    = new Date()
-    const offset = 9 * 60
-    const witNow = new Date(now.getTime() + (offset - now.getTimezoneOffset()) * 60000)
-    const today  = witNow.toISOString().split('T')[0]
+    // FIX: pakai range UTC yang benar untuk WIT hari ini
+    const { startUtc, endUtc } = getTodayWITRangeUTC()
 
     const { data: sesi } = await supabase
       .from('sessions')
       .select(`id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name))`)
       .eq('class_groups.tutor_id', tutor.id)
-      .gte('scheduled_at', `${today}T00:00:00`)
-      .lte('scheduled_at', `${today}T23:59:59`)
+      .gte('scheduled_at', startUtc)
+      .lte('scheduled_at', endUtc)
       .order('scheduled_at')
 
     setSesiHariIni(sesi ?? [])
@@ -351,7 +368,6 @@ export default function TutorAbsensiPage() {
                       {fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}
                     </p>
                   </div>
-                  {/* Tombol WA Admin — 1 tombol, hijau, di header */}
                   {adminPhone && (
                     <a
                       href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
@@ -385,7 +401,6 @@ export default function TutorAbsensiPage() {
 
                       return (
                         <div key={s.studentId} className="px-5 py-4">
-                          {/* Info siswa */}
                           <div className="flex items-center gap-3 mb-3">
                             <div
                               className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
@@ -397,7 +412,6 @@ export default function TutorAbsensiPage() {
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionOffset}/{s.sessionTotal}</div>
                             </div>
-                            {/* Tombol WA Ortu — hanya muncul kalau siswa absen */}
                             {isAbsen && s.phone && (
                               <a
                                 href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
@@ -410,7 +424,6 @@ export default function TutorAbsensiPage() {
                             )}
                           </div>
 
-                          {/* Status absensi */}
                           <div className="flex gap-2 flex-wrap mb-3">
                             {STATUS_OPTIONS.map(opt => (
                               <button
@@ -426,7 +439,6 @@ export default function TutorAbsensiPage() {
                             ))}
                           </div>
 
-                          {/* Catatan absensi */}
                           {isAbsen && (
                             <input
                               type="text"
@@ -437,7 +449,6 @@ export default function TutorAbsensiPage() {
                             />
                           )}
 
-                          {/* Toggle laporan belajar */}
                           <button
                             onClick={() => toggleReport(s.studentId)}
                             className="flex items-center gap-2 text-xs font-semibold text-[#5C4FE5] hover:underline transition"
@@ -446,60 +457,30 @@ export default function TutorAbsensiPage() {
                             {isReportOpen ? 'Sembunyikan' : 'Isi'} Laporan Belajar
                           </button>
 
-                          {/* Form laporan belajar */}
                           {isReportOpen && (
                             <div className="mt-3 space-y-3 bg-[#F7F6FF] rounded-xl p-4 border border-[#E5E3FF]">
                               <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-widest">
                                 Laporan Belajar Sesi Ini
                               </p>
-                              <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Materi yang Diajarkan
-                                </label>
-                                <textarea
-                                  rows={2}
-                                  placeholder="Contoh: Phonics level 3, blending CVC words..."
-                                  value={report.materi}
-                                  onChange={e => setReport(s.studentId, 'materi', e.target.value)}
-                                  className={textareaCls}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Perkembangan & Pemahaman Siswa
-                                </label>
-                                <textarea
-                                  rows={2}
-                                  placeholder="Contoh: Sudah bisa membaca 3 huruf..."
-                                  value={report.perkembangan}
-                                  onChange={e => setReport(s.studentId, 'perkembangan', e.target.value)}
-                                  className={textareaCls}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Saran untuk Siswa
-                                </label>
-                                <textarea
-                                  rows={2}
-                                  placeholder="Contoh: Rajin membaca buku cerita bergambar..."
-                                  value={report.saranSiswa}
-                                  onChange={e => setReport(s.studentId, 'saranSiswa', e.target.value)}
-                                  className={textareaCls}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                                  Saran untuk Orang Tua
-                                </label>
-                                <textarea
-                                  rows={2}
-                                  placeholder="Contoh: Mohon dampingi latihan membaca 10 menit setiap hari..."
-                                  value={report.saranOrtu}
-                                  onChange={e => setReport(s.studentId, 'saranOrtu', e.target.value)}
-                                  className={textareaCls}
-                                />
-                              </div>
+                              {[
+                                { field: 'materi' as keyof ReportField, label: 'Materi yang Diajarkan', placeholder: 'Contoh: Phonics level 3, blending CVC words...' },
+                                { field: 'perkembangan' as keyof ReportField, label: 'Perkembangan & Pemahaman Siswa', placeholder: 'Contoh: Sudah bisa membaca 3 huruf...' },
+                                { field: 'saranSiswa' as keyof ReportField, label: 'Saran untuk Siswa', placeholder: 'Contoh: Rajin membaca buku cerita bergambar...' },
+                                { field: 'saranOrtu' as keyof ReportField, label: 'Saran untuk Orang Tua', placeholder: 'Contoh: Mohon dampingi latihan membaca 10 menit setiap hari...' },
+                              ].map(({ field, label, placeholder }) => (
+                                <div key={field}>
+                                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                    {label}
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    placeholder={placeholder}
+                                    value={report[field]}
+                                    onChange={e => setReport(s.studentId, field, e.target.value)}
+                                    className={textareaCls}
+                                  />
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -507,7 +488,6 @@ export default function TutorAbsensiPage() {
                     })}
                   </div>
 
-                  {/* Footer simpan */}
                   <div className="px-5 py-4 border-t border-[#E5E3FF] bg-[#F7F6FF]">
                     {error   && <p className="text-xs text-red-600 font-semibold mb-3">{error}</p>}
                     {success && <p className="text-xs text-green-600 font-semibold mb-3">✅ {success}</p>}
