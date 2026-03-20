@@ -47,7 +47,15 @@ export default async function DashboardPage() {
     `)
     .eq(isParent ? 'parent_profile_id' : 'profile_id', session.user.id)
 
-  const activeChild = getActiveChild((childrenList ?? []).map(c => ({ ...c, enrollments: [] })))
+  // FIX: flatten profile array dari Supabase join → single object
+  const activeChild = getActiveChild(
+    (childrenList ?? []).map((c: any) => ({
+      ...c,
+      enrollments: [],
+      profile: Array.isArray(c.profile) ? c.profile[0] ?? null : c.profile,
+    }))
+  )
+
   if (!activeChild) {
     return (
       <div className="px-4 pt-6 text-center">
@@ -185,22 +193,16 @@ export default async function DashboardPage() {
   }))
 
   // ── Step 5: Kehadiran bulan ini ──
-  const monthStart = new Date(nowWIT.getFullYear(), nowWIT.getMonth(), 1)
+  const startOfMonth = new Date(nowWIT.getFullYear(), nowWIT.getMonth(), 1)
   const { data: attendances } = await supabase
     .from('attendances')
     .select('status')
     .eq('student_id', activeChild.id)
-    .gte('created_at', toUTC(monthStart))
+    .gte('created_at', toUTC(startOfMonth))
 
-  const hadirCount = attendances?.filter(a => a.status === 'hadir').length ?? 0
-  const totalAtt   = attendances?.length ?? 0
-  const hadirPct   = totalAtt > 0 ? Math.round((hadirCount / totalAtt) * 100) : 0
-
-  // ── Step 6: Progress sesi ──
-  const { data: sessionsDone } = await supabase
-    .from('attendances')
-    .select('session_id, sessions(class_group_id)')
-    .eq('student_id', activeChild.id)
+  const totalAtt  = (attendances ?? []).length
+  const hadirCount = (attendances ?? []).filter((a: any) => a.status === 'hadir').length
+  const hadirPct  = totalAtt > 0 ? Math.round((hadirCount / totalAtt) * 100) : 0
 
   return (
     <div className="px-4 pt-4 pb-2">
@@ -383,4 +385,3 @@ export default async function DashboardPage() {
     </div>
   )
 }
-// Feed sudah ada di laporan terbaru — tidak perlu tambah file baru
