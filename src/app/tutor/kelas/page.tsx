@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, Users, Clock, ChevronDown, ExternalLink } from 'lucide-react'
+import { BookOpen, Users, Clock, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 
 const AVATAR_COLORS = [
   { bg: '#EEEDFE', text: '#3C3489' },
@@ -152,8 +152,8 @@ export default function TutorKelasPage() {
         <p className="text-sm text-[#7B78A8] mt-1">Daftar kelas yang kamu ampu ({kelasList.length} kelas)</p>
       </div>
 
-      <div className="space-y-4">
-        {kelasList.map((k: any) => {
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+        {kelasList.map((k: any, ki: number) => {
           const course        = courseMap[k.course_id]
           const typeName      = typeMap[k.class_type_id] ?? '—'
           const kelasEnroll   = enrollMap[k.id] ?? []
@@ -169,95 +169,93 @@ export default function TutorKelasPage() {
           const totalSesi     = kelasSessions.length
 
           return (
-            <div key={k.id} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-              {/* Header */}
-              <div className="px-5 py-4" style={{ borderLeft: `3px solid ${course?.color ?? '#5C4FE5'}` }}>
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-base font-black text-[#1A1640]">{k.label}</h2>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor[k.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                        {statusLabel[k.status] ?? k.status}
+            <div key={k.id} className={ki > 0 ? 'border-t border-[#F0EFFF]' : ''}>
+              {/* Row kelas */}
+              <div className="flex items-center gap-3 px-5 py-4 hover:bg-[#F7F6FF] transition-colors"
+                style={{ borderLeft: `3px solid ${course?.color ?? '#5C4FE5'}` }}>
+
+                {/* Info kelas */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-[#1A1640]">{k.label}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor[k.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {statusLabel[k.status] ?? k.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                    <span className="text-xs text-[#7B78A8]">{course?.name ?? '—'} · {typeName}</span>
+                    {nextSesi && (
+                      <span className="text-[10px] font-semibold text-[#5C4FE5]">
+                        📅 {fmtDate(nextSesi.scheduled_at)} · {fmtTime(nextSesi.scheduled_at)} WIT
                       </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-[#7B78A8]">{course?.name ?? '—'}</span>
-                      <span className="text-xs text-[#7B78A8]">·</span>
-                      <span className="text-xs text-[#7B78A8]">{typeName}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Stats */}
+                  <div className="hidden sm:flex items-center gap-3 mr-2">
+                    <div className="flex items-center gap-1">
+                      <Clock size={12} className="text-[#7B78A8]"/>
+                      <span className="text-xs text-[#7B78A8]">{completedSesi}/{totalSesi}</span>
                     </div>
                   </div>
+
+                  {/* Tombol lihat siswa */}
+                  <button
+                    onClick={() => toggleExpand(k.id)}
+                    title="Lihat siswa"
+                    className={[
+                      'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                      isOpen
+                        ? 'bg-[#5C4FE5] text-white'
+                        : 'bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white'
+                    ].join(' ')}
+                  >
+                    <Users size={13}/>
+                    <span className={isFull ? 'text-current' : ''}>
+                      {kelasEnroll.length}
+                    </span>
+                    {isOpen ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                  </button>
+
+                  {/* Zoom */}
                   {k.zoom_link && (
                     <a href={k.zoom_link} target="_blank" rel="noopener noreferrer"
-                      className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl font-semibold hover:bg-blue-100 transition">
-                      <ExternalLink size={11}/> Buka Zoom
+                      title="Buka Zoom"
+                      className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
+                      <ExternalLink size={14}/>
                     </a>
                   )}
                 </div>
-
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Users size={13} className="text-[#7B78A8]"/>
-                    <span className={`text-xs font-bold ${isFull ? 'text-red-600' : 'text-[#4A4580]'}`}>
-                      {kelasEnroll.length}/{k.max_participants} siswa
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Clock size={13} className="text-[#7B78A8]"/>
-                    <span className="text-xs font-bold text-[#4A4580]">
-                      {completedSesi}/{totalSesi} sesi selesai
-                    </span>
-                  </div>
-                  {nextSesi && (
-                    <div className="px-2.5 py-1 bg-[#EEEDFE] rounded-lg">
-                      <span className="text-[10px] font-bold text-[#5C4FE5]">
-                        Berikutnya: {fmtDate(nextSesi.scheduled_at)} · {fmtTime(nextSesi.scheduled_at)} WIT
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-3 w-full h-1 bg-[#E5E3FF] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-[#5C4FE5] transition-all"
-                    style={{ width: `${totalSesi > 0 ? Math.min((completedSesi / totalSesi) * 100, 100) : 0}%` }}/>
-                </div>
               </div>
 
-              {/* Toggle siswa */}
-              <button
-                onClick={() => toggleExpand(k.id)}
-                className="w-full flex items-center justify-between px-5 py-3 border-t border-[#F0EFFF] hover:bg-[#F7F6FF] transition-colors"
-              >
-                <span className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-widest">Siswa</span>
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-[#5C4FE5]">
-                  {kelasEnroll.length} siswa
-                  <ChevronDown
-                    size={14}
-                    style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
-                  />
-                </span>
-              </button>
-
-              {/* Daftar siswa collapsible */}
+              {/* Dropdown siswa */}
               {isOpen && (
-                <div className="px-5 pb-4 border-t border-[#F0EFFF]">
+                <div className="px-5 pb-4 pt-2 bg-[#F7F6FF] border-t border-[#E5E3FF]">
+                  <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-widest mb-3">
+                    Siswa Terdaftar ({kelasEnroll.length} siswa)
+                  </p>
                   {kelasEnroll.length === 0 ? (
-                    <p className="text-xs text-[#7B78A8] py-3">Belum ada siswa terdaftar</p>
+                    <p className="text-xs text-[#7B78A8]">Belum ada siswa terdaftar</p>
                   ) : (
-                    <div className="divide-y divide-[#F0EFFF]">
+                    <div className="flex flex-wrap gap-2">
                       {kelasEnroll.map((e: any, idx: number) => {
                         const nama          = studentMap[e.student_id] ?? 'Siswa'
                         const avatarColor   = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                         const sessionOffset = e.session_start_offset ?? 1
                         const sessionTotal  = e.sessions_total ?? 8
                         return (
-                          <div key={e.id} className="flex items-center gap-3 py-3">
-                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          <div key={e.id}
+                            className="flex items-center gap-2 bg-white border border-[#E5E3FF] rounded-xl px-3 py-2 min-w-[160px]">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
                               style={{ background: avatarColor.bg, color: avatarColor.text }}>
                               {getInitials(nama)}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold text-[#1A1640] truncate">{nama}</div>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="text-xs font-semibold text-[#1A1640] truncate">{nama}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
                                 <div className="flex-1 h-1 bg-[#E5E3FF] rounded-full overflow-hidden">
                                   <div className="h-full rounded-full bg-[#5C4FE5]"
                                     style={{ width: `${Math.min((sessionOffset / sessionTotal) * 100, 100)}%` }}/>
