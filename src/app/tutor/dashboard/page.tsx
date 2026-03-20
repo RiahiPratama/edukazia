@@ -172,46 +172,6 @@ export default async function TutorDashboard() {
         </div>
       </div>
 
-      {/* Notifikasi Sesi Besok — muncul kalau ada */}
-      {sesiHariEsok && sesiHariEsok.length > 0 && (
-        <div className="bg-[#EEEDFE] border border-[#C4BFFF] rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Clock size={16} className="text-[#5C4FE5]"/>
-              <span className="text-sm font-bold text-[#3C3489]">
-                Besok — {formatTanggalPendek(tomorrowStart)}
-              </span>
-            </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#5C4FE5] text-white">
-              {sesiHariEsok.length} sesi
-            </span>
-          </div>
-          <div className="space-y-2">
-            {sesiHariEsok.map((s: any) => (
-              <div key={s.id} className="flex items-center gap-3 bg-white rounded-xl px-3 py-2">
-                <div className="text-sm font-black text-[#5C4FE5] flex-shrink-0 w-12 text-center">
-                  {formatTime(s.scheduled_at)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-[#1A1640] truncate">
-                    {s.class_groups?.label ?? '—'}
-                  </div>
-                  <div className="text-[10px] text-[#7B78A8]">
-                    {s.class_groups?.courses?.name ?? '—'}
-                  </div>
-                </div>
-                {s.zoom_link && (
-                  <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                    className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition flex-shrink-0">
-                    Zoom
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Sesi Hari Ini */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
@@ -261,6 +221,46 @@ export default async function TutorDashboard() {
           </div>
         )}
       </div>
+
+      {/* Notifikasi Sesi Besok — muncul kalau ada */}
+      {sesiHariEsok && sesiHariEsok.length > 0 && (
+        <div className="bg-[#EEEDFE] border border-[#C4BFFF] rounded-2xl p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-[#5C4FE5]"/>
+              <span className="text-sm font-bold text-[#3C3489]">
+                Besok — {formatTanggalPendek(tomorrowStart)}
+              </span>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#5C4FE5] text-white">
+              {sesiHariEsok.length} sesi
+            </span>
+          </div>
+          <div className="space-y-2">
+            {sesiHariEsok.map((s: any) => (
+              <div key={s.id} className="flex items-center gap-3 bg-white rounded-xl px-3 py-2">
+                <div className="text-sm font-black text-[#5C4FE5] flex-shrink-0 w-12 text-center">
+                  {formatTime(s.scheduled_at)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-[#1A1640] truncate">
+                    {s.class_groups?.label ?? '—'}
+                  </div>
+                  <div className="text-[10px] text-[#7B78A8]">
+                    {s.class_groups?.courses?.name ?? '—'}
+                  </div>
+                </div>
+                {s.zoom_link && (
+                  <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                    className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition flex-shrink-0">
+                    Zoom
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Kelas Aktif */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
