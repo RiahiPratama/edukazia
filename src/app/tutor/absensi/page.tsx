@@ -39,17 +39,15 @@ function fmtTanggal() {
 // FIX: hitung range UTC yang benar untuk hari ini WIT (UTC+9)
 function getTodayWITRangeUTC() {
   const now = new Date()
-  // Konversi ke WIT
-  const witNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
-  const today  = witNow.toISOString().split('T')[0] // YYYY-MM-DD WIT
+  // en-CA menghasilkan format YYYY-MM-DD langsung dalam timezone WIT
+  const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
 
-  // WIT 00:00:00 = UTC hari sebelumnya jam 15:00:00
-  // WIT 23:59:59 = UTC hari ini jam 14:59:59
-  const prevDay = new Date(witNow)
-  prevDay.setDate(prevDay.getDate() - 1)
-  const prevDate = prevDay.toISOString().split('T')[0]
+  // WIT 00:00 = UTC hari sebelumnya jam 15:00
+  const prevDateObj = new Date(today + 'T00:00:00+09:00')
+  prevDateObj.setDate(prevDateObj.getDate() - 1)
+  const prevDateStr = prevDateObj.toLocaleDateString('en-CA')
 
-  const startUtc = `${prevDate}T15:00:00+00:00`
+  const startUtc = `${prevDateStr}T15:00:00+00:00`
   const endUtc   = `${today}T14:59:59+00:00`
 
   return { startUtc, endUtc }
