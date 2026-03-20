@@ -47,12 +47,18 @@ export default async function SiswaLayout({ children }: { children: React.ReactN
     `)
     .eq(isParent ? 'parent_profile_id' : 'profile_id', session.user.id)
 
-  const activeChild = getActiveChild(childrenList ?? [])
+  // FIX: flatten profile array dari Supabase join
+  const childrenListFlat = (childrenList ?? []).map((c: any) => ({
+    ...c,
+    profile: Array.isArray(c.profile) ? c.profile[0] ?? null : c.profile,
+  }))
+
+  const activeChild = getActiveChild(childrenListFlat)
 
   return (
     <SiswaLayoutClient
       profile={profile}
-      childrenList={childrenList ?? []}
+      childrenList={childrenListFlat}
       activeChild={activeChild}
       isParent={isParent}
     >
