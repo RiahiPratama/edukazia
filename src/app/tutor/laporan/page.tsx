@@ -97,12 +97,12 @@ export default function TutorLaporanPage() {
 
     const studentIds = enrollments.map((e: any) => e.student_id)
 
-    // Hanya ambil sesi completed
+    // Ambil semua sesi (completed dan scheduled) untuk info lengkap
     const { data: sessions } = await supabase
       .from('sessions')
       .select('id, scheduled_at, status')
       .eq('class_group_id', k.id)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'scheduled'])
       .order('scheduled_at')
 
     const sessionIds = (sessions ?? []).map((s: any) => s.id)
@@ -160,6 +160,7 @@ export default function TutorLaporanPage() {
 
       const detailSesi = (sessions ?? []).map((s: any) => ({
         sessionId:    s.id,
+        sessionStatus: s.status,
         scheduledAt:  s.scheduled_at,
         absenStatus:  siswaAtt[s.id]?.status ?? null,
         absenNotes:   siswaAtt[s.id]?.notes ?? '',
@@ -315,7 +316,7 @@ export default function TutorLaporanPage() {
               {laporanData.map((siswa: any, idx: number) => {
                 const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                 const isOpen      = expandedSiswa[siswa.studentId] ?? false
-                const laporanBelumDiisi = siswa.detailSesi.filter((s: any) => s.absenStatus && !s.hasReport).length
+                const laporanBelumDiisi = siswa.detailSesi.filter((s: any) => s.sessionStatus === 'completed' && s.absenStatus && !s.hasReport).length
 
                 return (
                   <div key={siswa.studentId} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
@@ -399,8 +400,8 @@ export default function TutorLaporanPage() {
                                     </span>
                                   )}
 
-                                  {/* Tombol laporan — hanya muncul kalau sudah diabsen */}
-                                  {sesi.absenStatus && !isEditing && (
+                                  {/* Tombol laporan — hanya muncul kalau sesi completed & sudah diabsen */}
+                                  {sesi.sessionStatus === 'completed' && sesi.absenStatus && !isEditing && (
                                     <button
                                       onClick={() => hasReport
                                         ? toggleSesi(key)
@@ -415,7 +416,7 @@ export default function TutorLaporanPage() {
                                   )}
 
                                   {/* Tombol edit kalau laporan sudah ada */}
-                                  {hasReport && isSesiOpen && !isEditing && (
+                                  {sesi.sessionStatus === 'completed' && hasReport && isSesiOpen && !isEditing && (
                                     <button
                                       onClick={() => startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu })}
                                       className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
