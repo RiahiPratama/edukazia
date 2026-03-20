@@ -6,20 +6,23 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, BookOpen,
-  FolderOpen, Coins, LogOut, Menu, Globe2
+  FolderOpen, Coins, LogOut, Menu, Globe2,
+  ClipboardList, BarChart2
 } from 'lucide-react'
 
 const navItems = [
   { group: 'Utama', items: [
-    { href: '/tutor/dashboard', label: 'Dashboard',     icon: LayoutDashboard },
+    { href: '/tutor/dashboard', label: 'Dashboard',       icon: LayoutDashboard },
     { href: '/tutor/jadwal',    label: 'Jadwal Mengajar', icon: CalendarDays },
   ]},
   { group: 'Akademik', items: [
-    { href: '/tutor/kelas',     label: 'Kelas & Siswa',  icon: BookOpen },
-    { href: '/tutor/materi',    label: 'Materi Ajar',    icon: FolderOpen },
+    { href: '/tutor/kelas',     label: 'Kelas & Siswa',   icon: BookOpen },
+    { href: '/tutor/absensi',   label: 'Absensi',         icon: ClipboardList },
+    { href: '/tutor/laporan',   label: 'Laporan Siswa',   icon: BarChart2 },
+    { href: '/tutor/materi',    label: 'Materi Ajar',     icon: FolderOpen },
   ]},
   { group: 'Keuangan', items: [
-    { href: '/tutor/honor',     label: 'Honor Saya',     icon: Coins },
+    { href: '/tutor/honor',     label: 'Honor Saya',      icon: Coins },
   ]},
 ]
 
