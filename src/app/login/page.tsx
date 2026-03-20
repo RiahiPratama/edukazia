@@ -27,7 +27,7 @@ function LoginForm() {
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
     const routes: Record<string, string> = {
-      admin: '/admin', tutor: '/tutor', student: '/siswa'
+      admin: '/admin', tutor: '/tutor', student: '/siswa', parent: '/siswa'
     }
     const role = profile?.role ?? 'student'
     const redirect = searchParams.get('redirect')
@@ -161,7 +161,7 @@ function LoginForm() {
 
         {msg && (
           <div className={`mt-4 px-4 py-3 rounded-xl text-sm font-semibold text-center ${msg.err ? 'bg-red-50 text-red-600 border border-red-200'
-              : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
+            : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
             {msg.text}
           </div>
         )}

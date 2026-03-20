@@ -3,9 +3,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── Mapping role → route yang diizinkan ──────────────────
 const ROLE_ROUTES: Record<string, string> = {
-  admin: '/admin',
-  tutor: '/tutor',
+  admin:   '/admin',
+  tutor:   '/tutor',
   student: '/siswa',
+  parent:  '/siswa',  // ortu akses portal yang sama dengan siswa
 }
 
 // Route yang butuh login
@@ -57,6 +58,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // ── Redirect /siswa → /siswa/dashboard ──
+  if (pathname === '/siswa' || pathname === '/siswa/') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/siswa/dashboard'
+    return NextResponse.redirect(redirectUrl)
+  }
+
   // ── Jika belum login dan akses protected route → ke /login ──
   const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
   if (!user && isProtected) {
@@ -104,7 +112,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Jalankan middleware di semua route kecuali static files dan API routes internal
     '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

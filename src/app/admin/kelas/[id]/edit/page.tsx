@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { X, ArrowRightLeft, UserMinus, Pencil } from 'lucide-react'
+import { X, ArrowRightLeft, UserMinus, Pencil, UserPlus } from 'lucide-react'
 
 type Enrollment = {
   id: string
@@ -26,6 +26,7 @@ type ClassGroup = {
 }
 
 type OtherClass = { id: string; label: string }
+type StudentOption = { id: string; full_name: string }
 
 export default function EditKelasPage() {
   const router   = useRouter()
@@ -46,11 +47,18 @@ export default function EditKelasPage() {
   const [fStatus, setFStatus] = useState('active')
 
   // Modal — tambah tipe 'edit'
-  const [modalType,        setModalType]        = useState<'transfer' | 'stop' | 'edit' | null>(null)
+  const [modalType,        setModalType]        = useState<'transfer' | 'stop' | 'edit' | 'tambah' | null>(null)
   const [selectedEnroll,   setSelectedEnroll]   = useState<Enrollment | null>(null)
   const [transferTargetId, setTransferTargetId] = useState('')
   const [modalSaving,      setModalSaving]      = useState(false)
   const [modalError,       setModalError]       = useState('')
+
+  // Tambah siswa state
+  const [studentOptions,    setStudentOptions]    = useState<StudentOption[]>([])
+  const [studentSearch,     setStudentSearch]     = useState('')
+  const [selectedStudentId, setSelectedStudentId] = useState('')
+  const [tambahTotal,       setTambahTotal]       = useState(8)
+  const [tambahOffset,      setTambahOffset]      = useState(1)
 
   // Edit sesi form
   const [editSessionsTotal,      setEditSessionsTotal]      = useState(8)
@@ -135,6 +143,46 @@ export default function EditKelasPage() {
         session_start_offset: editSessionStartOffset,
       })
       .eq('id', selectedEnroll.id)
+    if (err) { setModalError(err.message); setModalSaving(false); return }
+    setModalSaving(false); setModalType(null); fetchAll()
+  }
+
+  async function fetchStudentOptions(search: string) {
+    const { data: students } = await supabase
+      .from('students').select('id, profile_id').eq('status', 'active')
+    if (!students) return
+    const profIds = students.map((s: any) => s.profile_id).filter(Boolean)
+    if (profIds.length === 0) return
+    let query = supabase.from('profiles').select('id, full_name').in('id', profIds)
+    if (search.trim()) query = query.ilike('full_name', `%${search.trim()}%`)
+    const { data: profs } = await query.limit(20)
+    const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]))
+    const options: StudentOption[] = students
+      .filter((s: any) => profMap[s.profile_id])
+      .map((s: any) => ({ id: s.id, full_name: profMap[s.profile_id].full_name }))
+    const activeStudentIds = enrollments.filter(e => e.status === 'active').map(e => e.student_id)
+    setStudentOptions(options.filter(o => !activeStudentIds.includes(o.id)))
+  }
+
+  function openTambahSiswa() {
+    setSelectedStudentId(''); setStudentSearch('')
+    setTambahTotal(8); setTambahOffset(1)
+    setModalError(''); setModalType('tambah')
+    fetchStudentOptions('')
+  }
+
+  async function handleTambahSiswa() {
+    if (!selectedStudentId) { setModalError('Pilih siswa terlebih dahulu.'); return }
+    if (tambahOffset > tambahTotal) { setModalError('Mulai dari sesi ke- tidak boleh melebihi total sesi.'); return }
+    setModalSaving(true); setModalError('')
+    const { error: err } = await supabase.from('enrollments').insert({
+      student_id:           selectedStudentId,
+      class_group_id:       kelasId,
+      sessions_total:       tambahTotal,
+      session_start_offset: tambahOffset,
+      sessions_used:        0,
+      status:               'active',
+    })
     if (err) { setModalError(err.message); setModalSaving(false); return }
     setModalSaving(false); setModalType(null); fetchAll()
   }
@@ -242,9 +290,15 @@ export default function EditKelasPage() {
 
       {/* DAFTAR SISWA */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
-          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Daftar Siswa</p>
-          <p className="text-xs text-[#7B78A8] mt-0.5">Kelola siswa yang terdaftar di kelas ini</p>
+        <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF] flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Daftar Siswa</p>
+            <p className="text-xs text-[#7B78A8] mt-0.5">Kelola siswa yang terdaftar di kelas ini</p>
+          </div>
+          <button onClick={openTambahSiswa}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white text-xs font-bold rounded-xl transition">
+            <UserPlus size={13}/> Tambah Siswa
+          </button>
         </div>
         {enrollments.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-[#7B78A8]">Belum ada siswa terdaftar di kelas ini.</div>
@@ -295,6 +349,72 @@ export default function EditKelasPage() {
           })
         )}
       </div>
+
+      {/* MODAL TAMBAH SISWA */}
+      {modalType === 'tambah' && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-[#1A1640]">Tambah Siswa ke Kelas</h2>
+              <button onClick={() => setModalType(null)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
+            </div>
+            <div className="bg-[#F7F6FF] rounded-xl px-4 py-3 mb-4">
+              <p className="text-xs text-[#7B78A8] mb-0.5">Kelas</p>
+              <p className="text-sm font-bold text-[#1A1640]">{kelas?.label}</p>
+              <p className="text-xs text-[#7B78A8] mt-0.5">{kelas?.courses?.name} · {kelas?.class_types?.name}</p>
+            </div>
+            <div className="space-y-4 mb-4">
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Cari Siswa <span className="text-red-500">*</span></label>
+                <input type="text" value={studentSearch}
+                  onChange={e => { setStudentSearch(e.target.value); setSelectedStudentId(''); fetchStudentOptions(e.target.value) }}
+                  placeholder="Ketik nama siswa..." className={inputCls}/>
+                {studentOptions.length > 0 && (
+                  <div className="mt-1 border border-[#E5E3FF] rounded-xl overflow-hidden max-h-40 overflow-y-auto bg-white shadow-sm">
+                    {studentOptions.map(s => (
+                      <button key={s.id}
+                        onClick={() => { setSelectedStudentId(s.id); setStudentSearch(s.full_name); setStudentOptions([]) }}
+                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#F7F6FF] transition border-b border-[#E5E3FF] last:border-0
+                          ${selectedStudentId === s.id ? 'bg-[#EEEDFE] text-[#5C4FE5] font-semibold' : 'text-[#1A1640]'}`}>
+                        {s.full_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedStudentId && <p className="text-xs text-green-600 font-semibold mt-1">✓ {studentSearch}</p>}
+                {studentSearch && !selectedStudentId && studentOptions.length === 0 && (
+                  <p className="text-xs text-[#7B78A8] mt-1">Tidak ada siswa ditemukan</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Total Sesi</label>
+                <input type="number" min={1} max={100} value={tambahTotal}
+                  onChange={e => setTambahTotal(Number(e.target.value))} className={inputCls}/>
+                <p className="text-xs text-[#7B78A8] mt-1">1 paket normal = 8 sesi</p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Mulai dari Sesi ke-</label>
+                <input type="number" min={1} max={tambahTotal} value={tambahOffset}
+                  onChange={e => setTambahOffset(Number(e.target.value))} className={inputCls}/>
+                <p className="text-xs text-[#7B78A8] mt-1">
+                  {tambahOffset === 1 ? 'Paket mulai dari awal' : `Sesi pertama sebagai sesi ke-${tambahOffset} dari ${tambahTotal}`}
+                </p>
+              </div>
+            </div>
+            {modalError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold mb-4">{modalError}</div>}
+            <div className="flex gap-3">
+              <button onClick={handleTambahSiswa} disabled={modalSaving || !selectedStudentId}
+                className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                {modalSaving ? 'Menyimpan...' : 'Tambahkan ke Kelas'}
+              </button>
+              <button onClick={() => setModalType(null)}
+                className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL EDIT SESI */}
       {modalType === 'edit' && selectedEnroll && (
