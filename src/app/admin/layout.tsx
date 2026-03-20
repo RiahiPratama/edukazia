@@ -7,7 +7,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
-  Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2
+  Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2,
+  ClipboardList
 } from 'lucide-react'
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
     { href: '/admin/tutor',     label: 'Tutor',           icon: Users },
     { href: '/admin/kelas',     label: 'Kelas',           icon: BookOpen },
     { href: '/admin/kursus',    label: 'Kursus & Paket',  icon: Layers },
+    { href: '/admin/absensi',   label: 'Absensi',         icon: ClipboardList },
   ]},
   { group: 'Keuangan', items: [
     { href: '/admin/pembayaran', label: 'Pembayaran',     icon: CreditCard },
