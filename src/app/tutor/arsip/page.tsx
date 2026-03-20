@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Archive, BookOpen, ChevronDown, ChevronUp, Users, FileText } from 'lucide-react'
+import { Archive, Users, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 
 const STATUS_COLOR: Record<string, string> = {
   hadir: 'bg-green-100 text-green-700',
@@ -38,13 +38,13 @@ function fmtTime(iso: string) {
 export default function TutorArsipPage() {
   const supabase = createClient()
 
-  const [kelasList,      setKelasList]      = useState<any[]>([])
-  const [selectedKelas,  setSelectedKelas]  = useState<any | null>(null)
-  const [laporanData,    setLaporanData]    = useState<any[]>([])
-  const [expandedSiswa,  setExpandedSiswa]  = useState<Record<string, boolean>>({})
-  const [expandedSesi,   setExpandedSesi]   = useState<Record<string, boolean>>({})
-  const [loading,        setLoading]        = useState(true)
-  const [loadingLaporan, setLoadingLaporan] = useState(false)
+  const [kelasList,     setKelasList]     = useState<any[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [expandedKelas, setExpandedKelas] = useState<Record<string, boolean>>({})
+  const [kelasData,     setKelasData]     = useState<Record<string, any>>({})
+  const [loadingKelas,  setLoadingKelas]  = useState<string | null>(null)
+  const [expandedSiswa, setExpandedSiswa] = useState<Record<string, boolean>>({})
+  const [expandedSesi,  setExpandedSesi]  = useState<Record<string, boolean>>({})
 
   useEffect(() => { fetchKelas() }, [])
 
@@ -59,7 +59,7 @@ export default function TutorArsipPage() {
 
     const { data: kelas } = await supabase
       .from('class_groups')
-      .select('id, label, status, course_id, courses(name, color)')
+      .select('id, label, status, max_participants, course_id, courses(name, color), class_types(name), enrollments(id, status)')
       .eq('tutor_id', tutor.id)
       .eq('status', 'inactive')
       .order('created_at', { ascending: false })
@@ -68,29 +68,25 @@ export default function TutorArsipPage() {
     setLoading(false)
   }
 
-  async function selectKelas(k: any) {
-    setSelectedKelas(k)
-    setExpandedSiswa({})
-    setExpandedSesi({})
-    setLoadingLaporan(true)
+  async function toggleKelas(k: any) {
+    const isOpen = expandedKelas[k.id] ?? false
+    setExpandedKelas(prev => ({ ...prev, [k.id]: !isOpen }))
+    if (isOpen || kelasData[k.id]) return
+
+    setLoadingKelas(k.id)
 
     const { data: enrollments } = await supabase
-      .from('enrollments')
-      .select('id, student_id, session_start_offset, sessions_total')
-      .eq('class_group_id', k.id)
+      .from('enrollments').select('id, student_id, session_start_offset, sessions_total').eq('class_group_id', k.id)
 
     if (!enrollments || enrollments.length === 0) {
-      setLaporanData([]); setLoadingLaporan(false); return
+      setKelasData(prev => ({ ...prev, [k.id]: [] }))
+      setLoadingKelas(null)
+      return
     }
 
     const studentIds = enrollments.map((e: any) => e.student_id)
-
     const { data: sessions } = await supabase
-      .from('sessions')
-      .select('id, scheduled_at, status')
-      .eq('class_group_id', k.id)
-      .order('scheduled_at')
-
+      .from('sessions').select('id, scheduled_at, status').eq('class_group_id', k.id).order('scheduled_at')
     const sessionIds = (sessions ?? []).map((s: any) => s.id)
 
     const [{ data: attendances }, { data: sessionReports }, { data: students }] = await Promise.all([
@@ -136,7 +132,6 @@ export default function TutorArsipPage() {
       const sakit  = Object.values(siswaAtt).filter((a: any) => a.status === 'sakit').length
       const alpha  = Object.values(siswaAtt).filter((a: any) => a.status === 'alpha').length
       const pctHadir = totalSesi > 0 ? Math.round((hadir / totalSesi) * 100) : 0
-
       const detailSesi = (sessions ?? []).map((s: any) => ({
         sessionId:    s.id,
         scheduledAt:  s.scheduled_at,
@@ -148,12 +143,11 @@ export default function TutorArsipPage() {
         saranOrtu:    siswaRep[s.id]?.saranOrtu ?? '',
         hasReport:    !!siswaRep[s.id],
       }))
-
       return { studentId: e.student_id, nama, sessionTotal: e.sessions_total, totalSesi, hadir, izin, sakit, alpha, pctHadir, detailSesi }
     })
 
-    setLaporanData(laporan)
-    setLoadingLaporan(false)
+    setKelasData(prev => ({ ...prev, [k.id]: laporan }))
+    setLoadingKelas(null)
   }
 
   if (loading) return (
@@ -166,142 +160,132 @@ export default function TutorArsipPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Arsip Kelas</h1>
-        <p className="text-sm text-[#7B78A8] mt-1">Riwayat kelas dan laporan siswa yang sudah selesai</p>
+        <p className="text-sm text-[#7B78A8] mt-1">Riwayat kelas yang sudah selesai</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Kolom kiri */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E5E3FF]">
-              <h2 className="font-bold text-sm text-[#1A1640]">Kelas Diarsipkan</h2>
-            </div>
-            {kelasList.length === 0 ? (
-              <div className="p-6 text-center">
-                <Archive size={28} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
-                <p className="text-xs text-[#7B78A8]">Belum ada kelas diarsipkan</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#F0EFFF]">
-                {kelasList.map((k: any) => {
-                  const isSelected = selectedKelas?.id === k.id
-                  return (
-                    <button key={k.id} onClick={() => selectKelas(k)}
-                      className={['w-full text-left px-4 py-3 transition-colors',
-                        isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'
-                      ].join(' ')}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0 opacity-60"
-                          style={{ background: isSelected ? 'white' : (k.courses?.color ?? '#5C4FE5') }}/>
-                        <div className="min-w-0">
-                          <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#7B78A8]'}`}>{k.label}</div>
-                          <div className={`text-xs ${isSelected ? 'text-white/70' : 'text-[#9B97B2]'}`}>{k.courses?.name ?? '—'}</div>
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+      {kelasList.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center">
+          <Archive size={40} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-3"/>
+          <p className="font-bold text-[#1A1640] mb-1">Belum ada kelas diarsipkan</p>
+          <p className="text-sm text-[#7B78A8]">Kelas yang sudah selesai akan muncul di sini</p>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {kelasList.map((k: any) => {
+            const totalEnroll = k.enrollments?.length ?? 0
+            const isOpen      = expandedKelas[k.id] ?? false
+            const isLoading   = loadingKelas === k.id
+            const siswaData   = kelasData[k.id] ?? []
 
-        {/* Kolom kanan */}
-        <div className="lg:col-span-2">
-          {!selectedKelas ? (
-            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
-              <Users size={36} strokeWidth={1.5} className="text-[#C4BFFF] mb-3"/>
-              <p className="text-sm font-semibold text-[#7B78A8]">Pilih kelas di sebelah kiri</p>
-              <p className="text-xs text-[#7B78A8] mt-1">untuk melihat riwayat laporan</p>
-            </div>
-          ) : loadingLaporan ? (
-            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center">
-              <p className="text-sm text-[#7B78A8]">Memuat laporan...</p>
-            </div>
-          ) : laporanData.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center">
-              <p className="text-sm text-[#7B78A8]">Belum ada data di kelas ini</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {laporanData.map((siswa: any, idx: number) => {
-                const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                const isOpen      = expandedSiswa[siswa.studentId] ?? false
-                return (
-                  <div key={siswa.studentId} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-                    <div className="px-5 py-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                          style={{ background: avatarColor.bg, color: avatarColor.text }}>
-                          {getInitials(siswa.nama)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-[#1A1640]">{siswa.nama}</div>
-                          <div className="text-xs text-[#7B78A8]">{siswa.totalSesi} sesi · {siswa.sessionTotal} paket</div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-lg font-black text-[#5C4FE5]">{siswa.pctHadir}%</div>
-                          <div className="text-[10px] text-[#7B78A8]">kehadiran</div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 flex-wrap mb-3">
-                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-green-50 text-green-700">✓ {siswa.hadir} Hadir</span>
-                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700">{siswa.izin} Izin</span>
-                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700">{siswa.sakit} Sakit</span>
-                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-700">{siswa.alpha} Alpha</span>
-                      </div>
-                      <div className="w-full h-2 bg-[#E5E3FF] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-[#5C4FE5]" style={{ width: `${siswa.pctHadir}%` }}/>
-                      </div>
+            return (
+              <div key={k.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden opacity-90 hover:opacity-100 transition-all">
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[#7B78A8] truncate">{k.label}</div>
+                      <div className="text-xs text-[#9B97B2] mt-0.5">{k.courses?.name} · {k.class_types?.name ?? '—'}</div>
                     </div>
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-500 flex-shrink-0 ml-2">Arsip</span>
+                  </div>
 
-                    <button onClick={() => setExpandedSiswa(prev => ({ ...prev, [siswa.studentId]: !prev[siswa.studentId] }))}
-                      className="w-full flex items-center justify-between px-5 py-3 border-t border-[#F0EFFF] hover:bg-[#F7F6FF] transition-colors">
-                      <span className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-widest">Detail per Sesi</span>
-                      <span className="flex items-center gap-1 text-xs text-[#5C4FE5] font-semibold">
-                        {siswa.totalSesi} sesi {isOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-                      </span>
-                    </button>
+                  <div className="flex items-center text-xs text-[#9B97B2] mb-4">
+                    <Users size={12} className="mr-1"/>{totalEnroll} siswa terdaftar
+                  </div>
 
-                    {isOpen && (
-                      <div className="border-t border-[#F0EFFF] divide-y divide-[#F0EFFF]">
-                        {siswa.detailSesi.map((sesi: any, i: number) => {
-                          const key        = `${siswa.studentId}-${sesi.sessionId}`
-                          const isSesiOpen = expandedSesi[key] ?? false
+                  <button onClick={() => toggleKelas(k)}
+                    className="w-full flex items-center justify-center gap-2 py-2 border border-[#E5E3FF] text-[#5C4FE5] text-xs font-bold rounded-lg hover:bg-[#F0EFFF] transition-colors">
+                    {isOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+                    {isOpen ? 'Sembunyikan Laporan' : 'Lihat Laporan Siswa'}
+                  </button>
+                </div>
+
+                {isOpen && (
+                  <div className="border-t border-[#E5E3FF] bg-[#F7F6FF]">
+                    {isLoading ? (
+                      <div className="p-6 text-center text-sm text-[#7B78A8]">Memuat laporan...</div>
+                    ) : siswaData.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-[#7B78A8]">Belum ada data siswa</div>
+                    ) : (
+                      <div className="divide-y divide-[#E5E3FF]">
+                        {siswaData.map((siswa: any, idx: number) => {
+                          const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                          const isSiswaOpen = expandedSiswa[`${k.id}-${siswa.studentId}`] ?? false
+
                           return (
-                            <div key={sesi.sessionId}>
-                              <div className="flex items-center gap-3 px-5 py-3 hover:bg-[#F7F6FF] transition-colors">
-                                <div className="w-6 h-6 rounded-full bg-[#F0EFFF] flex items-center justify-center text-[10px] font-bold text-[#7B78A8] flex-shrink-0">
-                                  {i + 1}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-semibold text-[#1A1640]">
-                                    {fmtDate(sesi.scheduledAt)} · {fmtTime(sesi.scheduledAt)} WIT
+                            <div key={siswa.studentId}>
+                              <div className="px-5 py-3">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                                    style={{ background: avatarColor.bg, color: avatarColor.text }}>
+                                    {getInitials(siswa.nama)}
                                   </div>
-                                  {sesi.absenNotes && <div className="text-[10px] text-[#7B78A8] italic">"{sesi.absenNotes}"</div>}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-[#1A1640]">{siswa.nama}</div>
+                                    <div className="text-[10px] text-[#7B78A8]">{siswa.totalSesi} sesi terlaksana</div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <div className="text-sm font-black text-[#5C4FE5]">{siswa.pctHadir}%</div>
+                                    <div className="text-[10px] text-[#7B78A8]">hadir</div>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  {sesi.absenStatus ? (
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[sesi.absenStatus]}`}>
-                                      {STATUS_LABEL[sesi.absenStatus]}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Belum diabsen</span>
-                                  )}
-                                  {sesi.hasReport && (
-                                    <button onClick={() => setExpandedSesi(prev => ({ ...prev, [key]: !prev[key] }))}
-                                      className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
-                                      <FileText size={11}/>{isSesiOpen ? 'Tutup' : 'Laporan'}
-                                    </button>
-                                  )}
+                                <div className="flex gap-1.5 flex-wrap mb-2">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-green-50 text-green-700">✓ {siswa.hadir}</span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">{siswa.izin} Izin</span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-700">{siswa.sakit} Sakit</span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-50 text-red-700">{siswa.alpha} Alpha</span>
                                 </div>
+                                <button
+                                  onClick={() => setExpandedSiswa(prev => ({ ...prev, [`${k.id}-${siswa.studentId}`]: !prev[`${k.id}-${siswa.studentId}`] }))}
+                                  className="text-[10px] font-semibold text-[#5C4FE5] hover:underline flex items-center gap-1">
+                                  {isSiswaOpen ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+                                  {isSiswaOpen ? 'Sembunyikan' : 'Detail Sesi'}
+                                </button>
                               </div>
-                              {isSesiOpen && sesi.hasReport && (
-                                <div className="mx-5 mb-3 bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-4 space-y-3">
-                                  {sesi.materi && <div><p className="text-[10px] font-bold text-[#7B78A8] uppercase mb-1">Materi</p><p className="text-xs text-[#1A1640]">{sesi.materi}</p></div>}
-                                  {sesi.perkembangan && <div><p className="text-[10px] font-bold text-[#7B78A8] uppercase mb-1">Perkembangan</p><p className="text-xs text-[#1A1640]">{sesi.perkembangan}</p></div>}
-                                  {sesi.saranSiswa && <div><p className="text-[10px] font-bold text-[#7B78A8] uppercase mb-1">Saran Siswa</p><p className="text-xs text-[#1A1640]">{sesi.saranSiswa}</p></div>}
-                                  {sesi.saranOrtu && <div><p className="text-[10px] font-bold text-[#7B78A8] uppercase mb-1">Saran Orang Tua</p><p className="text-xs text-[#1A1640]">{sesi.saranOrtu}</p></div>}
+
+                              {isSiswaOpen && (
+                                <div className="border-t border-[#E5E3FF] divide-y divide-[#E5E3FF] bg-white">
+                                  {siswa.detailSesi.map((sesi: any, i: number) => {
+                                    const key        = `${k.id}-${siswa.studentId}-${sesi.sessionId}`
+                                    const isSesiOpen = expandedSesi[key] ?? false
+                                    return (
+                                      <div key={sesi.sessionId}>
+                                        <div className="flex items-center gap-3 px-5 py-2.5">
+                                          <div className="w-5 h-5 rounded-full bg-[#F0EFFF] flex items-center justify-center text-[9px] font-bold text-[#7B78A8] flex-shrink-0">
+                                            {i + 1}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-[11px] font-semibold text-[#1A1640]">
+                                              {fmtDate(sesi.scheduledAt)} · {fmtTime(sesi.scheduledAt)} WIT
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            {sesi.absenStatus ? (
+                                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[sesi.absenStatus]}`}>
+                                                {STATUS_LABEL[sesi.absenStatus]}
+                                              </span>
+                                            ) : (
+                                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">—</span>
+                                            )}
+                                            {sesi.hasReport && (
+                                              <button
+                                                onClick={() => setExpandedSesi(prev => ({ ...prev, [key]: !prev[key] }))}
+                                                className="flex items-center gap-0.5 text-[9px] font-semibold text-[#5C4FE5] hover:underline">
+                                                <FileText size={10}/>{isSesiOpen ? 'Tutup' : 'Lap.'}
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                        {isSesiOpen && sesi.hasReport && (
+                                          <div className="mx-5 mb-3 bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3 space-y-2">
+                                            {sesi.materi && <div><p className="text-[9px] font-bold text-[#7B78A8] uppercase mb-0.5">Materi</p><p className="text-[11px] text-[#1A1640]">{sesi.materi}</p></div>}
+                                            {sesi.perkembangan && <div><p className="text-[9px] font-bold text-[#7B78A8] uppercase mb-0.5">Perkembangan</p><p className="text-[11px] text-[#1A1640]">{sesi.perkembangan}</p></div>}
+                                            {sesi.saranSiswa && <div><p className="text-[9px] font-bold text-[#7B78A8] uppercase mb-0.5">Saran Siswa</p><p className="text-[11px] text-[#1A1640]">{sesi.saranSiswa}</p></div>}
+                                            {sesi.saranOrtu && <div><p className="text-[9px] font-bold text-[#7B78A8] uppercase mb-0.5">Saran Ortu</p><p className="text-[11px] text-[#1A1640]">{sesi.saranOrtu}</p></div>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -310,12 +294,12 @@ export default function TutorArsipPage() {
                       </div>
                     )}
                   </div>
-                )
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            )
+          })}
         </div>
-      </div>
+      )}
     </div>
   )
 }
