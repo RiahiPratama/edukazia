@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { CalendarDays, Check, MessageCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 
 type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
 
@@ -357,9 +357,9 @@ export default function TutorAbsensiPage() {
                       href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition flex-shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] hover:bg-green-500 text-white rounded-xl text-xs font-semibold transition flex-shrink-0"
                     >
-                      <MessageCircle size={13}/>
+                      <AlertTriangle size={13}/><MessageCircle size={13}/>
                       Laporkan ke Admin
                     </a>
                   )}
