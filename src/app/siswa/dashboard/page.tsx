@@ -71,10 +71,10 @@ export default async function DashboardPage() {
     .eq('student_id', activeChild.id)
 
   const activeEnrollments = (enrollments ?? []).filter(
-    e => getEnrollmentStatus(e) === 'active'
+    (e: any) => getEnrollmentStatus(e) === 'active'
   )
   const isExpired = (enrollments ?? []).length > 0 &&
-    (enrollments ?? []).every(e => getEnrollmentStatus(e) === 'expired')
+    (enrollments ?? []).every((e: any) => getEnrollmentStatus(e) === 'expired')
 
   const classGroupIds = activeEnrollments
     .map((e: any) => e.class_group_id)
