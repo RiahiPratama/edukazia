@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, ChevronDown, ChevronUp, Users, FileText, Pencil, Save, X } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronUp, Users, FileText, Pencil, Save, X, Archive } from 'lucide-react'
 
 const STATUS_COLOR: Record<string, string> = {
   hadir: 'bg-green-100 text-green-700',
@@ -50,7 +50,7 @@ export default function TutorLaporanPage() {
   const [laporanData,    setLaporanData]    = useState<any[]>([])
   const [expandedSiswa,  setExpandedSiswa]  = useState<Record<string, boolean>>({})
   const [expandedSesi,   setExpandedSesi]   = useState<Record<string, boolean>>({})
-  const [editingKey,     setEditingKey]     = useState<string | null>(null)
+  const [showArsip,      setShowArsip]      = useState(false)  const [editingKey,     setEditingKey]     = useState<string | null>(null)
   const [editForm,       setEditForm]       = useState<ReportForm>({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' })
   const [savingKey,      setSavingKey]      = useState<string | null>(null)
   const [saveSuccess,    setSaveSuccess]    = useState<string | null>(null)
@@ -272,7 +272,8 @@ export default function TutorLaporanPage() {
               </div>
             ) : (
               <div className="divide-y divide-[#F0EFFF]">
-                {kelasList.map((k: any) => {
+                {/* Kelas Aktif */}
+                {kelasList.filter(k => k.status === 'active').map((k: any) => {
                   const isSelected = selectedKelas?.id === k.id
                   return (
                     <button key={k.id} onClick={() => selectKelas(k)}
@@ -290,6 +291,42 @@ export default function TutorLaporanPage() {
                     </button>
                   )
                 })}
+
+                {/* Arsip Kelas */}
+                {kelasList.filter(k => k.status === 'inactive').length > 0 && (
+                  <>
+                    <button
+                      onClick={() => setShowArsip(prev => !prev)}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 bg-gray-50 text-[#9B97B2] text-xs font-semibold hover:bg-gray-100 transition-colors">
+                      <Archive size={12}/>
+                      Arsip Kelas
+                      <span className="ml-1 bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                        {kelasList.filter(k => k.status === 'inactive').length}
+                      </span>
+                      <span className="ml-auto">
+                        {showArsip ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                      </span>
+                    </button>
+                    {showArsip && kelasList.filter(k => k.status === 'inactive').map((k: any) => {
+                      const isSelected = selectedKelas?.id === k.id
+                      return (
+                        <button key={k.id} onClick={() => selectKelas(k)}
+                          className={['w-full text-left px-4 py-3 transition-colors',
+                            isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'
+                          ].join(' ')}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full flex-shrink-0 opacity-50"
+                              style={{ background: isSelected ? 'white' : (k.courses?.color ?? '#5C4FE5') }}/>
+                            <div className="min-w-0">
+                              <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#7B78A8]'}`}>{k.label}</div>
+                              <div className={`text-xs ${isSelected ? 'text-white/70' : 'text-[#9B97B2]'}`}>{k.courses?.name ?? '—'} · Arsip</div>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </>
+                )}
               </div>
             )}
           </div>
