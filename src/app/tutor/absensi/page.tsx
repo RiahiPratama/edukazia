@@ -239,9 +239,19 @@ export default function TutorAbsensiPage() {
       recorded_by: tutorId,
     }))
 
-    const { error: absenErr } = await supabase
+    const { data: absenData, error: absenErr } = await supabase
       .from('attendances').upsert(absenRecords, { onConflict: 'session_id,student_id' })
-    if (absenErr) { setError(absenErr.message); setSaving(false); return }
+      .select()
+    if (absenErr) {
+      setError(`Attendance error: ${absenErr.message} | code: ${absenErr.code} | details: ${absenErr.details}`)
+      setSaving(false)
+      return
+    }
+    if (!absenData || absenData.length === 0) {
+      setError(`Attendance tersimpan 0 rows — tutorId: ${tutorId}, sessionId: ${selectedSesi.id}`)
+      setSaving(false)
+      return
+    }
 
     const reportRecords = siswaList
       .filter(s => {
