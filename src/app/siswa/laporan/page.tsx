@@ -15,7 +15,9 @@ export default async function LaporanPage() {
       cookies: {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          } catch {}
         },
       },
     }
@@ -37,7 +39,14 @@ export default async function LaporanPage() {
     .select(`id, grade, school, status, relation_role, profile:profiles!students_profile_id_fkey(id, full_name)`)
     .eq(isParent ? 'parent_profile_id' : 'profile_id', session.user.id)
 
-  const activeChild = getActiveChild((childrenList ?? []).map(c => ({ ...c, enrollments: [] })))
+  // FIX: flatten profile array + cast any
+  const activeChild = getActiveChild(
+    (childrenList ?? []).map((c: any) => ({
+      ...c,
+      enrollments: [],
+      profile: Array.isArray(c.profile) ? c.profile[0] ?? null : c.profile,
+    }))
+  )
   if (!activeChild) {
     return (
       <div className="px-4 pt-6 text-center">
@@ -52,7 +61,6 @@ export default async function LaporanPage() {
     .select('id, class_group_id')
     .eq('student_id', activeChild.id)
 
-  // Ambil courses dari enrollments secara terpisah
   const enrollCgIds = (enrollments ?? []).map((e: any) => e.class_group_id).filter(Boolean)
   const { data: enrollCg } = enrollCgIds.length > 0
     ? await supabase.from('class_groups').select('id, course_id').in('id', enrollCgIds)
@@ -72,16 +80,11 @@ export default async function LaporanPage() {
     .eq('student_id', activeChild.id)
     .order('created_at', { ascending: false })
 
-  // Step 3b: Ambil sessions untuk laporan
   const laporanSessionIds = (laporan ?? []).map((l: any) => l.session_id).filter(Boolean)
   const { data: laporanSessions } = laporanSessionIds.length > 0
-    ? await supabase
-        .from('sessions')
-        .select('id, scheduled_at, class_group_id')
-        .in('id', laporanSessionIds)
+    ? await supabase.from('sessions').select('id, scheduled_at, class_group_id').in('id', laporanSessionIds)
     : { data: [] }
 
-  // Step 3c: Ambil class_groups, courses, tutor untuk laporan
   const laporanCgIds = (laporanSessions ?? []).map((s: any) => s.class_group_id).filter(Boolean)
   const { data: laporanCg } = laporanCgIds.length > 0
     ? await supabase.from('class_groups').select('id, label, course_id, tutor_id').in('id', laporanCgIds)
@@ -98,7 +101,6 @@ export default async function LaporanPage() {
     ? await supabase.from('profiles').select('id, full_name').in('id', laporanTutorIds)
     : { data: [] }
 
-  // Gabungkan semua data laporan
   const laporanCgMap: Record<string, any> = {}
   ;(laporanCg ?? []).forEach((cg: any) => {
     laporanCgMap[cg.id] = {
@@ -110,10 +112,7 @@ export default async function LaporanPage() {
 
   const laporanSessionMap: Record<string, any> = {}
   ;(laporanSessions ?? []).forEach((s: any) => {
-    laporanSessionMap[s.id] = {
-      ...s,
-      class_groups: laporanCgMap[s.class_group_id] ?? null
-    }
+    laporanSessionMap[s.id] = { ...s, class_groups: laporanCgMap[s.class_group_id] ?? null }
   })
 
   const laporanWithSessions = (laporan ?? []).map((l: any) => ({
