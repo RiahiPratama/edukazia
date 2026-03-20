@@ -6,6 +6,15 @@ import { Camera, Plus, Trash2, Save, Mail } from 'lucide-react'
 
 const EDU_LEVELS = ['SMA/SMK', 'D3', 'S1', 'S2', 'S3']
 
+type Achievement = { name: string; category: string; issuer: string; year: string }
+
+const CATEGORIES = [
+  { value: 'pelatihan',   label: 'Pelatihan',   color: '#EEEDFE', textColor: '#3C3489' },
+  { value: 'sertifikasi', label: 'Sertifikasi', color: '#E6F4EC', textColor: '#1A5C36' },
+  { value: 'prestasi',    label: 'Prestasi',    color: '#FEF3E2', textColor: '#92400E' },
+  { value: 'komunitas',   label: 'Komunitas',   color: '#E6F1FB', textColor: '#185FA5' },
+]
+
 export default function TutorProfilPage() {
   const supabase = createClient()
 
@@ -71,6 +80,7 @@ export default function TutorProfilPage() {
     if (tutor?.id) {
       setTutorId(tutor.id)
       setSubjects(tutor.subjects ?? [])
+      setAchievements(tutor.achievements ?? [])
 
       // Ambil kursus tutor
       const { data: tutorCourses } = await supabase
@@ -159,6 +169,7 @@ export default function TutorProfilPage() {
         teaching_experience_years: form.teaching_experience_years ? parseInt(form.teaching_experience_years) : null,
         previous_workplaces:       form.previous_workplaces.trim() || null,
         subjects:                  subjects.length > 0 ? subjects : null,
+        achievements:              achievements,
       })
       .eq('id', tutorId)
     if (tutorErr) { setError(tutorErr.message); setSaving(false); return }
@@ -366,6 +377,81 @@ export default function TutorProfilPage() {
                 placeholder="SMPN 1 Ternate, LBB..." className={inputCls}/>
             </div>
           </div>
+        </div>
+
+        {/* PELATIHAN, SERTIFIKASI & PRESTASI */}
+        <div className={sectionCls}>
+          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Pelatihan, Sertifikasi & Prestasi <span className="normal-case font-normal">(opsional)</span></p>
+
+          {/* Form tambah */}
+          <div className="bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl p-4 space-y-3">
+            <p className="text-xs font-bold text-[#7B78A8]">Tambah item baru</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Nama</label>
+                <input type="text" value={newAch.name}
+                  onChange={e => setNewAch(p => ({ ...p, name: e.target.value }))}
+                  placeholder="Contoh: TOEFL Score 550" className={inputCls}/>
+              </div>
+              <div>
+                <label className={labelCls}>Kategori</label>
+                <select value={newAch.category}
+                  onChange={e => setNewAch(p => ({ ...p, category: e.target.value }))}
+                  className={inputCls}>
+                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Lembaga/Penyelenggara</label>
+                <input type="text" value={newAch.issuer}
+                  onChange={e => setNewAch(p => ({ ...p, issuer: e.target.value }))}
+                  placeholder="ETS, Kemdikbud..." className={inputCls}/>
+              </div>
+              <div>
+                <label className={labelCls}>Tahun</label>
+                <input type="text" value={newAch.year}
+                  onChange={e => setNewAch(p => ({ ...p, year: e.target.value }))}
+                  placeholder="2021" className={inputCls}/>
+              </div>
+            </div>
+            <button type="button"
+              onClick={() => {
+                if (!newAch.name.trim()) return
+                setAchievements(prev => [...prev, { ...newAch }])
+                setNewAch({ name: '', category: 'pelatihan', issuer: '', year: '' })
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-xl text-sm font-bold hover:bg-[#3D34C4] transition">
+              <Plus size={13}/> Tambah
+            </button>
+          </div>
+
+          {/* List achievements */}
+          {achievements.length > 0 && (
+            <div className="space-y-2">
+              {achievements.map((a, idx) => {
+                const cat = CATEGORIES.find(c => c.value === a.category) ?? CATEGORIES[0]
+                return (
+                  <div key={idx} className="flex items-center justify-between gap-3 px-4 py-3 bg-white border border-[#E5E3FF] rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-[#1A1640]">{a.name}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: cat.color, color: cat.textColor }}>
+                          {cat.label}
+                        </span>
+                      </div>
+                      <div className="text-xs text-[#7B78A8] mt-0.5">{a.issuer}{a.year ? ` · ${a.year}` : ''}</div>
+                    </div>
+                    <button type="button"
+                      onClick={() => setAchievements(prev => prev.filter((_, i) => i !== idx))}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition flex-shrink-0">
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Error & Success */}
