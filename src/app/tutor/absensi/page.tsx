@@ -395,9 +395,10 @@ export default function TutorAbsensiPage() {
                     {!isSesiDimulai(selectedSesi.scheduled_at) && (
                       <p className="text-[11px] text-[#9B97B2] text-center mt-2">Tombol aktif saat kelas dimulai pukul {fmtTime(selectedSesi.scheduled_at)} WIT</p>
                     )}
-                    <p className="text-[11px] text-[#9B97B2] text-center mt-2">
-                      Laporan belajar dapat diisi di menu <span className="font-semibold text-[#5C4FE5]">Laporan Siswa</span>
-                    </p>
+                    <a href="/tutor/laporan"
+                      className="mt-3 w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm transition hover:bg-[#EAE8FD] flex items-center justify-center gap-2">
+                      📋 Isi / Lihat Laporan Belajar Siswa
+                    </a>
                   </div>
                 </>
               )}
