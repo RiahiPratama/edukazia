@@ -448,19 +448,43 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
             )}
 
             {isAnakMode ? (
-              <Link
-                href="/ortu/dashboard"
-                onClick={() => setSidebarOpen(false)}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-medium w-full"
-                style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.8)',
-                  border: '0.5px solid rgba(255,255,255,0.2)',
-                  textDecoration: 'none',
-                }}>
-                <ArrowLeft size={13} style={{ flexShrink: 0 }} />
-                Kembali ke Akun Utama
-              </Link>
+              <>
+                <Link
+                  href="/ortu/dashboard"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-medium w-full mb-2"
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.8)',
+                    border: '0.5px solid rgba(255,255,255,0.2)',
+                    textDecoration: 'none',
+                  }}>
+                  <ArrowLeft size={13} style={{ flexShrink: 0 }} />
+                  Kembali ke Akun Utama
+                </Link>
+                {/* Toggle dark/light di bawah kembali */}
+                <button
+                  onClick={toggleDark}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-colors"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    color: 'rgba(255,255,255,0.65)',
+                    border: '0.5px solid rgba(255,255,255,0.12)',
+                  }}>
+                  {isDark
+                    ? <Sun size={13} style={{ color: '#E6B800', flexShrink: 0 }} />
+                    : <Moon size={13} style={{ flexShrink: 0 }} />
+                  }
+                  <span>{isDark ? 'Mode Terang' : 'Mode Gelap'}</span>
+                  <div
+                    className="ml-auto flex items-center px-0.5 rounded-full transition-colors flex-shrink-0"
+                    style={{ width: '26px', height: '14px', background: isDark ? '#E6B800' : 'rgba(255,255,255,0.2)' }}>
+                    <div
+                      className="rounded-full bg-white transition-transform"
+                      style={{ width: '10px', height: '10px', transform: isDark ? 'translateX(12px)' : 'translateX(0)' }} />
+                  </div>
+                </button>
+              </>
             ) : (
               <button
                 onClick={handleSignOut}
@@ -494,7 +518,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                 <Menu size={16} />
               </button>
 
-              {/* Badge nama anak — ini yang dimaksud user */}
+              {/* Badge nama anak */}
               <div
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-full border"
                 style={{
@@ -511,18 +535,6 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                   style={{ color: isDark ? '#AFA9EC' : '#3C3489' }}>
                   {activeChild.full_name}
                 </span>
-
-                {/* Toggle dark/light di dalam badge, sisi kanan */}
-                <button
-                  onClick={toggleDark}
-                  className="ml-1 p-1 rounded-full transition-colors flex-shrink-0"
-                  style={{
-                    background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(92,79,229,0.1)',
-                    color: isDark ? '#E6B800' : '#5C4FE5',
-                  }}
-                  title={isDark ? 'Mode Terang' : 'Mode Gelap'}>
-                  {isDark ? <Sun size={12} /> : <Moon size={12} />}
-                </button>
               </div>
             </header>
           ) : (
