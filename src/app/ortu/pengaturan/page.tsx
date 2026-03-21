@@ -368,7 +368,7 @@ export default function OrtuPengaturanPage() {
                           onChange={e => setFormChild(p => ({ ...p, school: e.target.value }))}
                           placeholder="Nama sekolah" className={inputCls} />
                       </div>
-                      {childMsg?.id === child.id && (
+                      {childMsg?.id === child.id && childMsg && (
                         <div className={`flex items-center gap-2 text-[11px] px-3 py-2 rounded-lg ${
                           childMsg.type === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
                         }`}>
