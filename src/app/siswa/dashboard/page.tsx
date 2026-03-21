@@ -134,181 +134,227 @@ function getInitials(name: string) {
 
 const AVATAR_BG = ['#5C4FE5','#D4537E','#1D9E75','#D85A30','#185FA5']
 
-// ─── KOMPONEN: Dashboard Ortu ────────────────────────────────────
+// ─── KOMPONEN: Dashboard Ortu — REVOLUSIONER ─────────────────────
 async function ParentDashboard({ supabase, childrenList, nowWIT }: any) {
-  const toUTC = (d: Date) => new Date(d.getTime() - 9 * 60 * 60 * 1000).toISOString()
-
-  // Fetch summary semua anak secara parallel
+  // Fetch semua anak secara parallel
   const summaries = await Promise.all(
     childrenList.map((child: any) => fetchChildSummary(supabase, child.id, nowWIT))
   )
-
   const childrenWithData = childrenList.map((child: any, i: number) => ({
-    ...child,
-    summary: summaries[i],
+    ...child, summary: summaries[i],
   }))
 
-  // Cek apakah ada anak yang alpha hari ini
-  const alertChildren = childrenWithData.filter((c: any) => {
-    const todayAtt = c.summary.todaySessions?.length > 0
-    return false // akan dikembangkan dengan cek attendance hari ini
-  })
-
-  // Feed gabungan semua laporan terbaru
-  const allLaporan = childrenWithData.flatMap((c: any) =>
-    c.summary.laporanList.map((l: any) => ({ ...l, childName: c.profile?.full_name ?? 'Siswa', childAv: getInitials(c.profile?.full_name ?? 'S'), childColor: AVATAR_BG[childrenList.indexOf(c) % AVATAR_BG.length] }))
-  ).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5)
-
-  const totalSesiHariIni = childrenWithData.reduce((acc: number, c: any) => acc + (c.summary.todaySessions?.length ?? 0), 0)
-  const avgHadir = childrenWithData.length > 0
-    ? Math.round(childrenWithData.reduce((acc: number, c: any) => acc + c.summary.hadirPct, 0) / childrenWithData.length)
+  // Aggregate stats
+  const totalSesiHariIni = childrenWithData.reduce((a: number, c: any) => a + (c.summary.todaySessions?.length ?? 0), 0)
+  const childrenWithAtt  = childrenWithData.filter((c: any) => c.summary.totalAtt > 0)
+  const avgHadir = childrenWithAtt.length > 0
+    ? Math.round(childrenWithAtt.reduce((a: number, c: any) => a + c.summary.hadirPct, 0) / childrenWithAtt.length)
     : 0
 
+  // Feed aktivitas gabungan semua anak — diurutkan terbaru
+  const allLaporan = childrenWithData.flatMap((c: any, idx: number) =>
+    (c.summary.laporanList ?? []).map((l: any) => ({
+      ...l,
+      childName:  c.profile?.full_name ?? 'Siswa',
+      childAv:    getInitials(c.profile?.full_name ?? 'S'),
+      childColor: AVATAR_BG[idx % AVATAR_BG.length],
+      type: 'laporan',
+    }))
+  ).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 6)
+
+  const tanggal = new Date().toLocaleDateString('id-ID', {
+    timeZone: 'Asia/Jayapura', weekday: 'long', day: 'numeric', month: 'long'
+  })
+
   return (
-    <div className="px-4 pt-4 pb-2">
-      <div className="mb-4">
-        <h2 className="text-[16px] font-bold text-[#1A1530]">Ringkasan Belajar</h2>
-        <p className="text-[12px] text-[#9B97B2] mt-0.5">{formatDateWIT(new Date())} · WIT</p>
-      </div>
+    <div className="pb-6">
 
-      {/* Stat ringkasan semua anak */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-white border border-[#E5E3FF] rounded-2xl p-4">
-          <p className="text-[11px] text-[#9B97B2] mb-1">Anak Terdaftar</p>
-          <p className="text-[26px] font-bold text-[#5C4FE5] leading-none">{childrenList.length}</p>
-          <p className="text-[11px] text-[#9B97B2] mt-1">anak aktif</p>
-        </div>
-        <div className="bg-white border border-[#E5E3FF] rounded-2xl p-4">
-          <p className="text-[11px] text-[#9B97B2] mb-1">Sesi Hari Ini</p>
-          <p className="text-[26px] font-bold text-[#5C4FE5] leading-none">{totalSesiHariIni}</p>
-          <p className="text-[11px] text-[#9B97B2] mt-1">sesi terjadwal</p>
-        </div>
-        <div className="bg-white border border-[#E5E3FF] rounded-2xl p-4">
-          <p className="text-[11px] text-[#9B97B2] mb-1">Rata-rata Hadir</p>
-          <p className={`text-[26px] font-bold leading-none ${avgHadir >= 80 ? 'text-green-600' : avgHadir >= 60 ? 'text-yellow-600' : 'text-red-500'}`}>
-            {childrenWithData.some((c: any) => c.summary.totalAtt > 0) ? `${avgHadir}%` : '—'}
-          </p>
-          <p className="text-[11px] text-[#9B97B2] mt-1">bulan ini</p>
-        </div>
-      </div>
-
-      {/* Card per anak */}
-      <p className="text-[11px] font-bold text-[#9B97B2] uppercase tracking-widest mb-3">Semua Anak</p>
-      <div className="space-y-3 mb-4">
-        {childrenWithData.map((child: any, idx: number) => {
-          const name    = child.profile?.full_name ?? 'Siswa'
-          const summary = child.summary
-          const bgColor = AVATAR_BG[idx % AVATAR_BG.length]
-          const nextSesi = summary.todaySessions?.[0]
-          const firstEnroll = summary.activeEnrollmentsWithCG?.[0]
-          const courseName = firstEnroll?.class_groups?.courses?.name ?? firstEnroll?.class_groups?.label ?? '—'
-          const done  = firstEnroll?.done ?? 0
-          const total = firstEnroll?.sessions_total ?? 0
-          const pct   = total > 0 ? Math.round((done / total) * 100) : 0
-
-          return (
-            <div key={child.id} className="bg-white border border-[#E5E3FF] rounded-2xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0"
-                  style={{ background: bgColor }}>
-                  {getInitials(name)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-bold text-[#1A1530] truncate">{name}</p>
-                  <p className="text-[11px] text-[#9B97B2]">{courseName}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className={`text-[16px] font-bold ${summary.hadirPct >= 80 ? 'text-green-600' : summary.hadirPct >= 60 ? 'text-yellow-600' : 'text-red-500'}`}>
-                    {summary.totalAtt > 0 ? `${summary.hadirPct}%` : '—'}
-                  </p>
-                  <p className="text-[10px] text-[#9B97B2]">kehadiran</p>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              {total > 0 && (
-                <div className="mb-3">
-                  <div className="flex justify-between mb-1">
-                    <p className="text-[11px] text-[#9B97B2]">Progress sesi</p>
-                    <p className="text-[11px] font-semibold text-[#1A1530]">{done}/{total}</p>
-                  </div>
-                  <div className="h-2 bg-[#F7F6FF] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: bgColor }}/>
-                  </div>
-                </div>
-              )}
-
-              {/* Sesi hari ini */}
-              {nextSesi ? (
-                <div className="flex items-center justify-between px-3 py-2 bg-[#EEEDFE] rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#5C4FE5]"/>
-                    <p className="text-[12px] font-semibold text-[#3C3489]">
-                      Sesi hari ini · {formatWIT(nextSesi.scheduled_at)} WIT
-                    </p>
-                  </div>
-                  {(nextSesi.zoom_link || nextSesi.class_groups?.zoom_link) && (
-                    <a href={nextSesi.zoom_link || nextSesi.class_groups?.zoom_link}
-                      target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] font-bold text-[#5C4FE5]">▶ Zoom</a>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2 bg-[#F7F6FF] rounded-xl">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#C4BFFF]"/>
-                  <p className="text-[12px] text-[#9B97B2]">Tidak ada sesi hari ini</p>
-                </div>
-              )}
-
-              {/* Laporan terbaru singkat */}
-              {summary.laporanList?.[0] && (
-                <div className="mt-3 pt-3 border-t border-[#F0EFFF]">
-                  <p className="text-[11px] text-[#9B97B2] mb-1">Laporan terakhir dari tutor</p>
-                  <p className="text-[12px] text-[#1A1530] truncate">{summary.laporanList[0].materi ?? '—'}</p>
-                  {summary.laporanList[0].perkembangan && (
-                    <p className="text-[11px] text-[#9B97B2] truncate">{summary.laporanList[0].perkembangan}</p>
-                  )}
-                </div>
-              )}
+      {/* ── HERO BANNER ── */}
+      <div className="bg-[#5C4FE5] px-4 pt-5 pb-6 mb-[-16px]">
+        <p className="text-white/60 text-[12px] mb-1">{tanggal} · WIT</p>
+        <p className="text-white text-[20px] font-bold mb-4">Pantau Belajar Anak</p>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'Anak Aktif',     val: childrenList.length,                             unit: 'anak' },
+            { label: 'Sesi Hari Ini',  val: totalSesiHariIni,                                unit: 'sesi' },
+            { label: 'Rata-rata Hadir',val: childrenWithAtt.length > 0 ? `${avgHadir}%` : '—', unit: 'bulan ini' },
+          ].map(s => (
+            <div key={s.label} className="bg-white/15 rounded-2xl px-3 py-3 text-center">
+              <p className="text-white text-[22px] font-bold leading-none">{s.val}</p>
+              <p className="text-white/60 text-[10px] mt-1">{s.unit}</p>
             </div>
-          )
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* Feed gabungan laporan semua anak */}
-      {allLaporan.length > 0 && (
-        <div className="bg-white border border-[#E5E3FF] rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[13px] font-bold text-[#1A1530]">Laporan Terbaru</p>
-            <Link href="/siswa/laporan" className="text-[11px] font-semibold text-[#5C4FE5]">Lihat Semua ›</Link>
-          </div>
-          <div className="space-y-3">
-            {allLaporan.map((l: any, i: number) => {
-              const cg     = l.sessions?.class_groups
-              const course = cg?.courses
-              const tutor  = cg?.profiles
-              return (
-                <div key={`${l.id}-${i}`} className={`flex items-start gap-3 pb-3 ${i < allLaporan.length - 1 ? 'border-b border-[#F0EFFF]' : ''}`}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-                    style={{ background: l.childColor }}>
-                    {l.childAv}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[12px] font-bold text-[#1A1530]">{l.childName}</p>
-                      <p className="text-[10px] text-[#9B97B2] flex-shrink-0">
-                        {new Date(l.created_at).toLocaleDateString('id-ID', { timeZone: 'Asia/Jayapura', day: 'numeric', month: 'short' })}
-                      </p>
+      <div className="px-4 pt-8">
+
+        {/* ── KARTU PER ANAK — grid 2 kolom ── */}
+        <p className="text-[11px] font-bold text-[#9B97B2] uppercase tracking-widest mb-3">Semua Anak</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          {childrenWithData.map((child: any, idx: number) => {
+            const name      = child.profile?.full_name ?? 'Siswa'
+            const summary   = child.summary
+            const bgColor   = AVATAR_BG[idx % AVATAR_BG.length]
+            const nextSesi  = summary.todaySessions?.[0]
+            const enrolls   = summary.activeEnrollmentsWithCG ?? []
+            const firstE    = enrolls[0]
+            const courseName = firstE?.class_groups?.courses?.name ?? firstE?.class_groups?.label ?? '—'
+            const done   = firstE?.done ?? 0
+            const total  = firstE?.sessions_total ?? 0
+            const pct    = total > 0 ? Math.round((done / total) * 100) : 0
+            const laporan = summary.laporanList?.[0]
+            const hadirOk = summary.hadirPct >= 80
+            const hadirWarn = summary.hadirPct >= 60 && summary.hadirPct < 80
+            const hadirColor = hadirOk ? 'text-green-600' : hadirWarn ? 'text-yellow-600' : 'text-red-500'
+
+            return (
+              <div key={child.id} className="bg-white border border-[#E5E3FF] rounded-2xl overflow-hidden">
+                {/* Header anak */}
+                <div className="px-4 pt-4 pb-3 border-b border-[#F0EFFF]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center text-[14px] font-bold text-white flex-shrink-0"
+                      style={{ background: bgColor }}>
+                      {getInitials(name)}
                     </div>
-                    <p className="text-[11px] text-[#9B97B2]">{course?.name ?? '—'} · {tutor?.full_name ?? '—'}</p>
-                    <p className="text-[12px] text-[#6B6580] mt-1 truncate">{l.materi ?? '—'}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-bold text-[#1A1530] truncate">{name}</p>
+                      <p className="text-[11px] text-[#9B97B2] truncate">{courseName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-[18px] font-bold ${hadirColor}`}>
+                        {summary.totalAtt > 0 ? `${summary.hadirPct}%` : '—'}
+                      </p>
+                      <p className="text-[10px] text-[#9B97B2]">hadir</p>
+                    </div>
                   </div>
                 </div>
-              )
-            })}
-          </div>
+
+                {/* Progress */}
+                {total > 0 && (
+                  <div className="px-4 py-3 border-b border-[#F0EFFF]">
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-[11px] text-[#9B97B2]">Progress sesi</p>
+                      <p className="text-[12px] font-bold text-[#1A1530]">{done}/{total}</p>
+                    </div>
+                    <div className="h-2.5 bg-[#F7F6FF] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: bgColor }}/>
+                    </div>
+                    <div className="flex justify-between mt-1.5">
+                      <p className="text-[10px] text-[#9B97B2]">{pct}% selesai</p>
+                      <p className="text-[10px] text-[#9B97B2]">{total - done} sesi tersisa</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sesi hari ini */}
+                <div className="px-4 py-3 border-b border-[#F0EFFF]">
+                  {nextSesi ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#5C4FE5] animate-pulse"/>
+                        <div>
+                          <p className="text-[12px] font-bold text-[#3C3489]">Sesi hari ini</p>
+                          <p className="text-[11px] text-[#7B78A8]">{formatWIT(nextSesi.scheduled_at)} WIT</p>
+                        </div>
+                      </div>
+                      {(nextSesi.zoom_link || nextSesi.class_groups?.zoom_link) && (
+                        <a href={nextSesi.zoom_link || nextSesi.class_groups?.zoom_link}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[11px] font-bold text-white bg-[#5C4FE5] px-3 py-1.5 rounded-xl">
+                          ▶ Zoom
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-[#9B97B2] text-center py-1">Tidak ada sesi hari ini</p>
+                  )}
+                </div>
+
+                {/* Laporan terakhir */}
+                {laporan ? (
+                  <div className="px-4 py-3">
+                    <p className="text-[10px] font-bold text-[#9B97B2] uppercase tracking-wide mb-1.5">Laporan terakhir tutor</p>
+                    <p className="text-[12px] font-semibold text-[#1A1530] truncate">{laporan.materi ?? '—'}</p>
+                    {laporan.perkembangan && (
+                      <p className="text-[11px] text-[#9B97B2] truncate mt-0.5">{laporan.perkembangan}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="px-4 py-3">
+                    <p className="text-[12px] text-[#9B97B2] text-center">Belum ada laporan</p>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
-      )}
+
+        {/* ── AKSI CEPAT ── */}
+        <p className="text-[11px] font-bold text-[#9B97B2] uppercase tracking-widest mb-3">Aksi Cepat</p>
+        <div className="grid grid-cols-4 gap-2 mb-5">
+          {[
+            { label: 'Jadwal',  href: '/siswa/jadwal',  bg: '#EEEDFE', iconColor: '#5C4FE5',
+              icon: 'M8 2v3M16 2v3M3 8h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z' },
+            { label: 'Laporan', href: '/siswa/laporan', bg: '#EAF3DE', iconColor: '#3B6D11',
+              icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
+            { label: 'Materi',  href: '/siswa/materi',  bg: '#FAEEDA', iconColor: '#854F0B',
+              icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z' },
+            { label: 'Profil',  href: '/siswa/profil',  bg: '#FBEAF0', iconColor: '#993556',
+              icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z' },
+          ].map(qa => (
+            <Link key={qa.href} href={qa.href}
+              className="bg-white border border-[#E5E3FF] rounded-2xl p-3 flex flex-col items-center gap-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: qa.bg }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={qa.iconColor} strokeWidth="2" strokeLinecap="round">
+                  <path d={qa.icon}/>
+                </svg>
+              </div>
+              <p className="text-[11px] text-[#7B78A8] font-medium">{qa.label}</p>
+            </Link>
+          ))}
+        </div>
+
+        {/* ── FEED AKTIVITAS GABUNGAN ── */}
+        {allLaporan.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold text-[#9B97B2] uppercase tracking-widest">Aktivitas Terbaru</p>
+              <Link href="/siswa/laporan" className="text-[11px] font-semibold text-[#5C4FE5]">Lihat Semua ›</Link>
+            </div>
+            <div className="bg-white border border-[#E5E3FF] rounded-2xl overflow-hidden">
+              {allLaporan.map((l: any, i: number) => {
+                const cg    = l.sessions?.class_groups
+                const course = cg?.courses
+                const tutor  = cg?.profiles
+                return (
+                  <div key={`${l.id}-${i}`}
+                    className={`flex items-start gap-3 px-4 py-3.5 ${i < allLaporan.length - 1 ? 'border-b border-[#F0EFFF]' : ''}`}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold text-white flex-shrink-0"
+                      style={{ background: l.childColor }}>
+                      {l.childAv}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className="text-[13px] font-bold text-[#1A1530]">{l.childName}</p>
+                        <p className="text-[10px] text-[#9B97B2] flex-shrink-0">
+                          {new Date(l.created_at).toLocaleDateString('id-ID', { timeZone: 'Asia/Jayapura', day: 'numeric', month: 'short' })}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-[#9B97B2] mb-1">{course?.name ?? '—'} · {tutor?.full_name ?? '—'}</p>
+                      <p className="text-[12px] text-[#4A4580] truncate">{l.materi ?? '—'}</p>
+                      {l.perkembangan && (
+                        <p className="text-[11px] text-[#9B97B2] truncate mt-0.5 italic">"{l.perkembangan}"</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
