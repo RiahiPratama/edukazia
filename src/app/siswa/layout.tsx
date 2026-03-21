@@ -15,11 +15,8 @@ export default async function SiswaLayout({ children }: { children: React.ReactN
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // Server Component tidak bisa set cookies — diabaikan
-          }
+              cookieStore.set(name, value, options))
+          } catch {}
         },
       },
     }
@@ -47,13 +44,24 @@ export default async function SiswaLayout({ children }: { children: React.ReactN
     `)
     .eq(isParent ? 'parent_profile_id' : 'profile_id', session.user.id)
 
-  // FIX: flatten profile array dari Supabase join
   const childrenListFlat = (childrenList ?? []).map((c: any) => ({
     ...c,
     profile: Array.isArray(c.profile) ? c.profile[0] ?? null : c.profile,
   }))
 
-  const activeChild = getActiveChild(childrenListFlat)
+  // FIX: baca cookie active_child untuk menentukan anak yang aktif
+  const activeChildCookie = cookieStore.get('active_child')?.value
+  let activeChild = null
+
+  if (activeChildCookie) {
+    // Cari anak berdasarkan cookie
+    activeChild = childrenListFlat.find((c: any) => c.id === activeChildCookie) ?? null
+  }
+
+  // Fallback ke getActiveChild jika cookie tidak ada atau tidak valid
+  if (!activeChild) {
+    activeChild = getActiveChild(childrenListFlat)
+  }
 
   return (
     <SiswaLayoutClient

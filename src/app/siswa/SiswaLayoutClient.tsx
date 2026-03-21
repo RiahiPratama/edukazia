@@ -221,7 +221,7 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
           <button className="relative w-8 h-8 rounded-full border border-[#E5E3FF] bg-white flex items-center justify-center flex-shrink-0">
             <Bell size={14} className="text-[#6B6580]" />
           </button>
-          <div className="flex items-center gap-2 bg-[#EAE8FD] rounded-full px-3 py-1.5 cursor-pointer" onClick={() => canSwitch && setShowSwitcher(true)}>
+          <div className="flex items-center gap-2 bg-[#EAE8FD] rounded-full px-3 py-1.5 cursor-pointer" onClick={() => setShowSwitcher(true)}>
             <div className="w-6 h-6 rounded-full bg-[#5C4FE5] flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
               {getInitials(profile.full_name)}
             </div>
@@ -256,36 +256,71 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
         </main>
       </div>
 
-      {/* Child Switcher Modal */}
+      {/* Child Switcher Modal — gaya sekolah.mu */}
       {showSwitcher && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSwitcher(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[14px] font-bold text-[#1A1530]">Pilih Siswa</h3>
-              <button onClick={() => setShowSwitcher(false)} className="w-7 h-7 rounded-full bg-[#F7F6FF] border border-[#E5E3FF] flex items-center justify-center text-[12px] text-[#6B6580]">✕</button>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowSwitcher(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+
+            {/* Header — info ortu */}
+            <div className="px-5 py-4 bg-[#F7F6FF] border-b border-[#E5E3FF]">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[12px] font-bold text-[#9B97B2] uppercase tracking-wide">Akun Saya</p>
+                <button onClick={() => setShowSwitcher(false)} className="w-7 h-7 rounded-full bg-white border border-[#E5E3FF] flex items-center justify-center text-[12px] text-[#6B6580]">✕</button>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#5C4FE5] flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0">
+                  {getInitials(profile.full_name)}
+                </div>
+                <div>
+                  <p className="text-[14px] font-bold text-[#1A1530]">{profile.full_name}</p>
+                  <p className="text-[11px] text-[#9B97B2]">{isParent ? 'Orang Tua' : 'Siswa'}</p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              {childrenList.map((child: any) => {
-                const isSelected = child.id === activeChild?.id
-                const exp = isStudentFullyExpired(child)
-                return (
-                  <button
-                    key={child.id}
-                    onClick={() => { document.cookie = `active_child=${child.id}; path=/`; window.location.reload(); setShowSwitcher(false) }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors ${isSelected ? 'border-[#5C4FE5] bg-[#EAE8FD]' : 'border-[#E5E3FF] bg-[#F7F6FF]'}`}
-                  >
-                    <div className="w-9 h-9 rounded-full bg-[#5C4FE5] flex items-center justify-center text-[12px] font-bold text-white flex-shrink-0">
-                      {getInitials(child.profile.full_name)}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[13px] font-bold text-[#1A1530]">{child.profile.full_name}</p>
-                      <p className="text-[11px] text-[#9B97B2]">Kelas {child.grade} · {child.school ?? '—'}</p>
-                    </div>
-                    {exp && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Expired</span>}
-                    {isSelected && <span className="text-[#5C4FE5] font-bold text-[12px]">✓</span>}
-                  </button>
-                )
-              })}
+
+            {/* Daftar anak */}
+            {isParent && childrenList.length > 0 && (
+              <div className="px-5 py-3">
+                <p className="text-[11px] font-bold text-[#9B97B2] uppercase tracking-wide mb-2">Daftar Anak</p>
+                <div className="space-y-2">
+                  {childrenList.map((child: any) => {
+                    const isSelected = child.id === activeChild?.id
+                    const exp = isStudentFullyExpired(child)
+                    return (
+                      <button
+                        key={child.id}
+                        onClick={() => {
+                          document.cookie = `active_child=${child.id}; path=/; max-age=86400`
+                          window.location.reload()
+                          setShowSwitcher(false)
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors ${isSelected ? 'border-[#5C4FE5] bg-[#EAE8FD]' : 'border-[#E5E3FF] bg-[#F7F6FF] hover:bg-[#EEEDFE]'}`}
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold text-white flex-shrink-0 ${isSelected ? 'bg-[#5C4FE5]' : 'bg-[#9B97B2]'}`}>
+                          {getInitials(child.profile.full_name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-[#1A1530] truncate">{child.profile.full_name}</p>
+                          <p className="text-[11px] text-[#9B97B2]">{child.grade ? `Kelas ${child.grade}` : '—'}{child.school ? ` · ${child.school}` : ''}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {exp && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Expired</span>}
+                          {isSelected && <span className="text-[#5C4FE5] font-bold text-[14px]">✓</span>}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-[#E5E3FF]">
+              <button
+                onClick={() => { setShowSwitcher(false); window.location.href = '/siswa/profil' }}
+                className="w-full text-center text-[12px] font-semibold text-[#5C4FE5] hover:underline py-1">
+                Pengaturan Akun
+              </button>
             </div>
           </div>
         </div>
