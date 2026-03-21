@@ -299,17 +299,6 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                     </p>
                   )}
                 </div>
-                {/* Toggle dark di sisi kanan nama anak */}
-                <button
-                  onClick={toggleDark}
-                  className="p-1.5 rounded-lg flex-shrink-0 transition-colors"
-                  style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    color: isDark ? '#E6B800' : 'rgba(255,255,255,0.7)',
-                  }}
-                  title={isDark ? 'Mode Terang' : 'Mode Gelap'}>
-                  {isDark ? <Sun size={13} /> : <Moon size={13} />}
-                </button>
               </div>
               {kids.filter(k => k.id !== activeStudentId).map(k => {
                 const col = CHILD_COLORS[kids.indexOf(k) % CHILD_COLORS.length]
@@ -488,30 +477,78 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
         {/* ═══ MAIN ═══ */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-          {/* Mobile topbar — hanya hamburger, tanpa topbar di desktop */}
-          <div
-            className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
-            style={{
-              background: isAnakMode
-                ? (isDark ? 'rgba(13,13,24,0.95)' : 'rgba(247,246,255,0.95)')
-                : (isDark ? 'rgba(15,15,20,0.95)' : 'rgba(255,255,255,0.95)'),
-              backdropFilter: 'blur(8px)',
-              borderBottom: `1px solid ${isAnakMode ? (isDark ? '#2A2A38' : '#E5E3FF') : (isDark ? '#2A2A38' : '#FEF3C7')}`,
-            }}>
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg border flex-shrink-0"
+          {/* Topbar — mode anak: badge nama anak + toggle dark. Mode ortu: hamburger mobile saja */}
+          {isAnakMode && activeChild ? (
+            <header
+              className="sticky top-0 z-10 flex items-center gap-3 px-4 py-2.5"
               style={{
-                background: isAnakMode ? '#EEEDFE' : (isDark ? '#1E1E2A' : '#FEF9EE'),
-                borderColor: isAnakMode ? '#CECBF6' : (isDark ? '#2A2A38' : '#FAC775'),
-                color: isAnakMode ? '#5C4FE5' : (isDark ? '#C4B89A' : '#B45309'),
+                background: isDark ? 'rgba(13,13,24,0.95)' : 'rgba(247,246,255,0.95)',
+                backdropFilter: 'blur(8px)',
+                borderBottom: `1px solid ${isDark ? '#2A2A38' : '#E5E3FF'}`,
               }}>
-              <Menu size={16} />
-            </button>
-            <span className="text-sm font-bold" style={{ color: isAnakMode ? (isDark ? '#AFA9EC' : '#3C3489') : 'var(--ortu-text)', fontFamily: "'Sora', sans-serif" }}>
-              {isAnakMode && activeChild ? activeChild.full_name.split(' ')[0] : 'EduKazia'}
-            </span>
-          </div>
+              {/* Hamburger mobile */}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-lg border flex-shrink-0"
+                style={{ background: '#EEEDFE', borderColor: '#CECBF6', color: '#5C4FE5' }}>
+                <Menu size={16} />
+              </button>
+
+              {/* Badge nama anak — ini yang dimaksud user */}
+              <div
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-full border"
+                style={{
+                  background: isDark ? '#1A1A30' : '#EEEDFE',
+                  borderColor: isDark ? '#3A3A60' : '#CECBF6',
+                }}>
+                <div
+                  className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                  style={{ background: '#5C4FE5', color: '#fff' }}>
+                  {initials(activeChild.full_name)}
+                </div>
+                <span
+                  className="text-[12px] font-semibold"
+                  style={{ color: isDark ? '#AFA9EC' : '#3C3489' }}>
+                  {activeChild.full_name}
+                </span>
+
+                {/* Toggle dark/light di dalam badge, sisi kanan */}
+                <button
+                  onClick={toggleDark}
+                  className="ml-1 p-1 rounded-full transition-colors flex-shrink-0"
+                  style={{
+                    background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(92,79,229,0.1)',
+                    color: isDark ? '#E6B800' : '#5C4FE5',
+                  }}
+                  title={isDark ? 'Mode Terang' : 'Mode Gelap'}>
+                  {isDark ? <Sun size={12} /> : <Moon size={12} />}
+                </button>
+              </div>
+            </header>
+          ) : (
+            /* Mode ortu — hanya hamburger di mobile, tidak ada topbar di desktop */
+            <div
+              className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
+              style={{
+                background: isDark ? 'rgba(15,15,20,0.95)' : 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(8px)',
+                borderBottom: `1px solid ${isDark ? '#2A2A38' : '#FEF3C7'}`,
+              }}>
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 rounded-lg border flex-shrink-0"
+                style={{
+                  background: isDark ? '#1E1E2A' : '#FEF9EE',
+                  borderColor: isDark ? '#2A2A38' : '#FAC775',
+                  color: isDark ? '#C4B89A' : '#B45309',
+                }}>
+                <Menu size={16} />
+              </button>
+              <span className="text-sm font-bold" style={{ color: 'var(--ortu-text)', fontFamily: "'Sora', sans-serif" }}>
+                EduKazia
+              </span>
+            </div>
+          )}
 
           {/* Page content */}
           <main className="ortu-content flex-1 overflow-y-auto">
