@@ -27,7 +27,7 @@ function LoginForm() {
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', user.id).single()
     const routes: Record<string, string> = {
-      admin: '/admin', tutor: '/tutor', student: '/siswa', parent: '/siswa'
+      admin: '/admin', tutor: '/tutor', student: '/siswa', parent: '/ortu/dashboard'
     }
     const role = profile?.role ?? 'student'
     const redirect = searchParams.get('redirect')

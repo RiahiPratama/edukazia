@@ -8,7 +8,7 @@ import { ChevronDown, Search, Check, X } from 'lucide-react'
 
 type Course    = { id: string; name: string; color: string | null }
 type Tutor     = { id: string; profiles: { full_name: string } | null }
-type ClassType = { id: string; name: string; max_participants: number }
+type ClassType = { id: string; name: string; max_participants: number; base_price: number }
 type Student   = { id: string; profiles: { full_name: string } | null; is_new: boolean }
 
 export default function BuatKelasPage() {
@@ -29,7 +29,7 @@ export default function BuatKelasPage() {
   const [sessionStartOffset, setSessionStartOffset] = useState(0)
 
   const [form, setForm] = useState({
-    label: '', course_id: '', tutor_id: '', class_type_id: '', zoom_link: '', status: 'active',
+    label: '', course_id: '', tutor_id: '', class_type_id: '', zoom_link: '', status: 'active', price: '',
   })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
@@ -38,7 +38,7 @@ export default function BuatKelasPage() {
     Promise.all([
       supabase.from('courses').select('id, name, color').eq('is_active', true),
       supabase.from('tutors').select('id, profiles:profile_id(full_name)').eq('is_active', true),
-      supabase.from('class_types').select('id, name, max_participants').order('max_participants'),
+      supabase.from('class_types').select('id, name, max_participants, base_price').order('max_participants'),
       supabase.from('students').select('id, profiles:profile_id(full_name)'),
     ]).then(async ([c, t, ct, s]) => {
       if (c.data)  setCourses(c.data)
@@ -115,7 +115,15 @@ export default function BuatKelasPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
+    setForm(prev => {
+      const next = { ...prev, [name]: value }
+      // Auto-fill price dari base_price saat tipe kelas dipilih
+      if (name === 'class_type_id' && value) {
+        const ct = classTypes.find(c => c.id === value)
+        if (ct?.base_price) next.price = String(ct.base_price)
+      }
+      return next
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -139,6 +147,7 @@ export default function BuatKelasPage() {
         zoom_link:        form.zoom_link.trim() || null,
         max_participants: classType?.max_participants ?? 8,
         status:           form.status,
+        price:            form.price ? parseInt(form.price) : null,
       })
       .select('id').single()
 
@@ -195,6 +204,28 @@ export default function BuatKelasPage() {
                 {classTypes.map(ct => <option key={ct.id} value={ct.id}>{ct.name} (maks. {ct.max_participants} orang)</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Tarif per siswa */}
+          <div>
+            <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+              Tarif per Siswa <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8] text-sm font-semibold">Rp</span>
+              <input
+                type="number"
+                name="price"
+                value={form.price}
+                onChange={handleChange}
+                placeholder="500000"
+                min={0}
+                className="w-full pl-10 pr-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+              />
+            </div>
+            <p className="text-xs text-[#7B78A8] mt-1">
+              Auto-diisi dari tarif tipe kelas, bisa diubah sesuai angkatan siswa
+            </p>
           </div>
 
           <div>
