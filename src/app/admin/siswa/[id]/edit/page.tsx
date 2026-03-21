@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import { UserCheck, UserPlus, Eye, EyeOff } from 'lucide-react'
 
 import { WILAYAH, PROVINCES, getCities } from '@/lib/wilayah'
 const RELATION_ROLES = ['Orang Tua', 'Wali', 'Diri Sendiri']
@@ -14,11 +15,21 @@ export default function SiswaEditPage() {
   const siswaId  = params.id as string
   const supabase = createClient()
 
-  const [loading,  setLoading]  = useState(true)
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState('')
-  const [success,  setSuccess]  = useState(false)
+  const [loading,   setLoading]   = useState(true)
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState('')
+  const [success,   setSuccess]   = useState(false)
   const [profileId, setProfileId] = useState('')
+
+  // Parent account state
+  const [parentProfileId,   setParentProfileId]   = useState<string | null>(null)
+  const [parentEmail,       setParentEmail]       = useState('')
+  const [parentEmailInput,  setParentEmailInput]  = useState('')
+  const [parentPassword,    setParentPassword]    = useState('')
+  const [showPassword,      setShowPassword]      = useState(false)
+  const [savingParent,      setSavingParent]      = useState(false)
+  const [parentError,       setParentError]       = useState('')
+  const [parentSuccess,     setParentSuccess]     = useState('')
 
   const [form, setForm] = useState({
     full_name:      '',
@@ -42,13 +53,13 @@ export default function SiswaEditPage() {
 
   async function fetchSiswa() {
     setLoading(true)
-    const { data: student, error: sErr } = await supabase
+    const { data: student } = await supabase
       .from('students')
-      .select('id, profile_id, birth_date, province, city, relation_name, relation_role, relation_phone, relation_email, school, grade, notes')
+      .select('id, profile_id, parent_profile_id, birth_date, province, city, relation_name, relation_role, relation_phone, relation_email, school, grade, notes')
       .eq('id', siswaId)
       .single()
 
-    if (sErr || !student) { setError('Siswa tidak ditemukan.'); setLoading(false); return }
+    if (!student) { setError('Siswa tidak ditemukan.'); setLoading(false); return }
 
     setProfileId(student.profile_id)
 
@@ -73,6 +84,18 @@ export default function SiswaEditPage() {
       grade:          student.grade ?? '',
       notes:          student.notes ?? '',
     })
+
+    // Cek apakah akun ortu sudah ada
+    if (student.parent_profile_id) {
+      setParentProfileId(student.parent_profile_id)
+      const { data: parentProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', student.parent_profile_id)
+        .single()
+      setParentEmail(parentProfile?.email ?? '')
+    }
+
     setLoading(false)
   }
 
@@ -90,7 +113,6 @@ export default function SiswaEditPage() {
     if (!form.full_name.trim()) { setError('Nama siswa wajib diisi.'); return }
     setSaving(true); setError('')
 
-    // Update profile
     const { error: profileErr } = await supabase
       .from('profiles')
       .update({
@@ -102,7 +124,6 @@ export default function SiswaEditPage() {
 
     if (profileErr) { setError(profileErr.message); setSaving(false); return }
 
-    // Update student
     const { error: studentErr } = await supabase
       .from('students')
       .update({
@@ -123,6 +144,58 @@ export default function SiswaEditPage() {
 
     setSaving(false); setSuccess(true)
     setTimeout(() => router.push('/admin/siswa'), 1200)
+  }
+
+  async function handleBuatAkunOrtu() {
+    if (!parentEmailInput.trim()) { setParentError('Email ortu wajib diisi.'); return }
+    if (!parentPassword || parentPassword.length < 6) { setParentError('Password minimal 6 karakter.'); return }
+
+    setSavingParent(true); setParentError(''); setParentSuccess('')
+
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:      parentEmailInput.trim(),
+          password:   parentPassword,
+          role:       'parent',
+          full_name:  form.relation_name || `Ortu ${form.full_name}`,
+          student_id: siswaId,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setParentError(json.error ?? 'Gagal membuat akun.'); setSavingParent(false); return }
+
+      setParentProfileId(json.profile_id)
+      setParentEmail(parentEmailInput.trim())
+      setParentEmailInput('')
+      setParentPassword('')
+      setParentSuccess('Akun orang tua berhasil dibuat!')
+    } catch (err: any) {
+      setParentError(err.message ?? 'Terjadi kesalahan.')
+    }
+    setSavingParent(false)
+  }
+
+  async function handleResetPassword() {
+    if (!parentPassword || parentPassword.length < 6) { setParentError('Password baru minimal 6 karakter.'); return }
+    setSavingParent(true); setParentError(''); setParentSuccess('')
+
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile_id: parentProfileId, password: parentPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setParentError(json.error ?? 'Gagal reset password.'); setSavingParent(false); return }
+      setParentPassword('')
+      setParentSuccess('Password orang tua berhasil direset!')
+    } catch (err: any) {
+      setParentError(err.message ?? 'Terjadi kesalahan.')
+    }
+    setSavingParent(false)
   }
 
   const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
@@ -200,7 +273,7 @@ export default function SiswaEditPage() {
             <div>
               <label className={labelCls}>Kelas/Tingkat <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
               <input type="text" name="grade" value={form.grade} onChange={handleChange}
-                placeholder="Kelas 10 / Semester 3" className={inputCls}/>
+                placeholder="Level Pre-Starter" className={inputCls}/>
             </div>
           </div>
         </div>
@@ -247,6 +320,97 @@ export default function SiswaEditPage() {
                 💡 Notifikasi WA dan akses Google Drive akan menggunakan data kontak siswa di atas.
               </p>
             </div>
+          )}
+        </div>
+
+        {/* AKUN ORANG TUA */}
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            {parentProfileId
+              ? <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
+              : <UserPlus size={16} className="text-[#7B78A8] flex-shrink-0"/>
+            }
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Akun Orang Tua / Portal Siswa</p>
+          </div>
+
+          {parentProfileId ? (
+            // Akun sudah ada — tampilkan info + reset password
+            <>
+              <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
+                <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
+                <div>
+                  <p className="text-xs font-bold text-green-700">Akun aktif</p>
+                  <p className="text-xs text-green-600 mt-0.5">{parentEmail}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Reset Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={parentPassword}
+                    onChange={e => setParentPassword(e.target.value)}
+                    placeholder="Password baru (min. 6 karakter)"
+                    className={inputCls}
+                  />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
+                    {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
+                  </button>
+                </div>
+              </div>
+
+              {parentError   && <p className="text-xs text-red-600 font-semibold">{parentError}</p>}
+              {parentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {parentSuccess}</p>}
+
+              <button type="button" onClick={handleResetPassword} disabled={savingParent}
+                className="w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm hover:bg-[#EAE8FD] transition disabled:opacity-60">
+                {savingParent ? 'Menyimpan...' : 'Reset Password Orang Tua'}
+              </button>
+            </>
+          ) : (
+            // Akun belum ada — form buat akun baru
+            <>
+              <div className="px-4 py-3 bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl">
+                <p className="text-xs text-[#7B78A8]">
+                  Buat akun agar orang tua bisa login ke <span className="font-semibold text-[#5C4FE5]">portal siswa</span> dan memantau perkembangan belajar.
+                </p>
+              </div>
+
+              <div>
+                <label className={labelCls}>Email Login Orang Tua</label>
+                <input type="email" value={parentEmailInput}
+                  onChange={e => setParentEmailInput(e.target.value)}
+                  placeholder="email@contoh.com" className={inputCls}/>
+              </div>
+
+              <div>
+                <label className={labelCls}>Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={parentPassword}
+                    onChange={e => setParentPassword(e.target.value)}
+                    placeholder="Min. 6 karakter"
+                    className={inputCls}
+                  />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
+                    {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
+                  </button>
+                </div>
+              </div>
+
+              {parentError   && <p className="text-xs text-red-600 font-semibold">{parentError}</p>}
+              {parentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {parentSuccess}</p>}
+
+              <button type="button" onClick={handleBuatAkunOrtu} disabled={savingParent}
+                className="w-full py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 flex items-center justify-center gap-2">
+                <UserPlus size={15}/>
+                {savingParent ? 'Membuat akun...' : 'Buat Akun Orang Tua'}
+              </button>
+            </>
           )}
         </div>
 
