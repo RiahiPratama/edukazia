@@ -139,9 +139,21 @@ export default function AdminMateriPage() {
         supabase.auth.getUser(),
       ])
 
-    setMateriList((mat ?? []) as Materi[])
+    // Flatten Supabase join arrays → single object (Supabase kadang return array)
+    const flatMat = (mat ?? []).map((m: any) => ({
+      ...m,
+      courses:      Array.isArray(m.courses)      ? m.courses[0]      ?? null : m.courses,
+      class_groups: Array.isArray(m.class_groups) ? m.class_groups[0] ?? null : m.class_groups,
+      profiles:     Array.isArray(m.profiles)     ? m.profiles[0]     ?? null : m.profiles,
+    }))
+    const flatCG = (cg ?? []).map((c: any) => ({
+      ...c,
+      courses: Array.isArray(c.courses) ? c.courses[0] ?? null : c.courses,
+    }))
+
+    setMateriList(flatMat as Materi[])
     setCourses((crs ?? []) as Course[])
-    setClassGroups((cg ?? []) as ClassGroup[])
+    setClassGroups(flatCG as ClassGroup[])
     setMyProfileId(user?.id ?? null)
     setLoading(false)
   }, [supabase])
