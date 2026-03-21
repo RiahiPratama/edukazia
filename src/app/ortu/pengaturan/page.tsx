@@ -112,34 +112,38 @@ export default function OrtuPengaturanPage() {
     // Cari profile_id dari students
     const { data: stu } = await supabase.from('students').select('profile_id').eq('id', childId).single()
 
-    const updates: Array<Promise<any>> = [
-      supabase.from('students').update({
-        grade:         formChild.grade.trim() || null,
-        school:        formChild.school.trim() || null,
-        relation_role: formChild.relation_role,
-      }).eq('id', childId),
-    ]
+    // Update students
+    const { error: errStu } = await supabase.from('students').update({
+      grade:         formChild.grade.trim() || null,
+      school:        formChild.school.trim() || null,
+      relation_role: formChild.relation_role,
+    }).eq('id', childId)
 
-    if (stu?.profile_id) {
-      updates.push(
-        supabase.from('profiles').update({ full_name: formChild.full_name.trim() }).eq('id', stu.profile_id)
-      )
+    if (errStu) {
+      setSavingChild(false)
+      setChildMsg({ type: 'err', text: errStu.message, id: childId })
+      return
     }
 
-    const results = await Promise.all(updates)
-    const err = results.find(r => r.error)?.error
+    // Update nama di profiles kalau ada profile_id
+    if (stu?.profile_id) {
+      const { error: errProf } = await supabase.from('profiles')
+        .update({ full_name: formChild.full_name.trim() })
+        .eq('id', stu.profile_id)
+      if (errProf) {
+        setSavingChild(false)
+        setChildMsg({ type: 'err', text: errProf.message, id: childId })
+        return
+      }
+    }
 
     setSavingChild(false)
-    if (err) {
-      setChildMsg({ type: 'err', text: err.message, id: childId })
-    } else {
-      setChildMsg({ type: 'ok', text: 'Data anak berhasil disimpan!', id: childId })
-      setChildren(prev => prev.map(c => c.id === childId
-        ? { ...c, full_name: formChild.full_name.trim(), grade: formChild.grade, school: formChild.school, relation_role: formChild.relation_role }
-        : c
-      ))
-      setEditingChild(null)
-    }
+    setChildMsg({ type: 'ok', text: 'Data anak berhasil disimpan!', id: childId })
+    setChildren(prev => prev.map(c => c.id === childId
+      ? { ...c, full_name: formChild.full_name.trim(), grade: formChild.grade, school: formChild.school, relation_role: formChild.relation_role }
+      : c
+    ))
+    setEditingChild(null)
   }
 
   async function addChild() {
