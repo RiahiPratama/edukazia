@@ -289,7 +289,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                   style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
                   {initials(activeChild.full_name)}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate" style={{ color: '#fff' }}>
                     {activeChild.full_name}
                   </p>
@@ -299,6 +299,17 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                     </p>
                   )}
                 </div>
+                {/* Toggle dark di sisi kanan nama anak */}
+                <button
+                  onClick={toggleDark}
+                  className="p-1.5 rounded-lg flex-shrink-0 transition-colors"
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    color: isDark ? '#E6B800' : 'rgba(255,255,255,0.7)',
+                  }}
+                  title={isDark ? 'Mode Terang' : 'Mode Gelap'}>
+                  {isDark ? <Sun size={13} /> : <Moon size={13} />}
+                </button>
               </div>
               {kids.filter(k => k.id !== activeStudentId).map(k => {
                 const col = CHILD_COLORS[kids.indexOf(k) % CHILD_COLORS.length]
@@ -477,21 +488,19 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
         {/* ═══ MAIN ═══ */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-          {/* Topbar */}
-          <header
-            className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3"
+          {/* Mobile topbar — hanya hamburger, tanpa topbar di desktop */}
+          <div
+            className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
             style={{
               background: isAnakMode
                 ? (isDark ? 'rgba(13,13,24,0.95)' : 'rgba(247,246,255,0.95)')
-                : 'var(--ortu-tb-bg)',
+                : (isDark ? 'rgba(15,15,20,0.95)' : 'rgba(255,255,255,0.95)'),
               backdropFilter: 'blur(8px)',
-              borderBottom: `1px solid ${isAnakMode ? (isDark ? '#2A2A38' : '#E5E3FF') : 'var(--ortu-tb-border)'}`,
+              borderBottom: `1px solid ${isAnakMode ? (isDark ? '#2A2A38' : '#E5E3FF') : (isDark ? '#2A2A38' : '#FEF3C7')}`,
             }}>
-
-            {/* Hamburger */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg border flex-shrink-0"
+              className="p-2 rounded-lg border flex-shrink-0"
               style={{
                 background: isAnakMode ? '#EEEDFE' : (isDark ? '#1E1E2A' : '#FEF9EE'),
                 borderColor: isAnakMode ? '#CECBF6' : (isDark ? '#2A2A38' : '#FAC775'),
@@ -499,49 +508,10 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
               }}>
               <Menu size={16} />
             </button>
-
-            {/* Badge mode anak */}
-            {isAnakMode && activeChild ? (
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border flex-shrink-0"
-                style={{ background: isDark ? '#1E1E35' : '#EEEDFE', borderColor: '#CECBF6' }}>
-                <div
-                  className="w-4 h-4 rounded-sm flex items-center justify-center text-[7px] font-bold flex-shrink-0"
-                  style={{ background: '#5C4FE5', color: '#fff' }}>
-                  {initials(activeChild.full_name)}
-                </div>
-                <span className="text-[11px] font-medium" style={{ color: isDark ? '#AFA9EC' : '#3C3489' }}>
-                  {activeChild.full_name.split(' ')[0]}
-                </span>
-              </div>
-            ) : (
-              <div className="lg:hidden">
-                <p className="text-sm font-bold" style={{ color: 'var(--ortu-text)', fontFamily: "'Sora', sans-serif" }}>
-                  EduKazia
-                </p>
-                <p className="text-[10px]" style={{ color: isDark ? '#C4B89A' : '#B45309' }}>
-                  Portal Orang Tua
-                </p>
-              </div>
-            )}
-
-            <div className="flex-1" />
-
-            {/* Mode gelap toggle di topbar untuk mode anak */}
-            {isAnakMode && (
-              <button
-                onClick={toggleDark}
-                className="p-2 rounded-lg border flex-shrink-0"
-                style={{
-                  background: isDark ? '#1E1E2A' : '#EEEDFE',
-                  borderColor: isDark ? '#2A2A38' : '#CECBF6',
-                  color: isDark ? '#AFA9EC' : '#5C4FE5',
-                }}
-                title={isDark ? 'Mode Terang' : 'Mode Gelap'}>
-                {isDark ? <Sun size={14} /> : <Moon size={14} />}
-              </button>
-            )}
-          </header>
+            <span className="text-sm font-bold" style={{ color: isAnakMode ? (isDark ? '#AFA9EC' : '#3C3489') : 'var(--ortu-text)', fontFamily: "'Sora', sans-serif" }}>
+              {isAnakMode && activeChild ? activeChild.full_name.split(' ')[0] : 'EduKazia'}
+            </span>
+          </div>
 
           {/* Page content */}
           <main className="ortu-content flex-1 overflow-y-auto">
