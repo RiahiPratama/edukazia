@@ -78,9 +78,21 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     : { data: [] }
 
   const tutorIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
-  const { data: tutors } = tutorIds.length > 0
-    ? await supabase.from('profiles').select('id, full_name').in('id', tutorIds)
+  const { data: tutorRows } = tutorIds.length > 0
+    ? await supabase.from('tutors').select('id, profile_id').in('id', tutorIds)
     : { data: [] }
+
+  const tutorProfileIds = [...new Set((tutorRows ?? []).map((t: any) => t.profile_id).filter(Boolean))]
+  const { data: tutors } = tutorProfileIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name').in('id', tutorProfileIds)
+    : { data: [] }
+
+  // Map tutorId (tutors.id) → full_name
+  const tutorNameMap: Record<string, string> = {}
+  ;(tutorRows ?? []).forEach((t: any) => {
+    const prof = (tutors ?? []).find((p: any) => p.id === t.profile_id)
+    if (prof) tutorNameMap[t.id] = prof.full_name
+  })
 
   // Waktu WIT
   const nowWIT = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
@@ -273,7 +285,10 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
           <div className="flex flex-col gap-2">
             {todaySessions.map((s: any) => {
               const cg    = (classGroups ?? []).find((c: any) => c.id === s.class_group_id)
-              const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+              const tutor = (tutors ?? []).find((t: any) => {
+                const tRow = (tutorRows ?? []).find((tr: any) => tr.id === cg?.tutor_id)
+                return t.id === tRow?.profile_id
+              })
               const zoom  = s.zoom_link ?? cg?.zoom_link ?? null
               const sWIT  = new Date(new Date(s.scheduled_at).toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
               const isOngoing = nowWIT >= sWIT && nowWIT <= new Date(sWIT.getTime() + 90 * 60 * 1000)
@@ -371,7 +386,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         <div className="flex flex-col gap-2 mb-4">
           {(enrollments ?? []).map((e: any) => {
             const cg    = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
-            const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+            const tutorName = cg ? (tutorNameMap[cg.tutor_id] ?? '—') : '—'
             const cgCompleted = (completedSessions ?? []).filter((s: any) => s.class_group_id === e.class_group_id)
             const hadirInCG  = cgCompleted.filter((s: any) =>
               (attendances ?? []).find((a: any) => a.session_id === s.id && a.status === 'hadir')
@@ -384,7 +399,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-stone-50">
                   <div>
                     <p className="text-[12px] font-semibold text-stone-700">{cg?.label ?? '—'}</p>
-                    <p className="text-[10px] text-stone-400">{tutor?.full_name ?? '—'}</p>
+                    <p className="text-[10px] text-stone-400">{tutorName}</p>
                   </div>
                   <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
                     Aktif
