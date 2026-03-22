@@ -33,6 +33,15 @@ export default async function OrtuDashboardPage() {
 
   if (!profile) redirect('/login')
 
+  // Ambil nomor WhatsApp admin
+  const { data: adminProfile } = await supabase
+    .from('profiles')
+    .select('phone')
+    .eq('role', 'admin')
+    .not('phone', 'is', null)
+    .single()
+  const adminPhone = adminProfile?.phone ?? null
+
   // Ambil daftar anak
   const { data: studentRows } = await supabase
     .from('students')
@@ -44,6 +53,7 @@ export default async function OrtuDashboardPage() {
 
   const students = (studentRows as any[]).map(s => ({
     id:            s.id,
+    slug:          s.slug ?? s.id,
     full_name:     (Array.isArray(s.profiles) ? s.profiles[0] : s.profiles)?.full_name ?? '(Tanpa nama)',
     grade:         s.grade,
     school:        s.school,
@@ -217,6 +227,7 @@ export default async function OrtuDashboardPage() {
       profile={profile as any}
       childrenData={childrenData}
       activityFeed={activityFeed}
+      adminPhone={adminPhone}
       stats={{
         totalAnak:             students.length,
         totalSesiMingguIni,
