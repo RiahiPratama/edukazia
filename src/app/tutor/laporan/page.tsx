@@ -23,7 +23,7 @@ const AVATAR_COLORS = [
   { bg: '#FBEAF0', text: '#72243E' },
 ]
 
-type ReportForm = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string }
+type ReportForm = { materi: string; perkembangan: string; saranSiswa: string; saranOrtu: string; recordingUrl: string }
 
 function getInitials(name: string) {
   return name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
@@ -52,7 +52,7 @@ export default function TutorLaporanPage() {
   const [expandedSesi,   setExpandedSesi]   = useState<Record<string, boolean>>({})
   const [showArsip,      setShowArsip]      = useState(false)
   const [editingKey,     setEditingKey]     = useState<string | null>(null)
-  const [editForm,       setEditForm]       = useState<ReportForm>({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' })
+  const [editForm,       setEditForm]       = useState<ReportForm>({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '', recordingUrl: '' })
   const [savingKey,      setSavingKey]      = useState<string | null>(null)
   const [saveSuccess,    setSaveSuccess]    = useState<string | null>(null)
   const [loading,        setLoading]        = useState(true)
@@ -117,7 +117,7 @@ export default function TutorLaporanPage() {
         ? supabase.from('attendances').select('session_id, student_id, status, notes').in('session_id', sessionIds).in('student_id', studentIds)
         : { data: [] },
       sessionIds.length > 0
-        ? supabase.from('session_reports').select('session_id, student_id, materi, perkembangan, saran_siswa, saran_ortu').in('session_id', sessionIds).in('student_id', studentIds)
+        ? supabase.from('session_reports').select('session_id, student_id, materi, perkembangan, saran_siswa, saran_ortu, recording_url').in('session_id', sessionIds).in('student_id', studentIds)
         : { data: [] },
       supabase.from('students').select('id, profile_id').in('id', studentIds),
     ])
@@ -140,10 +140,11 @@ export default function TutorLaporanPage() {
     ;(sessionReports ?? []).forEach((r: any) => {
       if (!repMap[r.student_id]) repMap[r.student_id] = {}
       repMap[r.student_id][r.session_id] = {
-        materi:       r.materi ?? '',
-        perkembangan: r.perkembangan ?? '',
-        saranSiswa:   r.saran_siswa ?? '',
-        saranOrtu:    r.saran_ortu ?? '',
+        materi:        r.materi ?? '',
+        perkembangan:  r.perkembangan ?? '',
+        saranSiswa:    r.saran_siswa ?? '',
+        saranOrtu:     r.saran_ortu ?? '',
+        recordingUrl:  r.recording_url ?? '',
       }
     })
 
@@ -169,6 +170,7 @@ export default function TutorLaporanPage() {
         perkembangan: siswaRep[s.id]?.perkembangan ?? '',
         saranSiswa:   siswaRep[s.id]?.saranSiswa ?? '',
         saranOrtu:    siswaRep[s.id]?.saranOrtu ?? '',
+        recordingUrl: siswaRep[s.id]?.recordingUrl ?? '',
         hasReport:    !!siswaRep[s.id],
       }))
 
@@ -198,7 +200,7 @@ export default function TutorLaporanPage() {
   }
   function cancelEdit() {
     setEditingKey(null)
-    setEditForm({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '' })
+    setEditForm({ materi: '', perkembangan: '', saranSiswa: '', saranOrtu: '', recordingUrl: '' })
   }
 
   async function saveReport(studentId: string, sessionId: string, key: string) {
@@ -206,13 +208,14 @@ export default function TutorLaporanPage() {
     setSavingKey(key)
 
     const record = {
-      session_id:   sessionId,
-      student_id:   studentId,
-      materi:       editForm.materi || null,
-      perkembangan: editForm.perkembangan || null,
-      saran_siswa:  editForm.saranSiswa || null,
-      saran_ortu:   editForm.saranOrtu || null,
-      recorded_by:  tutorId,
+      session_id:    sessionId,
+      student_id:    studentId,
+      materi:        editForm.materi || null,
+      perkembangan:  editForm.perkembangan || null,
+      saran_siswa:   editForm.saranSiswa || null,
+      saran_ortu:    editForm.saranOrtu || null,
+      recording_url: editForm.recordingUrl || null,
+      recorded_by:   tutorId,
     }
 
     const { error } = await supabase
@@ -229,11 +232,12 @@ export default function TutorLaporanPage() {
             if (s.sessionId !== sessionId) return s
             return {
               ...s,
-              materi:       editForm.materi,
-              perkembangan: editForm.perkembangan,
-              saranSiswa:   editForm.saranSiswa,
-              saranOrtu:    editForm.saranOrtu,
-              hasReport:    true,
+              materi:        editForm.materi,
+              perkembangan:  editForm.perkembangan,
+              saranSiswa:    editForm.saranSiswa,
+              saranOrtu:     editForm.saranOrtu,
+              recordingUrl:  editForm.recordingUrl,
+              hasReport:     true,
             }
           })
         }
@@ -443,7 +447,7 @@ export default function TutorLaporanPage() {
                                     <button
                                       onClick={() => hasReport
                                         ? toggleSesi(key)
-                                        : startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu })
+                                        : startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu, recordingUrl: sesi.recordingUrl })
                                       }
                                       className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
                                       {hasReport
@@ -456,7 +460,7 @@ export default function TutorLaporanPage() {
                                   {/* Tombol edit kalau laporan sudah ada */}
                                   {sesi.sessionStatus === 'completed' && hasReport && isSesiOpen && !isEditing && (
                                     <button
-                                      onClick={() => startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu })}
+                                      onClick={() => startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu, recordingUrl: sesi.recordingUrl })}
                                       className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
                                       <Pencil size={11}/> Edit
                                     </button>
@@ -495,6 +499,19 @@ export default function TutorLaporanPage() {
                                       <p className="text-xs text-[#1A1640]">{sesi.saranOrtu}</p>
                                     </div>
                                   )}
+                                  {sesi.recordingUrl && (
+                                    <div>
+                                      <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Link Rekaman</p>
+                                      <a href={sesi.recordingUrl} target="_blank" rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5C4FE5] hover:underline">
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                          <circle cx="6" cy="6" r="5.5" stroke="#5C4FE5" strokeWidth="1"/>
+                                          <path d="M4.5 4l3.5 2-3.5 2V4z" fill="#5C4FE5"/>
+                                        </svg>
+                                        Buka Rekaman Google Drive
+                                      </a>
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -525,6 +542,21 @@ export default function TutorLaporanPage() {
                                       />
                                     </div>
                                   ))}
+
+                                  {/* Field link rekaman */}
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                                      Link Rekaman Google Drive
+                                      <span className="normal-case font-normal ml-1">(opsional)</span>
+                                    </label>
+                                    <input
+                                      type="url"
+                                      placeholder="https://drive.google.com/..."
+                                      value={editForm.recordingUrl}
+                                      onChange={e => setEditForm(prev => ({ ...prev, recordingUrl: e.target.value }))}
+                                      className="w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+                                    />
+                                  </div>
 
                                   <button
                                     onClick={() => saveReport(siswa.studentId, sesi.sessionId, key)}
