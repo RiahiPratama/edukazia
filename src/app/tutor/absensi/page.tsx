@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CalendarDays, Check, MessageCircle, AlertTriangle, Clock, FileText, X, Send } from 'lucide-react'
 
@@ -104,6 +105,7 @@ function ModalLaporan({
   onSaved: () => void
 }) {
   const supabase = createClient()
+  const router   = useRouter()
   const [form, setForm] = useState({
     materi:       '',
     perkembangan: '',
@@ -203,8 +205,9 @@ function ModalLaporan({
 
     setSaving(false)
     if (error) { setMsg({ type: 'err', text: error.message }); return }
-    setMsg({ type: 'ok', text: 'Laporan berhasil disimpan!' })
     onSaved()
+    onClose()
+    router.push('/tutor/dashboard')
   }
 
   const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
