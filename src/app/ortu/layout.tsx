@@ -11,6 +11,7 @@ import {
   Sun, Moon,
 } from 'lucide-react'
 import { OrtuProvider, type OrtuContextType, type ChildInfo, type OrtuProfile } from './context'
+import PushNotificationSetup from '@/components/PushNotificationSetup'
 
 const NAV_ORTU = [
   { href: '/ortu/dashboard',  label: 'Beranda',    icon: LayoutDashboard },
@@ -187,6 +188,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <OrtuProvider value={ctxData}>
+      <PushNotificationSetup />
       {/* Inject CSS variables ke seluruh portal */}
       <style>{`:root { ${cssVars} }`}</style>
       {/* CSS override untuk dark mode di halaman konten */}

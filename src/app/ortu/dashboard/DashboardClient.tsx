@@ -200,6 +200,51 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 )}
               </div>
 
+              {/* ── Banner kelas akan dimulai (< 1 jam) ── */}
+              {child.enrollments.map((enroll: any) => {
+                if (!enroll.nextSession) return null
+                const now = new Date()
+                const sessionTime = new Date(enroll.nextSession)
+                const diffMs = sessionTime.getTime() - now.getTime()
+                const diffMenit = Math.round(diffMs / 60000)
+                if (diffMenit < 0 || diffMenit > 60) return null
+
+                return (
+                  <div key={`mulai-${enroll.enrollmentId}`}
+                    className="mx-3 mb-2 rounded-xl flex items-center gap-3 px-3 py-2.5"
+                    style={{ background: '#EEEDFE', border: '0.5px solid #CECBF6' }}>
+                    {/* Animasi pulse */}
+                    <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center relative"
+                      style={{ background: '#5C4FE5' }}>
+                      <span className="absolute inset-0 rounded-lg animate-ping opacity-30"
+                        style={{ background: '#5C4FE5' }} />
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6.5" stroke="white" strokeWidth="1.2"/>
+                        <path d="M8 4.5v3.5l2.5 1.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-[#3C3489] truncate">
+                        {enroll.classLabel} · {diffMenit === 0 ? 'Sekarang!' : `${diffMenit} menit lagi`}
+                      </p>
+                      <p className="text-[10px] text-[#5C4FE5]">
+                        Kelas segera dimulai
+                      </p>
+                    </div>
+                    {enroll.zoomLink && (
+                      <a href={enroll.zoomLink} target="_blank" rel="noopener noreferrer"
+                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+                        style={{ background: '#5C4FE5', color: '#fff' }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                          <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                        </svg>
+                        Buka Zoom
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+
               {/* ── Banner sisa sesi ── */}
               {child.enrollments.map((enroll: any) => {
                 const sisa = enroll.total - enroll.progress
