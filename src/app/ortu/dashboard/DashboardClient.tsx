@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { CalendarDays, FileText, ChevronRight, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 interface Props {
   profile: { full_name: string; email: string }
@@ -49,6 +50,111 @@ function timeAgo(iso: string) {
   if (d > 0) return `${d} hari lalu`
   if (h > 0) return `${h} jam lalu`
   return 'Baru saja'
+}
+
+// ── Komponen Countdown Timer ──
+function CountdownTimer({ targetIso, zoomLink, classLabel }: {
+  targetIso: string
+  zoomLink?: string
+  classLabel: string
+}) {
+  const [diffMs, setDiffMs] = useState(() => new Date(targetIso).getTime() - Date.now())
+
+  useEffect(() => {
+    // Update setiap detik
+    const interval = setInterval(() => {
+      setDiffMs(new Date(targetIso).getTime() - Date.now())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [targetIso])
+
+  // Lebih dari 3 jam → tidak tampil
+  if (diffMs > 3 * 60 * 60 * 1000) return null
+
+  // Sudah lebih dari 90 menit berlalu → anggap selesai, tidak tampil
+  if (diffMs < -90 * 60 * 1000) return null
+
+  // Sedang berlangsung (sudah lewat waktu mulai)
+  const isBerlangsung = diffMs <= 0
+
+  // Format countdown HH:MM:SS atau MM:SS
+  const totalSec = Math.max(0, Math.floor(diffMs / 1000))
+  const jam = Math.floor(totalSec / 3600)
+  const menit = Math.floor((totalSec % 3600) / 60)
+  const detik = totalSec % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const countdown = jam > 0
+    ? `${pad(jam)}:${pad(menit)}:${pad(detik)}`
+    : `${pad(menit)}:${pad(detik)}`
+
+  // Warna berdasarkan sisa waktu
+  const isWarning = diffMs <= 60 * 60 * 1000  // ≤ 1 jam → ungu
+  const bgColor = isBerlangsung ? '#E8F9F0' : '#EEEDFE'
+  const borderColor = isBerlangsung ? '#9FE1CB' : '#CECBF6'
+  const textColor = isBerlangsung ? '#085041' : '#3C3489'
+  const accentColor = isBerlangsung ? '#1D9E75' : '#5C4FE5'
+
+  return (
+    <div className="mx-3 mb-2 rounded-xl flex items-center gap-3 px-3 py-2.5"
+      style={{ background: bgColor, border: `0.5px solid ${borderColor}` }}>
+
+      {/* Icon dengan animasi pulse */}
+      <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center relative"
+        style={{ background: accentColor }}>
+        {!isBerlangsung && (
+          <span className="absolute inset-0 rounded-lg animate-ping opacity-30"
+            style={{ background: accentColor }} />
+        )}
+        {isBerlangsung ? (
+          // Icon play untuk sedang berlangsung
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="white" strokeWidth="1.2"/>
+            <circle cx="8" cy="8" r="3" fill="white"/>
+          </svg>
+        ) : (
+          // Icon jam untuk countdown
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="white" strokeWidth="1.2"/>
+            <path d="M8 4.5v3.5l2.5 1.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </div>
+
+      {/* Teks & Countdown */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-semibold truncate" style={{ color: textColor }}>
+          {classLabel}
+          {isBerlangsung
+            ? ' · 🟢 Sedang berlangsung'
+            : (
+              <span>
+                {' · '}
+                <span className="font-mono tracking-wide" style={{ color: accentColor }}>
+                  {countdown}
+                </span>
+                {' lagi'}
+              </span>
+            )
+          }
+        </p>
+        <p className="text-[10px]" style={{ color: accentColor }}>
+          {isBerlangsung ? 'Kelas sedang berjalan' : 'Kelas segera dimulai'}
+        </p>
+      </div>
+
+      {/* Tombol Buka Zoom */}
+      {zoomLink && (
+        <a href={zoomLink} target="_blank" rel="noopener noreferrer"
+          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+          style={{ background: accentColor, color: '#fff' }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+            <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+          </svg>
+          Buka Zoom
+        </a>
+      )}
+    </div>
+  )
 }
 
 export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, stats }: Props) {
@@ -200,55 +306,27 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 )}
               </div>
 
-              {/* ── Banner kelas akan dimulai (< 1 jam) ── */}
+              {/* ── Countdown Timer (≤ 3 jam sebelum sesi) ── */}
               {child.enrollments.map((enroll: any) => {
                 if (!enroll.nextSession) return null
-                const now = new Date()
-                const sessionTime = new Date(enroll.nextSession)
-                const diffMs = sessionTime.getTime() - now.getTime()
-                const diffMenit = Math.round(diffMs / 60000)
-                if (diffMenit < 0 || diffMenit > 60) return null
-
+                const diffMs = new Date(enroll.nextSession).getTime() - Date.now()
+                // Tampil kalau ≤ 3 jam ke depan atau belum 90 menit berlalu
+                if (diffMs > 3 * 60 * 60 * 1000) return null
+                if (diffMs < -90 * 60 * 1000) return null
                 return (
-                  <div key={`mulai-${enroll.enrollmentId}`}
-                    className="mx-3 mb-2 rounded-xl flex items-center gap-3 px-3 py-2.5"
-                    style={{ background: '#EEEDFE', border: '0.5px solid #CECBF6' }}>
-                    {/* Animasi pulse */}
-                    <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center relative"
-                      style={{ background: '#5C4FE5' }}>
-                      <span className="absolute inset-0 rounded-lg animate-ping opacity-30"
-                        style={{ background: '#5C4FE5' }} />
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="6.5" stroke="white" strokeWidth="1.2"/>
-                        <path d="M8 4.5v3.5l2.5 1.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold text-[#3C3489] truncate">
-                        {enroll.classLabel} · {diffMenit === 0 ? 'Sekarang!' : `${diffMenit} menit lagi`}
-                      </p>
-                      <p className="text-[10px] text-[#5C4FE5]">
-                        Kelas segera dimulai
-                      </p>
-                    </div>
-                    {enroll.zoomLink && (
-                      <a href={enroll.zoomLink} target="_blank" rel="noopener noreferrer"
-                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
-                        style={{ background: '#5C4FE5', color: '#fff' }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
-                          <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
-                        </svg>
-                        Buka Zoom
-                      </a>
-                    )}
-                  </div>
+                  <CountdownTimer
+                    key={`countdown-${enroll.enrollmentId}`}
+                    targetIso={enroll.nextSession}
+                    zoomLink={enroll.zoomLink}
+                    classLabel={enroll.classLabel}
+                  />
                 )
               })}
 
               {/* ── Banner sisa sesi ── */}
               {child.enrollments.map((enroll: any) => {
                 const sisa = enroll.total - enroll.progress
-                if (sisa > 2) return null  // Hanya tampil kalau sisa ≤ 2
+                if (sisa > 2) return null
 
                 const waMsg = encodeURIComponent(
                   `Halo, saya ingin memperpanjang paket belajar untuk ${child.full_name} (${enroll.classLabel}). Sisa sesi tinggal ${sisa}. Mohon informasi untuk periode berikutnya. Terima kasih.`
@@ -264,7 +342,6 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       background: sisa === 0 ? '#FCEBEB' : '#FAEEDA',
                       border: `0.5px solid ${sisa === 0 ? '#F7C1C1' : '#FAC775'}`,
                     }}>
-                    {/* Icon */}
                     <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
                       style={{ background: sisa === 0 ? '#F7C1C1' : '#FAC775' }}>
                       <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -274,7 +351,6 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       </svg>
                     </div>
 
-                    {/* Teks */}
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-semibold truncate"
                         style={{ color: sisa === 0 ? '#791F1F' : '#633806' }}>
@@ -289,14 +365,10 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       </p>
                     </div>
 
-                    {/* Tombol WA */}
                     {waUrl ? (
                       <a href={waUrl} target="_blank" rel="noopener noreferrer"
                         className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
-                        style={{
-                          background: '#25D366',
-                          color: '#fff',
-                        }}>
+                        style={{ background: '#25D366', color: '#fff' }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
                           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
                           <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.553 4.122 1.524 5.854L0 24l6.337-1.501A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.373l-.36-.213-3.761.891.946-3.657-.234-.376A9.818 9.818 0 012.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/>
