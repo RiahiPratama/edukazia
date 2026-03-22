@@ -54,7 +54,17 @@ function isSesiDimulai(scheduledAt: string): boolean {
 }
 
 // ── Countdown Badge ────────────────────────────────────────────────────────
-function CountdownBadge({ scheduledAt, isSelected }: { scheduledAt: string; isSelected: boolean }) {
+function getDurasiMenit(classTypeName: string): number {
+  const name = (classTypeName ?? '').toLowerCase()
+  if (name.includes('privat') && !name.includes('semi')) return 45
+  return 60
+}
+
+function CountdownBadge({ scheduledAt, isSelected, classTypeName }: {
+  scheduledAt: string
+  isSelected: boolean
+  classTypeName: string
+}) {
   const [diffMs, setDiffMs] = useState(() => new Date(scheduledAt).getTime() - Date.now())
 
   useEffect(() => {
@@ -64,9 +74,23 @@ function CountdownBadge({ scheduledAt, isSelected }: { scheduledAt: string; isSe
     return () => clearInterval(interval)
   }, [scheduledAt])
 
-  if (diffMs < -90 * 60 * 1000) return null
+  const durasiMs = getDurasiMenit(classTypeName) * 60 * 1000
+
+  // Lebih dari 3 jam ke depan → tidak tampil
   if (diffMs > 3 * 60 * 60 * 1000) return null
 
+  // Sudah lewat durasi → Telah dilaksanakan
+  if (diffMs < -durasiMs) {
+    return (
+      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1 w-fit ${
+        isSelected ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-500'
+      }`}>
+        ✓ Telah dilaksanakan
+      </span>
+    )
+  }
+
+  // Sedang berlangsung
   if (diffMs <= 0) {
     return (
       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1 w-fit ${
@@ -78,6 +102,7 @@ function CountdownBadge({ scheduledAt, isSelected }: { scheduledAt: string; isSe
     )
   }
 
+  // Countdown mundur
   const totalSec = Math.floor(diffMs / 1000)
   const jam      = Math.floor(totalSec / 3600)
   const menit    = Math.floor((totalSec % 3600) / 60)
@@ -349,7 +374,7 @@ export default function TutorAbsensiPage() {
 
     const { data: sesi } = await supabase
       .from('sessions')
-      .select(`id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name))`)
+      .select(`id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name), class_types(name))`)
       .eq('class_groups.tutor_id', tutor.id)
       .gte('scheduled_at', startUtc)
       .lte('scheduled_at', endUtc)
@@ -618,7 +643,7 @@ export default function TutorAbsensiPage() {
                         </div>
                       </div>
                       {/* Countdown */}
-                      <CountdownBadge scheduledAt={s.scheduled_at} isSelected={isSelected} />
+                      <CountdownBadge scheduledAt={s.scheduled_at} isSelected={isSelected} classTypeName={s.class_groups?.class_types?.name ?? ''} />
                     </button>
                   )
                 })}

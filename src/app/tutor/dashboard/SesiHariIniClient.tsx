@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from 'react'
 
-function CountdownBadge({ scheduledAt }: { scheduledAt: string }) {
+function getDurasiMenit(classTypeName: string): number {
+  const name = (classTypeName ?? '').toLowerCase()
+  if (name.includes('privat') && !name.includes('semi')) return 45
+  return 60
+}
+
+function CountdownBadge({ scheduledAt, classTypeName }: {
+  scheduledAt: string
+  classTypeName: string
+}) {
   const [diffMs, setDiffMs] = useState(() => new Date(scheduledAt).getTime() - Date.now())
 
   useEffect(() => {
@@ -12,22 +21,31 @@ function CountdownBadge({ scheduledAt }: { scheduledAt: string }) {
     return () => clearInterval(interval)
   }, [scheduledAt])
 
-  // Sudah lebih dari 90 menit berlalu → tidak tampil
-  if (diffMs < -90 * 60 * 1000) return null
+  const durasiMs = getDurasiMenit(classTypeName) * 60 * 1000
+
+  // Lebih dari 3 jam ke depan → tidak tampil
+  if (diffMs > 3 * 60 * 60 * 1000) return null
+
+  // Sudah lewat durasi kelas → Telah dilaksanakan
+  if (diffMs < -durasiMs) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-stone-100 text-stone-500 w-fit flex items-center gap-1">
+        ✓ Telah dilaksanakan
+      </span>
+    )
+  }
 
   // Sedang berlangsung
   if (diffMs <= 0) {
     return (
-      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 flex items-center gap-1">
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 flex items-center gap-1 w-fit">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
         Berlangsung
       </span>
     )
   }
 
-  // Lebih dari 3 jam → tidak perlu countdown
-  if (diffMs > 3 * 60 * 60 * 1000) return null
-
+  // Countdown mundur
   const totalSec = Math.floor(diffMs / 1000)
   const jam      = Math.floor(totalSec / 3600)
   const menit    = Math.floor((totalSec % 3600) / 60)
@@ -36,17 +54,13 @@ function CountdownBadge({ scheduledAt }: { scheduledAt: string }) {
   const label    = jam > 0 ? `${pad(jam)}:${pad(menit)}:${pad(detik)}` : `${pad(menit)}:${pad(detik)}`
 
   return (
-    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-semibold bg-amber-50 text-amber-700 border border-amber-200 w-fit">
       ⏱ {label}
     </span>
   )
 }
 
-export default function SesiHariIniClient({
-  sesiHariIni,
-}: {
-  sesiHariIni: any[]
-}) {
+export default function SesiHariIniClient({ sesiHariIni }: { sesiHariIni: any[] }) {
   function fmtTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', {
       hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
@@ -83,38 +97,40 @@ export default function SesiHariIniClient({
 
   return (
     <div className="space-y-3">
-      {sesiHariIni.map((s: any) => (
-        <div key={s.id}
-          className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]">
-          <div className="w-14 text-center flex-shrink-0">
-            <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
-            <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-[#1A1640] truncate">
-              {s.class_groups?.label ?? '—'}
+      {sesiHariIni.map((s: any) => {
+        const classTypeName = s.class_groups?.class_types?.name ?? ''
+        return (
+          <div key={s.id}
+            className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]">
+            <div className="w-14 text-center flex-shrink-0">
+              <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+              <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
             </div>
-            <div className="text-xs text-[#7B78A8]">
-              {s.class_groups?.courses?.name ?? '—'}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-[#1A1640] truncate">
+                {s.class_groups?.label ?? '—'}
+              </div>
+              <div className="text-xs text-[#7B78A8]">
+                {s.class_groups?.courses?.name ?? '—'}
+              </div>
+              <div className="mt-1">
+                <CountdownBadge scheduledAt={s.scheduled_at} classTypeName={classTypeName} />
+              </div>
             </div>
-            {/* Countdown badge */}
-            <div className="mt-1">
-              <CountdownBadge scheduledAt={s.scheduled_at} />
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {s.zoom_link && (
+                <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                  className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
+                  Buka Zoom
+                </a>
+              )}
+              <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${statusColor[s.status] ?? 'bg-gray-50 text-gray-700'}`}>
+                {statusLabel[s.status] ?? s.status}
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {s.zoom_link && (
-              <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
-                Buka Zoom
-              </a>
-            )}
-            <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${statusColor[s.status] ?? 'bg-gray-50 text-gray-700'}`}>
-              {statusLabel[s.status] ?? s.status}
-            </span>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

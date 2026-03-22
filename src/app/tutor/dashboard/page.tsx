@@ -60,7 +60,7 @@ export default async function TutorDashboard() {
 
     supabase
       .from('sessions')
-      .select(`id, scheduled_at, zoom_link, status, class_groups!inner(id, label, tutor_id, courses(name))`)
+      .select(`id, scheduled_at, zoom_link, status, class_groups!inner(id, label, tutor_id, courses(name), class_types(name))`)
       .eq('class_groups.tutor_id', tutorId)
       .gte('scheduled_at', startUTC)
       .lte('scheduled_at', endUTC)
