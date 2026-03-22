@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CalendarDays, Check, MessageCircle, AlertTriangle, Clock } from 'lucide-react'
+import { CalendarDays, Check, MessageCircle, AlertTriangle, Clock, FileText, X, Send } from 'lucide-react'
 
 type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
 
@@ -52,22 +52,283 @@ function isSesiDimulai(scheduledAt: string): boolean {
   return nowWIT >= sesiWIT
 }
 
+// ── Countdown Badge ────────────────────────────────────────────────────────
+function CountdownBadge({ scheduledAt, isSelected }: { scheduledAt: string; isSelected: boolean }) {
+  const [diffMs, setDiffMs] = useState(() => new Date(scheduledAt).getTime() - Date.now())
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDiffMs(new Date(scheduledAt).getTime() - Date.now())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [scheduledAt])
+
+  if (diffMs < -90 * 60 * 1000) return null
+  if (diffMs > 3 * 60 * 60 * 1000) return null
+
+  if (diffMs <= 0) {
+    return (
+      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1 w-fit ${
+        isSelected ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'
+      }`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+        Berlangsung
+      </span>
+    )
+  }
+
+  const totalSec = Math.floor(diffMs / 1000)
+  const jam      = Math.floor(totalSec / 3600)
+  const menit    = Math.floor((totalSec % 3600) / 60)
+  const detik    = totalSec % 60
+  const pad      = (n: number) => String(n).padStart(2, '0')
+  const label    = jam > 0 ? `${pad(jam)}:${pad(menit)}:${pad(detik)}` : `${pad(menit)}:${pad(detik)}`
+
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-semibold w-fit ${
+      isSelected ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200'
+    }`}>
+      ⏱ {label}
+    </span>
+  )
+}
+
+// ── Modal Laporan Belajar ─────────────────────────────────────────────────
+function ModalLaporan({
+  sesi,
+  onClose,
+  onSaved,
+}: {
+  sesi: any
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const supabase = createClient()
+  const [form, setForm] = useState({
+    materi:       '',
+    perkembangan: '',
+    saran_ortu:   '',
+    recording_url: '',
+  })
+  const [loading, setLoading]   = useState(true)
+  const [saving,  setSaving]    = useState(false)
+  const [msg,     setMsg]       = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [siswaList, setSiswaList] = useState<any[]>([])
+  const [selectedSiswa, setSelectedSiswa] = useState<string>('')
+
+  useEffect(() => {
+    async function load() {
+      // Ambil siswa dari enrollments
+      const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('student_id')
+        .eq('class_group_id', sesi.class_groups.id)
+
+      if (!enrollments || enrollments.length === 0) { setLoading(false); return }
+
+      const studentIds = enrollments.map((e: any) => e.student_id)
+      const { data: students } = await supabase
+        .from('students').select('id, profile_id').in('id', studentIds)
+
+      const profileIds = (students ?? []).map((s: any) => s.profile_id).filter(Boolean)
+      const { data: profiles } = profileIds.length > 0
+        ? await supabase.from('profiles').select('id, full_name').in('id', profileIds)
+        : { data: [] }
+
+      const profMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p.full_name]))
+      const list = (students ?? []).map((s: any) => ({
+        id:   s.id,
+        name: profMap[s.profile_id] ?? 'Siswa',
+      }))
+      setSiswaList(list)
+
+      // Default ke siswa pertama
+      if (list.length > 0) {
+        setSelectedSiswa(list[0].id)
+        // Cek apakah sudah ada laporan
+        const { data: existing } = await supabase
+          .from('session_reports')
+          .select('materi, perkembangan, saran_ortu, recording_url')
+          .eq('session_id', sesi.id)
+          .eq('student_id', list[0].id)
+          .single()
+        if (existing) {
+          setForm({
+            materi:        existing.materi ?? '',
+            perkembangan:  existing.perkembangan ?? '',
+            saran_ortu:    existing.saran_ortu ?? '',
+            recording_url: existing.recording_url ?? '',
+          })
+        }
+      }
+      setLoading(false)
+    }
+    load()
+  }, [sesi])
+
+  async function loadLaporanSiswa(studentId: string) {
+    setSelectedSiswa(studentId)
+    setForm({ materi: '', perkembangan: '', saran_ortu: '', recording_url: '' })
+    const { data: existing } = await supabase
+      .from('session_reports')
+      .select('materi, perkembangan, saran_ortu, recording_url')
+      .eq('session_id', sesi.id)
+      .eq('student_id', studentId)
+      .single()
+    if (existing) {
+      setForm({
+        materi:        existing.materi ?? '',
+        perkembangan:  existing.perkembangan ?? '',
+        saran_ortu:    existing.saran_ortu ?? '',
+        recording_url: existing.recording_url ?? '',
+      })
+    }
+  }
+
+  async function handleSimpan() {
+    if (!selectedSiswa) return
+    if (!form.materi.trim()) { setMsg({ type: 'err', text: 'Materi tidak boleh kosong.' }); return }
+    setSaving(true); setMsg(null)
+
+    const { error } = await supabase
+      .from('session_reports')
+      .upsert({
+        session_id:    sesi.id,
+        student_id:    selectedSiswa,
+        materi:        form.materi.trim(),
+        perkembangan:  form.perkembangan.trim() || null,
+        saran_ortu:    form.saran_ortu.trim() || null,
+        recording_url: form.recording_url.trim() || null,
+      }, { onConflict: 'session_id,student_id' })
+
+    setSaving(false)
+    if (error) { setMsg({ type: 'err', text: error.message }); return }
+    setMsg({ type: 'ok', text: 'Laporan berhasil disimpan!' })
+    onSaved()
+  }
+
+  const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+  const labelCls = "block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1"
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF] rounded-t-2xl">
+          <div>
+            <h3 className="font-bold text-[#1A1640] text-sm">Input Laporan Belajar</h3>
+            <p className="text-xs text-[#7B78A8] mt-0.5">{sesi.class_groups?.label} · {fmtTime(sesi.scheduled_at)} WIT</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#E5E3FF] transition">
+            <X size={16} className="text-[#7B78A8]"/>
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-sm text-[#7B78A8]">Memuat...</div>
+        ) : siswaList.length === 0 ? (
+          <div className="p-8 text-center text-sm text-[#7B78A8]">Tidak ada siswa di kelas ini</div>
+        ) : (
+          <div className="px-5 py-4 flex flex-col gap-4">
+            {/* Pilih siswa */}
+            {siswaList.length > 1 && (
+              <div>
+                <label className={labelCls}>Siswa</label>
+                <select value={selectedSiswa} onChange={e => loadLaporanSiswa(e.target.value)} className={inputCls}>
+                  {siswaList.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className={labelCls}>Materi yang diajarkan *</label>
+              <input
+                type="text"
+                value={form.materi}
+                onChange={e => setForm(p => ({ ...p, materi: e.target.value }))}
+                placeholder="Contoh: Persamaan kuadrat dan faktorisasi"
+                className={inputCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Perkembangan siswa</label>
+              <textarea
+                value={form.perkembangan}
+                onChange={e => setForm(p => ({ ...p, perkembangan: e.target.value }))}
+                placeholder="Catatan perkembangan pemahaman siswa..."
+                rows={3}
+                className={inputCls + ' resize-none'}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Catatan / saran untuk orang tua</label>
+              <textarea
+                value={form.saran_ortu}
+                onChange={e => setForm(p => ({ ...p, saran_ortu: e.target.value }))}
+                placeholder="Pesan atau saran untuk orang tua siswa..."
+                rows={3}
+                className={inputCls + ' resize-none'}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Link rekaman Google Drive (opsional)</label>
+              <input
+                type="url"
+                value={form.recording_url}
+                onChange={e => setForm(p => ({ ...p, recording_url: e.target.value }))}
+                placeholder="https://drive.google.com/..."
+                className={inputCls}
+              />
+            </div>
+
+            {msg && (
+              <div className={`flex items-center gap-2 text-[11px] px-3 py-2 rounded-xl ${
+                msg.type === 'ok' ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-600 border border-red-200'
+              }`}>
+                {msg.type === 'ok' ? '✅' : '⚠️'} {msg.text}
+              </div>
+            )}
+
+            <button
+              onClick={handleSimpan}
+              disabled={saving}
+              className="flex items-center justify-center gap-2 w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-50">
+              <Send size={14}/>
+              {saving ? 'Menyimpan...' : 'Simpan Laporan'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────
 export default function TutorAbsensiPage() {
   const supabase   = createClient()
   const adminPhone = (process.env.NEXT_PUBLIC_WA_NUMBER ?? '').replace(/\D/g, '')
 
-  const [tutorId,      setTutorId]      = useState<string | null>(null)
-  const [sesiHariIni,  setSesiHariIni]  = useState<any[]>([])
-  const [selectedSesi, setSelectedSesi] = useState<any | null>(null)
-  const [siswaList,    setSiswaList]    = useState<any[]>([])
-  const [absensiMap,   setAbsensiMap]   = useState<Record<string, StatusAbsen>>({})
-  const [notesMap,     setNotesMap]     = useState<Record<string, string>>({})
-  const [savedSesiIds, setSavedSesiIds] = useState<Set<string>>(new Set())
-  const [loading,      setLoading]      = useState(true)
-  const [loadingSiswa, setLoadingSiswa] = useState(false)
-  const [saving,       setSaving]       = useState(false)
-  const [error,        setError]        = useState('')
-  const [success,      setSuccess]      = useState('')
+  const [tutorId,        setTutorId]        = useState<string | null>(null)
+  const [sesiHariIni,    setSesiHariIni]    = useState<any[]>([])
+  const [selectedSesi,   setSelectedSesi]   = useState<any | null>(null)
+  const [siswaList,      setSiswaList]      = useState<any[]>([])
+  const [absensiMap,     setAbsensiMap]     = useState<Record<string, StatusAbsen>>({})
+  const [notesMap,       setNotesMap]       = useState<Record<string, string>>({})
+  const [savedSesiIds,   setSavedSesiIds]   = useState<Set<string>>(new Set())
+  const [laporanSesiIds, setLaporanSesiIds] = useState<Set<string>>(new Set())
+  const [reminderSesi,   setReminderSesi]   = useState<any[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [loadingSiswa,   setLoadingSiswa]   = useState(false)
+  const [saving,         setSaving]         = useState(false)
+  const [error,          setError]          = useState('')
+  const [success,        setSuccess]        = useState('')
+  const [showLaporan,    setShowLaporan]    = useState(false)
 
   useEffect(() => { fetchSesiHariIni() }, [])
 
@@ -95,9 +356,26 @@ export default function TutorAbsensiPage() {
 
     if (sesi && sesi.length > 0) {
       const sesiIds = sesi.map((s: any) => s.id)
+
+      // Cek absensi yang sudah ada
       const { data: existing } = await supabase
         .from('attendances').select('session_id').in('session_id', sesiIds)
       setSavedSesiIds(new Set((existing ?? []).map((a: any) => a.session_id)) as Set<string>)
+
+      // Cek laporan yang sudah diisi
+      const { data: reports } = await supabase
+        .from('session_reports').select('session_id').in('session_id', sesiIds)
+      setLaporanSesiIds(new Set((reports ?? []).map((r: any) => r.session_id)) as Set<string>)
+
+      // Reminder: sesi completed > 5 jam tanpa laporan
+      const completedSesi = (sesi ?? []).filter((s: any) => s.status === 'completed')
+      const reminderList = completedSesi.filter((s: any) => {
+        const hasLaporan = (reports ?? []).some((r: any) => r.session_id === s.id)
+        if (hasLaporan) return false
+        const diffJam = (Date.now() - new Date(s.scheduled_at).getTime()) / (1000 * 60 * 60)
+        return diffJam >= 5
+      })
+      setReminderSesi(reminderList)
     }
 
     setLoading(false)
@@ -147,7 +425,6 @@ export default function TutorAbsensiPage() {
     setAbsensiMap(preAbsen)
     setNotesMap(preNotes)
 
-    // Hitung progress dari sesi completed saja
     const { data: completedSess } = await supabase
       .from('sessions').select('id')
       .eq('class_group_id', sesi.class_groups.id)
@@ -212,22 +489,23 @@ export default function TutorAbsensiPage() {
     await supabase.from('sessions').update({ status: 'completed' }).eq('id', selectedSesi.id)
 
     setSavedSesiIds(prev => new Set([...prev, selectedSesi.id]))
-    setSuccess('Absensi berhasil disimpan! Isi laporan belajar di menu Laporan Siswa.')
+    setSuccess('Absensi berhasil disimpan!')
     setSaving(false)
   }
 
-  function buildWAAdmin(siswaName: string) {
+  function buildWAAdmin(keterangan: string) {
     const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
     const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
-    return encodeURIComponent(`Halo Admin, siswa ${siswaName} belum hadir di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti.`)
+    return encodeURIComponent(`Halo Admin EduKazia, ada siswa ${keterangan} di sesi ${sesiLabel} pukul ${waktu} WIT. Mohon ditindaklanjuti. Terima kasih.`)
   }
-  function buildWAOrtu(siswa: any) {
+
+  function buildWAAdminSiswa(siswa: any) {
     const status     = absensiMap[siswa.studentId]
     const sesiLabel  = selectedSesi?.class_groups?.label ?? 'kelas'
     const waktu      = fmtTime(selectedSesi?.scheduled_at ?? '')
-    const statusText = status === 'izin' ? 'izin' : status === 'sakit' ? 'sakit' : 'tidak hadir (tanpa keterangan)'
+    const statusText = status === 'izin' ? 'izin' : 'sakit'
     const notes      = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
-    return encodeURIComponent(`Halo, kami dari EduKazia ingin menginformasikan bahwa ${siswa.name} ${statusText} pada sesi ${sesiLabel} hari ini pukul ${waktu} WIT.${notes} Terima kasih.`)
+    return encodeURIComponent(`Halo Admin EduKazia, siswa ${siswa.name} ${statusText} pada sesi ${sesiLabel} pukul ${waktu} WIT.${notes} Mohon ditindaklanjuti. Terima kasih.`)
   }
 
   const statusColor: Record<string, string> = {
@@ -246,12 +524,55 @@ export default function TutorAbsensiPage() {
 
   return (
     <div>
-      <div className="mb-6">
+      {/* Modal Laporan */}
+      {showLaporan && selectedSesi && (
+        <ModalLaporan
+          sesi={selectedSesi}
+          onClose={() => setShowLaporan(false)}
+          onSaved={() => {
+            setLaporanSesiIds(prev => new Set([...prev, selectedSesi.id]))
+            // Hapus dari reminder jika ada
+            setReminderSesi(prev => prev.filter(s => s.id !== selectedSesi.id))
+          }}
+        />
+      )}
+
+      <div className="mb-4">
         <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Absensi</h1>
         <p className="text-sm text-[#7B78A8] mt-1">{fmtTanggal()}</p>
       </div>
 
+      {/* ── Banner Reminder Laporan Belum Diisi > 5 jam ── */}
+      {reminderSesi.length > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={15} className="text-amber-600 flex-shrink-0"/>
+            <p className="text-[12px] font-bold text-amber-800">Laporan belajar belum diisi!</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {reminderSesi.map((s: any) => {
+              const jamLalu = Math.floor((Date.now() - new Date(s.scheduled_at).getTime()) / (1000 * 60 * 60))
+              return (
+                <div key={s.id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-3 py-2 border border-amber-100">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-amber-900 truncate">{s.class_groups?.label ?? '—'}</p>
+                    <p className="text-[10px] text-amber-600">Sudah {jamLalu} jam sejak sesi selesai</p>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedSesi(s); setShowLaporan(true) }}
+                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 text-white rounded-lg text-[10px] font-semibold hover:bg-amber-600 transition">
+                    <FileText size={11}/>
+                    Input Sekarang
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* ── Panel Kiri: Daftar Sesi ── */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E5E3FF]">
@@ -265,16 +586,20 @@ export default function TutorAbsensiPage() {
             ) : (
               <div className="divide-y divide-[#F0EFFF]">
                 {sesiHariIni.map((s: any) => {
-                  const isSelected = selectedSesi?.id === s.id
-                  const isDone     = savedSesiIds.has(s.id)
-                  const sudahMulai = isSesiDimulai(s.scheduled_at)
+                  const isSelected  = selectedSesi?.id === s.id
+                  const isDone      = savedSesiIds.has(s.id)
+                  const hasLaporan  = laporanSesiIds.has(s.id)
                   return (
                     <button key={s.id} onClick={() => selectSesi(s)}
                       className={['w-full text-left px-4 py-3 transition-colors', isSelected ? 'bg-[#5C4FE5] text-white' : 'hover:bg-[#F7F6FF]'].join(' ')}>
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2 mb-1">
                         <div className="min-w-0">
-                          <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#1A1640]'}`}>{s.class_groups?.label ?? '—'}</div>
-                          <div className={`text-xs mt-0.5 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>{fmtTime(s.scheduled_at)} WIT · {s.class_groups?.courses?.name ?? '—'}</div>
+                          <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#1A1640]'}`}>
+                            {s.class_groups?.label ?? '—'}
+                          </div>
+                          <div className={`text-xs mt-0.5 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>
+                            {fmtTime(s.scheduled_at)} WIT · {s.class_groups?.courses?.name ?? '—'}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {isDone && (
@@ -282,12 +607,15 @@ export default function TutorAbsensiPage() {
                               <Check size={11} className={isSelected ? 'text-white' : 'text-green-600'}/>
                             </div>
                           )}
-                          {!sudahMulai && !isDone && <Clock size={13} className={isSelected ? 'text-white/60' : 'text-[#9B97B2]'}/>}
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isSelected ? 'bg-white/20 text-white' : (statusColor[s.status] ?? 'bg-gray-50 text-gray-600')}`}>
-                            {statusSesiLabel[s.status] ?? s.status}
-                          </span>
+                          {hasLaporan && (
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isSelected ? 'bg-white/20' : 'bg-purple-100'}`}>
+                              <FileText size={11} className={isSelected ? 'text-white' : 'text-purple-600'}/>
+                            </div>
+                          )}
                         </div>
                       </div>
+                      {/* Countdown */}
+                      <CountdownBadge scheduledAt={s.scheduled_at} isSelected={isSelected} />
                     </button>
                   )
                 })}
@@ -296,6 +624,7 @@ export default function TutorAbsensiPage() {
           </div>
         </div>
 
+        {/* ── Panel Kanan: Absensi ── */}
         <div className="lg:col-span-2">
           {!selectedSesi ? (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
@@ -305,6 +634,7 @@ export default function TutorAbsensiPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+              {/* Header sesi */}
               <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -312,9 +642,9 @@ export default function TutorAbsensiPage() {
                     <p className="text-xs text-[#7B78A8] mt-0.5">{fmtTime(selectedSesi.scheduled_at)} WIT · {selectedSesi.class_groups?.courses?.name}</p>
                   </div>
                   {adminPhone && (
-                    <a href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('(nama siswa)')}`}
+                    <a href={`https://wa.me/${adminPhone}?text=${buildWAAdmin('belum hadir setelah 3 menit sesi dimulai')}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] hover:bg-green-500 text-white rounded-xl text-xs font-semibold transition flex-shrink-0">
+                      className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white rounded-xl text-xs font-semibold transition flex-shrink-0">
                       <AlertTriangle size={13}/><MessageCircle size={13}/> Laporkan ke Admin
                     </a>
                   )}
@@ -324,6 +654,7 @@ export default function TutorAbsensiPage() {
                 </p>
               </div>
 
+              {/* Banner belum mulai */}
               {!isSesiDimulai(selectedSesi.scheduled_at) && (
                 <div className="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl">
                   <Clock size={16} className="text-yellow-600 flex-shrink-0"/>
@@ -344,7 +675,7 @@ export default function TutorAbsensiPage() {
                     {siswaList.map((s, idx) => {
                       const currentStatus = absensiMap[s.studentId]
                       const avatarColor   = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                      const isAbsen       = currentStatus && currentStatus !== 'hadir'
+                      const isIzinSakit   = currentStatus === 'izin' || currentStatus === 'sakit'
                       const canAbsen      = isSesiDimulai(selectedSesi.scheduled_at)
                       return (
                         <div key={s.studentId} className="px-5 py-4">
@@ -357,11 +688,12 @@ export default function TutorAbsensiPage() {
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionDone}/{s.sessionTotal}</div>
                             </div>
-                            {isAbsen && s.phone && canAbsen && (
-                              <a href={`https://wa.me/${s.phone.replace(/\D/g, '')}?text=${buildWAOrtu(s)}`}
+                            {/* Izin/sakit → WA Admin (bukan WA Ortu) */}
+                            {isIzinSakit && adminPhone && canAbsen && (
+                              <a href={`https://wa.me/${adminPhone}?text=${buildWAAdminSiswa(s)}`}
                                 target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition flex-shrink-0">
-                                <MessageCircle size={12}/> WA Ortu
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-semibold hover:bg-amber-100 transition flex-shrink-0">
+                                <MessageCircle size={12}/> WA Admin
                               </a>
                             )}
                           </div>
@@ -373,8 +705,8 @@ export default function TutorAbsensiPage() {
                               </button>
                             ))}
                           </div>
-                          {isAbsen && canAbsen && (
-                            <input type="text" placeholder="Catatan absensi (opsional)..."
+                          {isIzinSakit && canAbsen && (
+                            <input type="text" placeholder="Keterangan izin/sakit (opsional)..."
                               value={notesMap[s.studentId] ?? ''}
                               onChange={e => setNotes(s.studentId, e.target.value)}
                               className="w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
@@ -385,20 +717,29 @@ export default function TutorAbsensiPage() {
                     })}
                   </div>
 
-                  <div className="px-5 py-4 border-t border-[#E5E3FF] bg-[#F7F6FF]">
-                    {error   && <p className="text-xs text-red-600 font-semibold mb-3">{error}</p>}
-                    {success && <p className="text-xs text-green-600 font-semibold mb-3">✅ {success}</p>}
-                    <button onClick={handleSimpan} disabled={saving || !isSesiDimulai(selectedSesi.scheduled_at)}
+                  <div className="px-5 py-4 border-t border-[#E5E3FF] bg-[#F7F6FF] flex flex-col gap-3">
+                    {error   && <p className="text-xs text-red-600 font-semibold">{error}</p>}
+                    {success && <p className="text-xs text-green-600 font-semibold">✅ {success}</p>}
+
+                    <button onClick={handleSimpan}
+                      disabled={saving || !isSesiDimulai(selectedSesi.scheduled_at)}
                       className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
                       {saving ? 'Menyimpan...' : 'Simpan Absensi'}
                     </button>
+
                     {!isSesiDimulai(selectedSesi.scheduled_at) && (
-                      <p className="text-[11px] text-[#9B97B2] text-center mt-2">Tombol aktif saat kelas dimulai pukul {fmtTime(selectedSesi.scheduled_at)} WIT</p>
+                      <p className="text-[11px] text-[#9B97B2] text-center">
+                        Tombol aktif saat kelas dimulai pukul {fmtTime(selectedSesi.scheduled_at)} WIT
+                      </p>
                     )}
-                    <a href="/tutor/laporan"
-                      className="mt-3 w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm transition hover:bg-[#EAE8FD] flex items-center justify-center gap-2">
-                      📋 Isi / Lihat Laporan Belajar Siswa
-                    </a>
+
+                    {/* Tombol Input/Lihat Laporan — inline modal */}
+                    <button
+                      onClick={() => setShowLaporan(true)}
+                      className="w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm transition hover:bg-[#EAE8FD] flex items-center justify-center gap-2">
+                      <FileText size={14}/>
+                      {laporanSesiIds.has(selectedSesi.id) ? 'Lihat / Edit Laporan Belajar' : 'Input Laporan Belajar'}
+                    </button>
                   </div>
                 </>
               )}

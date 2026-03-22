@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, BookOpen, Users, Coins, Clock } from 'lucide-react'
+import { BookOpen, Users, Coins } from 'lucide-react'
+import SesiHariIniClient from './SesiHariIniClient'
 
 export default async function TutorDashboard() {
   const supabase = await createClient()
@@ -22,14 +23,16 @@ export default async function TutorDashboard() {
   const now = new Date()
 
   // Hari ini WIT
-  const todayStart = now.toISOString().split('T')[0] + 'T00:00:00'
-  const todayEnd   = now.toISOString().split('T')[0] + 'T23:59:59'
+  const todayWIT   = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+  const startUTC   = `${todayWIT}T00:00:00+09:00`
+  const endUTC     = `${todayWIT}T23:59:59+09:00`
 
   // Besok WIT
   const tomorrow = new Date(now)
   tomorrow.setDate(now.getDate() + 1)
-  const tomorrowStart = tomorrow.toISOString().split('T')[0] + 'T00:00:00'
-  const tomorrowEnd   = tomorrow.toISOString().split('T')[0] + 'T23:59:59'
+  const tomorrowWIT   = tomorrow.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+  const tomorrowStart = `${tomorrowWIT}T00:00:00+09:00`
+  const tomorrowEnd   = `${tomorrowWIT}T23:59:59+09:00`
 
   // Minggu ini
   const day = now.getDay() === 0 ? 6 : now.getDay() - 1
@@ -57,10 +60,10 @@ export default async function TutorDashboard() {
 
     supabase
       .from('sessions')
-      .select(`id, scheduled_at, zoom_link, status, class_groups!inner(label, tutor_id, courses(name))`)
+      .select(`id, scheduled_at, zoom_link, status, class_groups!inner(id, label, tutor_id, courses(name))`)
       .eq('class_groups.tutor_id', tutorId)
-      .gte('scheduled_at', todayStart)
-      .lte('scheduled_at', todayEnd)
+      .gte('scheduled_at', startUTC)
+      .lte('scheduled_at', endUTC)
       .order('scheduled_at'),
 
     supabase
@@ -101,33 +104,20 @@ export default async function TutorDashboard() {
       style: 'currency', currency: 'IDR', maximumFractionDigits: 0
     }).format(n)
   }
-  function formatTime(iso: string) {
-    return new Date(iso).toLocaleTimeString('id-ID', {
-      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura'
-    })
-  }
   function formatTanggal(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura'
+    })
+  }
+  function formatTime(iso: string) {
+    return new Date(iso).toLocaleTimeString('id-ID', {
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura'
     })
   }
   function formatTanggalPendek(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', {
       weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jayapura'
     })
-  }
-
-  const statusColor: Record<string, string> = {
-    scheduled:   'bg-blue-50 text-blue-700',
-    completed:   'bg-green-50 text-green-700',
-    cancelled:   'bg-red-50 text-red-700',
-    rescheduled: 'bg-yellow-50 text-yellow-700',
-  }
-  const statusLabel: Record<string, string> = {
-    scheduled:   'Terjadwal',
-    completed:   'Selesai',
-    cancelled:   'Dibatalkan',
-    rescheduled: 'Reschedule',
   }
 
   return (
@@ -144,7 +134,12 @@ export default async function TutorDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-2xl border border-purple-100 p-4">
           <div className="w-10 h-10 rounded-xl bg-[#5C4FE5] flex items-center justify-center mb-3">
-            <CalendarDays size={20} color="white" strokeWidth={2}/>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
           </div>
           <div className="text-2xl font-black text-[#1A1640]">{totalSesiMingguIni}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Sesi Minggu Ini</div>
@@ -172,7 +167,7 @@ export default async function TutorDashboard() {
         </div>
       </div>
 
-      {/* Sesi Hari Ini */}
+      {/* Sesi Hari Ini — pakai client component untuk countdown */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-[#1A1640]">Sesi Hari Ini</h2>
@@ -180,54 +175,18 @@ export default async function TutorDashboard() {
             Lihat semua →
           </Link>
         </div>
-
-        {!sesiHariIni || sesiHariIni.length === 0 ? (
-          <div className="text-center py-8 text-[#7B78A8] text-sm">
-            <div className="flex justify-center mb-2">
-              <CalendarDays size={32} strokeWidth={1.5} className="text-[#C4BFFF]"/>
-            </div>
-            Tidak ada sesi mengajar hari ini
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {sesiHariIni.map((s: any) => (
-              <div key={s.id}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]">
-                <div className="w-14 text-center flex-shrink-0">
-                  <div className="text-sm font-black text-[#5C4FE5]">{formatTime(s.scheduled_at)}</div>
-                  <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-[#1A1640] truncate">
-                    {s.class_groups?.label ?? '—'}
-                  </div>
-                  <div className="text-xs text-[#7B78A8]">
-                    {s.class_groups?.courses?.name ?? '—'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {s.zoom_link && (
-                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                      className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
-                      Buka Zoom
-                    </a>
-                  )}
-                  <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${statusColor[s.status] ?? 'bg-gray-50 text-gray-700'}`}>
-                    {statusLabel[s.status] ?? s.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <SesiHariIniClient sesiHariIni={sesiHariIni ?? []} />
       </div>
 
-      {/* Notifikasi Sesi Besok — muncul kalau ada */}
+      {/* Notifikasi Sesi Besok */}
       {sesiHariEsok && sesiHariEsok.length > 0 && (
         <div className="bg-[#EEEDFE] border border-[#C4BFFF] rounded-2xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Clock size={16} className="text-[#5C4FE5]"/>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5C4FE5" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
               <span className="text-sm font-bold text-[#3C3489]">
                 Besok — {formatTanggalPendek(tomorrowStart)}
               </span>
@@ -273,9 +232,7 @@ export default async function TutorDashboard() {
 
         {!kelasAktif || kelasAktif.length === 0 ? (
           <div className="text-center py-8 text-[#7B78A8] text-sm">
-            <div className="flex justify-center mb-2">
-              <BookOpen size={32} strokeWidth={1.5} className="text-[#C4BFFF]"/>
-            </div>
+            <BookOpen size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
             Belum ada kelas aktif
           </div>
         ) : (
