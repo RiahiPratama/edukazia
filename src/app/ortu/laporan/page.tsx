@@ -55,7 +55,6 @@ export default async function OrtuLaporanPage() {
 
   const studentIds = students.map(s => s.id)
 
-  // Semua session yang sudah completed dari kelas aktif
   const { data: enrollments } = await supabase
     .from('enrollments')
     .select('student_id, class_group_id')
@@ -63,7 +62,6 @@ export default async function OrtuLaporanPage() {
 
   const classGroupIds = [...new Set((enrollments ?? []).map((e: any) => e.class_group_id).filter(Boolean))]
 
-  // Sessions completed
   const { data: sessions } = classGroupIds.length > 0
     ? await supabase
         .from('sessions')
@@ -76,17 +74,16 @@ export default async function OrtuLaporanPage() {
 
   const sessionIds = (sessions ?? []).map((s: any) => s.id)
 
-  // Reports (saran_ortu saja — siswa tidak lihat)
+  // Reports — termasuk recording_url
   const { data: reports } = sessionIds.length > 0
     ? await supabase
         .from('session_reports')
-        .select('session_id, student_id, materi, perkembangan, saran_ortu, created_at')
+        .select('session_id, student_id, materi, perkembangan, saran_ortu, recording_url, created_at')
         .in('session_id', sessionIds)
         .in('student_id', studentIds)
         .order('created_at', { ascending: false })
     : { data: [] }
 
-  // Attendances
   const { data: attendances } = sessionIds.length > 0
     ? await supabase
         .from('attendances')
@@ -95,7 +92,6 @@ export default async function OrtuLaporanPage() {
         .in('student_id', studentIds)
     : { data: [] }
 
-  // Class groups & tutor names
   const { data: classGroups } = classGroupIds.length > 0
     ? await supabase.from('class_groups').select('id, label, tutor_id').in('id', classGroupIds)
     : { data: [] }
@@ -105,9 +101,7 @@ export default async function OrtuLaporanPage() {
     ? await supabase.from('profiles').select('id, full_name').in('id', tutorIds)
     : { data: [] }
 
-  // Susun per siswa per laporan
   const reportsBySiswaThenClass: Record<string, Record<string, any[]>> = {}
-
   students.forEach(s => { reportsBySiswaThenClass[s.id] = {} })
 
   ;(reports ?? []).forEach((r: any) => {
@@ -122,15 +116,16 @@ export default async function OrtuLaporanPage() {
       reportsBySiswaThenClass[r.student_id][cgId] = []
     }
     reportsBySiswaThenClass[r.student_id][cgId].push({
-      sessionId:   r.session_id,
-      scheduledAt: sesi?.scheduled_at ?? r.created_at,
-      classLabel:  cg?.label ?? '—',
-      tutorName:   tutor?.full_name ?? '—',
-      materi:      r.materi,
+      sessionId:    r.session_id,
+      scheduledAt:  sesi?.scheduled_at ?? r.created_at,
+      classLabel:   cg?.label ?? '—',
+      tutorName:    tutor?.full_name ?? '—',
+      materi:       r.materi,
       perkembangan: r.perkembangan,
-      saranOrtu:   r.saran_ortu,
-      attendance:  att?.status ?? null,
-      createdAt:   r.created_at,
+      saranOrtu:    r.saran_ortu,
+      recordingUrl: r.recording_url ?? null,
+      attendance:   att?.status ?? null,
+      createdAt:    r.created_at,
     })
   })
 
@@ -225,6 +220,41 @@ export default async function OrtuLaporanPage() {
                           <p className="text-[11px]" style={{ color: student.textColor }}>
                             {rep.saranOrtu}
                           </p>
+                        </div>
+                      )}
+
+                      {/* ── Banner Rekaman ── */}
+                      {rep.recordingUrl && (
+                        <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-lg"
+                          style={{ background: '#F0F4FF', border: '0.5px solid #C7D4F7' }}>
+                          {/* Icon kamera */}
+                          <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+                            style={{ background: '#5C4FE5' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                              <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold text-[#3C3489]">
+                              Rekaman kelas tersedia
+                            </p>
+                            <p className="text-[9px] text-[#5C4FE5]">
+                              Download untuk review materi di rumah
+                            </p>
+                          </div>
+                          <a
+                            href={rep.recordingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+                            style={{ background: '#5C4FE5', color: '#fff' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+                              <path d="M12 16l-6-6h4V4h4v6h4l-6 6z"/>
+                              <path d="M20 18H4v2h16v-2z"/>
+                            </svg>
+                            Download
+                          </a>
                         </div>
                       )}
                     </div>

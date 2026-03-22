@@ -123,7 +123,7 @@ export default async function OrtuDashboardPage() {
         .in('student_id', studentIds)
     : { data: [] }
 
-  // Ambil laporan terbaru (activity feed)
+  // Ambil laporan terbaru (activity feed) — termasuk recording_url
   const allCompletedIds = classGroupIds.length > 0
     ? (await supabase
         .from('sessions')
@@ -139,7 +139,7 @@ export default async function OrtuDashboardPage() {
   const { data: recentReports } = completedIds.length > 0
     ? await supabase
         .from('session_reports')
-        .select('session_id, student_id, materi, perkembangan, saran_ortu, created_at')
+        .select('session_id, student_id, materi, perkembangan, saran_ortu, recording_url, created_at')
         .in('session_id', completedIds)
         .in('student_id', studentIds)
         .order('created_at', { ascending: false })
@@ -158,7 +158,6 @@ export default async function OrtuDashboardPage() {
       return e.status === 'active'
     })
 
-    // Progress per enrollment
     const enrollmentsWithProgress = activeEnrollments.map((e: any) => {
       const cg = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
       const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
@@ -171,7 +170,6 @@ export default async function OrtuDashboardPage() {
       const progress = (e.session_start_offset ?? 0) + hadirCount
       const total    = e.sessions_total ?? 8
 
-      // Sesi berikutnya
       const nextSesi = (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id)
 
       return {
@@ -186,7 +184,6 @@ export default async function OrtuDashboardPage() {
       }
     })
 
-    // Kehadiran bulan ini
     const studentAttendances = (attendances ?? []).filter((a: any) => a.student_id === student.id)
     const hadirCount  = studentAttendances.filter((a: any) => a.status === 'hadir').length
     const totalAtt    = studentAttendances.length
@@ -201,22 +198,22 @@ export default async function OrtuDashboardPage() {
     }
   })
 
-  // Activity feed
+  // Activity feed — sertakan recording_url
   const activityFeed = (recentReports ?? []).map((r: any) => {
     const student = students.find(s => s.id === r.student_id)
     const sesi    = allCompletedIds.find((s: any) => s.id === r.session_id)
     const cg      = (classGroups ?? []).find((c: any) => c.id === sesi?.class_group_id)
     return {
-      studentName: student?.full_name ?? '—',
-      studentId:   r.student_id,
-      classLabel:  cg?.label ?? '—',
-      materi:      r.materi,
-      saranOrtu:   r.saran_ortu,
-      createdAt:   r.created_at,
+      studentName:  student?.full_name ?? '—',
+      studentId:    r.student_id,
+      classLabel:   cg?.label ?? '—',
+      materi:       r.materi,
+      saranOrtu:    r.saran_ortu,
+      recordingUrl: r.recording_url ?? null,
+      createdAt:    r.created_at,
     }
   })
 
-  // Summary stats
   const totalSesiMingguIni = (upcomingSessions ?? []).length
   const allHadir = (attendances ?? []).filter((a: any) => a.status === 'hadir').length
   const allTotal = (attendances ?? []).length

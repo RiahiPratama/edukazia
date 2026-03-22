@@ -421,6 +421,28 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                     {!item.saranOrtu && item.materi && (
                       <p className="text-[10px] text-stone-400">Materi: {item.materi}</p>
                     )}
+                    {/* Banner rekaman */}
+                    {item.recordingUrl && (
+                      <div className="mt-1.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+                        style={{ background: '#F0F4FF', border: '0.5px solid #C7D4F7' }}>
+                        <div className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center"
+                          style={{ background: '#5C4FE5' }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+                            <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                          </svg>
+                        </div>
+                        <p className="text-[9px] text-[#3C3489] flex-1 font-medium">Rekaman tersedia — download untuk review</p>
+                        <a href={item.recordingUrl} target="_blank" rel="noopener noreferrer" download
+                          className="flex-shrink-0 flex items-center gap-0.5 px-2 py-1 rounded text-[9px] font-semibold"
+                          style={{ background: '#5C4FE5', color: '#fff' }}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 16l-6-6h4V4h4v6h4l-6 6z"/>
+                            <path d="M20 18H4v2h16v-2z"/>
+                          </svg>
+                          Download
+                        </a>
+                      </div>
+                    )}
                   </div>
                   <p className="text-[10px] text-stone-300 flex-shrink-0 mt-0.5">
                     {timeAgo(item.createdAt)}
