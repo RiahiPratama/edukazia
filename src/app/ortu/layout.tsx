@@ -82,7 +82,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
 
       const [{ data: asParent }, { data: asSelf }] = await Promise.all([
         supabase.from('students')
-          .select(`id, profile_id, relation_role, grade, school,
+          .select(`id, slug, profile_id, relation_role, grade, school,
             profiles!students_profile_id_fkey(full_name)`)
           .eq('parent_profile_id', userId),
         supabase.from('students').select('id')
@@ -96,6 +96,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
 
       const childList: ChildInfo[] = (asParent as any[]).map(row => ({
         id:            row.id,
+        slug:          row.slug ?? row.id,  // fallback ke id kalau slug belum ada
         profile_id:    row.profile_id,
         full_name:     (Array.isArray(row.profiles) ? row.profiles[0] : row.profiles)?.full_name ?? '(Tanpa nama)',
         grade:         row.grade,
@@ -135,6 +136,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
   const { profile, children: kids, isAlsoStudent } = ctxData
   const activeChild = activeStudentId ? kids.find(k => k.id === activeStudentId) : null
   const currentNav  = isAnakMode && activeStudentId ? navSiswa(activeStudentId) : NAV_ORTU
+  // activeStudentId sekarang adalah slug (bukan UUID)
 
   // ── CSS Variables untuk dark/light mode ──────────────────────────────────
   const cssVars = isDark ? `
@@ -305,7 +307,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                 return (
                   <Link
                     key={k.id}
-                    href={`/ortu/anak/${k.id}`}
+                    href={`/ortu/anak/${k.slug}`}
                     onClick={() => setSidebarOpen(false)}
                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg mb-1"
                     style={{ background: 'rgba(255,255,255,0.08)' }}>
@@ -336,7 +338,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                   return (
                     <Link
                       key={kid.id}
-                      href={`/ortu/anak/${kid.id}`}
+                      href={`/ortu/anak/${kid.slug}`}
                       onClick={() => setSidebarOpen(false)}
                       className="flex items-center gap-2 px-2.5 py-2 rounded-lg"
                       style={{ border: `0.5px solid ${col.border}`, background: col.bg + '50' }}>

@@ -4,6 +4,7 @@ import { createContext, useContext } from 'react'
 
 export interface ChildInfo {
   id: string
+  slug: string
   profile_id: string | null
   full_name: string
   grade: string | null

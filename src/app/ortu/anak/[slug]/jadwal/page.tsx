@@ -22,7 +22,7 @@ const statusBadge: Record<string, { bg: string; text: string; label: string }> =
   cancelled:  { bg: '#FCEBEB', text: '#791F1F', label: 'Dibatalkan' },
 }
 
-export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{ studentId: string }> }) {
+export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{ slug: string }> }) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,14 +38,24 @@ export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) redirect('/login')
 
-  const { studentId } = await params
+  const { slug } = await params
+
+  // Lookup studentId dari slug + verifikasi milik ortu ini
+  const { data: slugRow } = await supabase
+    .from('students')
+    .select('id')
+    .eq('slug', slug)
+    .eq('parent_profile_id', session.user.id)
+    .single()
+
+  const studentId = slugRow?.id ?? null
+  if (!studentId) redirect('/ortu/dashboard')
 
   // Verifikasi siswa milik ortu ini
   const { data: student } = await supabase
     .from('students')
     .select(`id, grade, profiles!students_profile_id_fkey(full_name)`)
     .eq('id', studentId)
-    .eq('parent_profile_id', session.user.id)
     .single()
 
   if (!student) redirect('/ortu/dashboard')

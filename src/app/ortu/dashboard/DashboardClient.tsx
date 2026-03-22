@@ -130,7 +130,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                     </p>
                   </div>
                 </div>
-                <Link href={`/ortu/anak/${child.id}`}
+                <Link href={`/ortu/anak/${child.slug ?? child.id}`}
                   className="text-[11px] text-stone-400 hover:text-stone-700 flex items-center gap-0.5">
                   Lihat <ChevronRight size={11} />
                 </Link>

@@ -36,7 +36,7 @@ export default async function OrtuDashboardPage() {
   // Ambil daftar anak
   const { data: studentRows } = await supabase
     .from('students')
-    .select(`id, grade, school, relation_role,
+    .select(`id, slug, grade, school, relation_role,
       profiles!students_profile_id_fkey(id, full_name)`)
     .eq('parent_profile_id', userId)
 
