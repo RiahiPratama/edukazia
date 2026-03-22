@@ -492,7 +492,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
         {/* ═══ MAIN ═══ */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-          {/* Mobile topbar */}
+          {/* Mobile topbar — Opsi 1 */}
           <div
             className="lg:hidden flex items-center gap-2 px-3 py-2.5 sticky top-0 z-10"
             style={{
@@ -515,53 +515,48 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
               <Menu size={15} />
             </button>
 
-            {/* Mode ortu: avatar anak sebagai shortcut */}
-            {!isAnakMode && kids.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {kids.slice(0, 4).map((kid, idx) => {
-                  const col = CHILD_COLORS[idx % CHILD_COLORS.length]
-                  return (
-                    <Link
-                      key={kid.id}
-                      href={`/ortu/anak/${kid.slug}`}
-                      onClick={() => setSidebarOpen(false)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                      style={{ background: col.bg, color: col.text, border: `0.5px solid ${col.border}` }}>
-                      {initials(kid.full_name)}
-                    </Link>
-                  )
-                })}
+            {/* Mode ortu: nama + divider + avatar anak shortcut */}
+            {!isAnakMode && (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="min-w-0">
+                  <p className="text-[12px] font-semibold leading-tight truncate"
+                    style={{ color: 'var(--ortu-text)' }}>
+                    {profile.full_name}
+                  </p>
+                  <p className="text-[10px] leading-tight"
+                    style={{ color: isDark ? '#C4B89A' : '#854F0B' }}>
+                    Orang Tua
+                  </p>
+                </div>
+                {kids.length > 0 && (
+                  <>
+                    <div className="flex-shrink-0" style={{ width: '1px', height: '24px', background: isDark ? '#2A2A38' : '#FEF3C7' }} />
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {kids.slice(0, 4).map((kid, idx) => {
+                        const col = CHILD_COLORS[idx % CHILD_COLORS.length]
+                        return (
+                          <Link
+                            key={kid.id}
+                            href={`/ortu/anak/${kid.slug}`}
+                            onClick={() => setSidebarOpen(false)}
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-[8px] font-bold flex-shrink-0"
+                            style={{ background: col.bg, color: col.text, border: `0.5px solid ${col.border}` }}>
+                            {initials(kid.full_name)}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Mode anak: avatar anak aktif */}
+            {/* Mode anak: nama anak */}
             {isAnakMode && activeChild && (
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '0.5px solid rgba(255,255,255,0.25)' }}>
-                {initials(activeChild.full_name)}
-              </div>
-            )}
-
-            <div className="flex-1" />
-
-            {/* Kanan: nama user + label portal */}
-            {!isAnakMode ? (
-              <div className="text-right flex-shrink-0">
-                <p className="text-[12px] font-semibold leading-tight"
-                  style={{ color: 'var(--ortu-text)' }}>
-                  {profile.full_name.split(' ')[0]}
-                </p>
-                <p className="text-[10px] leading-tight"
-                  style={{ color: isDark ? '#C4B89A' : '#854F0B' }}>
-                  Portal Orang Tua
-                </p>
-              </div>
-            ) : (
-              <div className="text-right flex-shrink-0">
-                <p className="text-[12px] font-semibold leading-tight"
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold leading-tight truncate"
                   style={{ color: isDark ? '#AFA9EC' : '#3C3489' }}>
-                  {activeChild?.full_name.split(' ')[0]}
+                  {activeChild.full_name}
                 </p>
                 <p className="text-[10px] leading-tight"
                   style={{ color: isDark ? '#7B78C4' : '#5C4FE5' }}>
@@ -569,6 +564,20 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                 </p>
               </div>
             )}
+
+            {/* Logo EduKazia di kanan */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div
+                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
+                style={{ background: '#5C4FE5', color: '#fff', fontFamily: "'Sora', sans-serif" }}>
+                E
+              </div>
+              <span
+                className="text-[12px] font-bold hidden sm:block"
+                style={{ fontFamily: "'Sora', sans-serif", color: 'var(--ortu-text)' }}>
+                edu<span style={{ color: '#E6B800' }}>kazia</span>
+              </span>
+            </div>
           </div>
 
           {/* Page content */}
