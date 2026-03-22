@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Save, Eye, EyeOff, CheckCircle2, AlertCircle, Mail } from 'lucide-react'
 
 const CHILD_COLORS = ['#E6B800', '#1D9E75', '#5C4FE5', '#D85A30', '#639922']
 const CHILD_BG     = ['#FAEEDA', '#E1F5EE', '#EEEDFE', '#FAECE7', '#EAF3DE']
@@ -29,6 +29,11 @@ export default function OrtuPengaturanPage() {
   const [showPwd, setShowPwd] = useState(false)
   const [savingPwd, setSavingPwd] = useState(false)
   const [pwdMsg, setPwdMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  // Ganti Email
+  const [formEmail, setFormEmail] = useState({ newEmail: '' })
+  const [savingEmail, setSavingEmail] = useState(false)
+  const [emailMsg, setEmailMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   // ── Anak ──────────────────────────────────────────────────────────────────
   const [children, setChildren] = useState<any[]>([])
@@ -97,6 +102,26 @@ export default function OrtuPengaturanPage() {
     setFormPwd({ password: '', confirm: '' })
   }
 
+  async function saveEmail() {
+    const newEmail = formEmail.newEmail.trim().toLowerCase()
+    if (!newEmail) { setEmailMsg({ type: 'err', text: 'Email baru tidak boleh kosong.' }); return }
+    if (newEmail === profile?.email) { setEmailMsg({ type: 'err', text: 'Email baru sama dengan email saat ini.' }); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      setEmailMsg({ type: 'err', text: 'Format email tidak valid.' }); return
+    }
+    setSavingEmail(true); setEmailMsg(null)
+    const { error } = await supabase.auth.updateUser({ email: newEmail })
+    setSavingEmail(false)
+    if (error) {
+      setEmailMsg({ type: 'err', text: error.message }); return
+    }
+    setEmailMsg({
+      type: 'ok',
+      text: `Link konfirmasi dikirim ke ${newEmail}. Cek inbox dan klik link untuk mengonfirmasi perubahan email.`,
+    })
+    setFormEmail({ newEmail: '' })
+  }
+
   function startEditChild(child: any) {
     setEditingChild(child.id)
     setFormChild({ full_name: child.full_name, grade: child.grade, school: child.school, relation_role: child.relation_role })
@@ -105,14 +130,11 @@ export default function OrtuPengaturanPage() {
 
   async function saveChild(childId: string) {
     setSavingChild(true); setChildMsg(null)
-    // Update nama di profiles (via profile_id)
     const child = children.find(c => c.id === childId)
     if (!child) { setSavingChild(false); return }
 
-    // Cari profile_id dari students
     const { data: stu } = await supabase.from('students').select('profile_id').eq('id', childId).single()
 
-    // Update students
     const { error: errStu } = await supabase.from('students').update({
       grade:         formChild.grade.trim() || null,
       school:        formChild.school.trim() || null,
@@ -125,7 +147,6 @@ export default function OrtuPengaturanPage() {
       return
     }
 
-    // Update nama di profiles kalau ada profile_id
     if (stu?.profile_id) {
       const { error: errProf } = await supabase.from('profiles')
         .update({ full_name: formChild.full_name.trim() })
@@ -159,8 +180,6 @@ export default function OrtuPengaturanPage() {
       grade:             formNew.grade.trim() || null,
       school:            formNew.school.trim() || null,
       relation_role:     formNew.relation_role,
-      // full_name disimpan di profiles — tapi jika tidak punya akun sendiri, simpan di notes atau label sementara
-      // Untuk sekarang kita simpan di kolom notes sebagai workaround
     })
 
     setAddingChild(false)
@@ -197,6 +216,7 @@ export default function OrtuPengaturanPage() {
       {/* ═══ Tab Akun ═══ */}
       {activeTab === 'akun' && (
         <div className="flex flex-col gap-5">
+
           {/* Data pribadi */}
           <div className="bg-white border border-stone-100 rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-50">
@@ -210,10 +230,9 @@ export default function OrtuPengaturanPage() {
                   className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Email</label>
+                <label className={labelCls}>Email Saat Ini</label>
                 <input type="text" value={profile?.email ?? '—'} disabled
                   className={inputCls + ' opacity-50 cursor-not-allowed'} />
-                <p className="text-[10px] text-stone-400 mt-1">Email tidak bisa diubah sendiri. Hubungi admin.</p>
               </div>
               <div>
                 <label className={labelCls}>No. HP</label>
@@ -238,7 +257,45 @@ export default function OrtuPengaturanPage() {
             </div>
           </div>
 
-          {/* Ganti password */}
+          {/* ── Ganti Email ── */}
+          <div className="bg-white border border-stone-100 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-stone-50">
+              <p className="text-[12px] font-bold text-stone-700">Ganti Email</p>
+            </div>
+            <div className="px-4 py-4 flex flex-col gap-3">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100">
+                <Mail size={13} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                <p className="text-[10px] text-blue-700 leading-relaxed">
+                  Setelah submit, link konfirmasi akan dikirim ke email baru kamu. Klik link tersebut untuk menyelesaikan perubahan.
+                </p>
+              </div>
+              <div>
+                <label className={labelCls}>Email Baru</label>
+                <input
+                  type="email"
+                  value={formEmail.newEmail}
+                  onChange={e => setFormEmail({ newEmail: e.target.value })}
+                  placeholder="emailbaru@contoh.com"
+                  className={inputCls}
+                />
+              </div>
+              {emailMsg && (
+                <div className={`flex items-start gap-2 text-[11px] px-3 py-2 rounded-lg ${
+                  emailMsg.type === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                }`}>
+                  {emailMsg.type === 'ok' ? <CheckCircle2 size={13} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />}
+                  <span>{emailMsg.text}</span>
+                </div>
+              )}
+              <button onClick={saveEmail} disabled={savingEmail}
+                className="flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-600 text-white text-[12px] font-semibold hover:bg-blue-700 transition disabled:opacity-50">
+                <Mail size={13} />
+                {savingEmail ? 'Mengirim…' : 'Kirim Link Konfirmasi'}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Ganti Password ── */}
           <div className="bg-white border border-stone-100 rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-50">
               <p className="text-[12px] font-bold text-stone-700">Ganti Password</p>
@@ -285,6 +342,7 @@ export default function OrtuPengaturanPage() {
               </button>
             </div>
           </div>
+
         </div>
       )}
 
@@ -300,7 +358,6 @@ export default function OrtuPengaturanPage() {
             return (
               <div key={child.id} className="bg-white border border-stone-100 rounded-2xl overflow-hidden mb-3"
                 style={{ borderTop: `3px solid ${col}` }}>
-                {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-stone-50">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
