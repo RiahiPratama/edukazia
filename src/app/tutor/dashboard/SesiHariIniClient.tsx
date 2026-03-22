@@ -2,15 +2,17 @@
 
 import { useState, useEffect } from 'react'
 
-function getDurasiMenit(classTypeName: string): number {
-  const name = (classTypeName ?? '').toLowerCase()
-  if (name.includes('privat') && !name.includes('semi')) return 45
+function getDurasiMenit(classTypeName: string, courseName: string): number {
+  const type   = (classTypeName ?? '').toLowerCase()
+  const course = (courseName ?? '').toLowerCase()
+  if (type.includes('privat') && !type.includes('semi') && course.includes('inggris')) return 45
   return 60
 }
 
-function CountdownBadge({ scheduledAt, classTypeName }: {
+function CountdownBadge({ scheduledAt, classTypeName, courseName }: {
   scheduledAt: string
   classTypeName: string
+  courseName: string
 }) {
   const [diffMs, setDiffMs] = useState(() => new Date(scheduledAt).getTime() - Date.now())
 
@@ -21,7 +23,7 @@ function CountdownBadge({ scheduledAt, classTypeName }: {
     return () => clearInterval(interval)
   }, [scheduledAt])
 
-  const durasiMs = getDurasiMenit(classTypeName) * 60 * 1000
+  const durasiMs = getDurasiMenit(classTypeName, courseName) * 60 * 1000
 
   // Lebih dari 3 jam ke depan → tidak tampil
   if (diffMs > 3 * 60 * 60 * 1000) return null
@@ -114,7 +116,7 @@ export default function SesiHariIniClient({ sesiHariIni }: { sesiHariIni: any[] 
                 {s.class_groups?.courses?.name ?? '—'}
               </div>
               <div className="mt-1">
-                <CountdownBadge scheduledAt={s.scheduled_at} classTypeName={classTypeName} />
+                <CountdownBadge scheduledAt={s.scheduled_at} classTypeName={classTypeName} courseName={s.class_groups?.courses?.name ?? ''} />
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
