@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type Tab = 'email' | 'phone'
+type Mode = 'login' | 'forgot'
 
 function LoginForm() {
   const router = useRouter()
@@ -13,6 +14,7 @@ function LoginForm() {
   const supabase = createClient()
 
   const [tab, setTab] = useState<Tab>('email')
+  const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [phone, setPhone] = useState('')
@@ -47,6 +49,20 @@ function LoginForm() {
     await redirectByRole()
   }
 
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!email) { setMsg({ text: 'Masukkan email kamu.', err: true }); return }
+    setLoading(true); setMsg(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setLoading(false)
+    if (error) {
+      setMsg({ text: 'Gagal mengirim email: ' + error.message, err: true }); return
+    }
+    setMsg({ text: 'Link reset password sudah dikirim! Cek inbox email kamu.', err: false })
+  }
+
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault()
     const raw = phone.replace(/\D/g, '')
@@ -77,102 +93,170 @@ function LoginForm() {
     if (d && i < 5) document.getElementById(`otp-${i + 1}`)?.focus()
   }
 
+  function switchMode(m: Mode) {
+    setMode(m); setMsg(null); setEmail(''); setPassword('')
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-xl w-full max-w-[400px] overflow-hidden border border-[#E5E3FF]">
       <div className="bg-gradient-to-br from-[#3D34C4] to-[#5C4FE5] px-7 py-6 text-center">
         <h1 className="font-bold text-2xl text-white">edu<span className="text-[#FFCC00]">kazia</span></h1>
-        <p className="text-xs text-white/70 tracking-widest uppercase mt-1">Portal Pengguna</p>
+        <p className="text-xs text-white/70 tracking-widest uppercase mt-1">
+          {mode === 'forgot' ? 'Reset Password' : 'Portal Pengguna'}
+        </p>
       </div>
+
       <div className="p-7">
-        <div className="flex bg-[#F0EFFF] rounded-full p-1 mb-5">
-          {(['email', 'phone'] as Tab[]).map(t => (
-            <button key={t} onClick={() => { setTab(t); setMsg(null); setStep('input') }}
-              className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${tab === t ? 'bg-[#5C4FE5] text-white shadow' : 'text-[#4A4580]'}`}>
-              {t === 'email' ? 'Email' : 'Nomor HP'}
-            </button>
-          ))}
-        </div>
 
-        {tab === 'email' && (
-          <form onSubmit={handleEmailLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="nama@email.com"
-                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+        {/* ── Mode: Lupa Password ── */}
+        {mode === 'forgot' && (
+          <>
+            <div className="text-center mb-5">
+              <p className="text-sm text-[#4A4580]">
+                Masukkan email akun kamu. Kami akan kirimkan link untuk membuat password baru.
+              </p>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
-            </div>
-            <button type="submit" disabled={loading}
-              className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 mt-2">
-              {loading ? 'Memverifikasi...' : 'Masuk ke Portal'}
-            </button>
-          </form>
-        )}
-
-        {tab === 'phone' && step === 'input' && (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Nomor HP terdaftar</label>
-              <div className="flex gap-2">
-                <span className="px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm font-bold text-[#4A4580] bg-[#F0EFFF]">+62</span>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                  placeholder="812 3456 7890"
-                  className="flex-1 px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="nama@email.com"
+                  className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+                />
               </div>
-              <p className="text-xs text-[#7B78A8] mt-1.5">Gunakan nomor yang didaftarkan admin EduKazia</p>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 mt-2">
+                {loading ? 'Mengirim...' : 'Kirim Link Reset'}
+              </button>
+            </form>
+            {msg && (
+              <div className={`mt-4 px-4 py-3 rounded-xl text-sm font-semibold text-center ${msg.err
+                ? 'bg-red-50 text-red-600 border border-red-200'
+                : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
+                {msg.text}
+              </div>
+            )}
+            <div className="mt-5 text-center">
+              <button
+                onClick={() => switchMode('login')}
+                className="text-[#5C4FE5] text-sm font-semibold hover:underline">
+                ← Kembali ke login
+              </button>
             </div>
-            <button type="submit" disabled={loading}
-              className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-              {loading ? 'Mengirim...' : 'Kirim Kode OTP'}
-            </button>
-          </form>
+          </>
         )}
 
-        {tab === 'phone' && step === 'otp' && (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <div className="text-center mb-2">
-              <p className="text-sm text-[#4A4580]">Kode 6 digit dikirim ke</p>
-              <p className="font-bold text-[#1A1640]">+62 {phone}</p>
-            </div>
-            <div className="flex gap-2 justify-center">
-              {otp.map((d, i) => (
-                <input key={i} id={`otp-${i}`} type="tel" maxLength={1} value={d}
-                  onChange={e => handleOtpChange(e.target.value, i)}
-                  onKeyDown={e => e.key === 'Backspace' && !d && i > 0 && document.getElementById(`otp-${i - 1}`)?.focus()}
-                  className="w-11 h-12 text-center text-xl font-bold border-2 border-[#E5E3FF] rounded-xl bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
+        {/* ── Mode: Login ── */}
+        {mode === 'login' && (
+          <>
+            <div className="flex bg-[#F0EFFF] rounded-full p-1 mb-5">
+              {(['email', 'phone'] as Tab[]).map(t => (
+                <button key={t} onClick={() => { setTab(t); setMsg(null); setStep('input') }}
+                  className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${tab === t ? 'bg-[#5C4FE5] text-white shadow' : 'text-[#4A4580]'}`}>
+                  {t === 'email' ? 'Email' : 'Nomor HP'}
+                </button>
               ))}
             </div>
-            <p className="text-center text-xs text-[#7B78A8]">
-              Berlaku 10 menit ·{' '}
-              <button type="button" onClick={() => { setStep('input'); setOtp(['', '', '', '', '', '']) }}
-                className="text-[#5C4FE5] font-semibold">Ganti nomor</button>
-            </p>
-            <button type="submit" disabled={loading}
-              className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-              {loading ? 'Memverifikasi...' : 'Verifikasi & Masuk'}
-            </button>
-          </form>
-        )}
 
-        {msg && (
-          <div className={`mt-4 px-4 py-3 rounded-xl text-sm font-semibold text-center ${msg.err ? 'bg-red-50 text-red-600 border border-red-200'
-            : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
-            {msg.text}
-          </div>
+            {tab === 'email' && (
+              <form onSubmit={handleEmailLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Email</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder="nama@email.com"
+                    className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => switchMode('forgot')}
+                      className="text-xs text-[#5C4FE5] font-semibold hover:underline">
+                      Lupa password?
+                    </button>
+                  </div>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 mt-2">
+                  {loading ? 'Memverifikasi...' : 'Masuk ke Portal'}
+                </button>
+              </form>
+            )}
+
+            {tab === 'phone' && step === 'input' && (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Nomor HP terdaftar</label>
+                  <div className="flex gap-2">
+                    <span className="px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm font-bold text-[#4A4580] bg-[#F0EFFF]">+62</span>
+                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                      placeholder="812 3456 7890"
+                      className="flex-1 px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+                  </div>
+                  <p className="text-xs text-[#7B78A8] mt-1.5">Gunakan nomor yang didaftarkan admin EduKazia</p>
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                  {loading ? 'Mengirim...' : 'Kirim Kode OTP'}
+                </button>
+              </form>
+            )}
+
+            {tab === 'phone' && step === 'otp' && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="text-center mb-2">
+                  <p className="text-sm text-[#4A4580]">Kode 6 digit dikirim ke</p>
+                  <p className="font-bold text-[#1A1640]">+62 {phone}</p>
+                </div>
+                <div className="flex gap-2 justify-center">
+                  {otp.map((d, i) => (
+                    <input key={i} id={`otp-${i}`} type="tel" maxLength={1} value={d}
+                      onChange={e => handleOtpChange(e.target.value, i)}
+                      onKeyDown={e => e.key === 'Backspace' && !d && i > 0 && document.getElementById(`otp-${i - 1}`)?.focus()}
+                      className="w-11 h-12 text-center text-xl font-bold border-2 border-[#E5E3FF] rounded-xl bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
+                  ))}
+                </div>
+                <p className="text-center text-xs text-[#7B78A8]">
+                  Berlaku 10 menit ·{' '}
+                  <button type="button" onClick={() => { setStep('input'); setOtp(['', '', '', '', '', '']) }}
+                    className="text-[#5C4FE5] font-semibold">Ganti nomor</button>
+                </p>
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                  {loading ? 'Memverifikasi...' : 'Verifikasi & Masuk'}
+                </button>
+              </form>
+            )}
+
+            {msg && (
+              <div className={`mt-4 px-4 py-3 rounded-xl text-sm font-semibold text-center ${msg.err
+                ? 'bg-red-50 text-red-600 border border-red-200'
+                : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
+                {msg.text}
+              </div>
+            )}
+          </>
         )}
       </div>
-      <div className="px-7 pb-5 text-center text-xs text-[#7B78A8] border-t border-[#E5E3FF] pt-4">
-        Belum punya akun?{' '}
-        <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WA_NUMBER}`}
-          target="_blank" rel="noopener noreferrer" className="text-[#5C4FE5] font-bold">
-          Daftar via WhatsApp
-        </a>
-      </div>
+
+      {mode === 'login' && (
+        <div className="px-7 pb-5 text-center text-xs text-[#7B78A8] border-t border-[#E5E3FF] pt-4">
+          Belum punya akun?{' '}
+          <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WA_NUMBER}`}
+            target="_blank" rel="noopener noreferrer" className="text-[#5C4FE5] font-bold">
+            Daftar via WhatsApp
+          </a>
+        </div>
+      )}
     </div>
   )
 }
