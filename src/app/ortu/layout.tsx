@@ -492,30 +492,83 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
         {/* ═══ MAIN ═══ */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-          {/* Mobile only — hamburger sederhana, tidak ada topbar di desktop */}
+          {/* Mobile topbar */}
           <div
-            className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-10"
+            className="lg:hidden flex items-center gap-2 px-3 py-2.5 sticky top-0 z-10"
             style={{
               background: isAnakMode
                 ? (isDark ? 'rgba(13,13,24,0.95)' : 'rgba(247,246,255,0.95)')
                 : (isDark ? 'rgba(15,15,20,0.95)' : 'rgba(255,255,255,0.95)'),
               backdropFilter: 'blur(8px)',
-              borderBottom: `1px solid ${isAnakMode ? (isDark ? '#2A2A38' : '#E5E3FF') : (isDark ? '#2A2A38' : '#FEF3C7')}`,
+              borderBottom: `0.5px solid ${isAnakMode ? (isDark ? '#2A2A38' : '#E5E3FF') : (isDark ? '#2A2A38' : '#FEF3C7')}`,
             }}>
+
+            {/* Hamburger */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg border flex-shrink-0"
+              className="flex-shrink-0 p-2 rounded-lg border"
               style={{
                 background: isAnakMode ? '#EEEDFE' : (isDark ? '#1E1E2A' : '#FEF9EE'),
                 borderColor: isAnakMode ? '#CECBF6' : (isDark ? '#2A2A38' : '#FAC775'),
                 color: isAnakMode ? '#5C4FE5' : (isDark ? '#C4B89A' : '#B45309'),
               }}>
-              <Menu size={16} />
+              <Menu size={15} />
             </button>
-            <span className="text-sm font-bold"
-              style={{ color: isAnakMode ? (isDark ? '#AFA9EC' : '#3C3489') : 'var(--ortu-text)', fontFamily: "'Sora', sans-serif" }}>
-              {isAnakMode && activeChild ? activeChild.full_name.split(' ')[0] : 'EduKazia'}
-            </span>
+
+            {/* Mode ortu: avatar anak sebagai shortcut */}
+            {!isAnakMode && kids.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {kids.slice(0, 4).map((kid, idx) => {
+                  const col = CHILD_COLORS[idx % CHILD_COLORS.length]
+                  return (
+                    <Link
+                      key={kid.id}
+                      href={`/ortu/anak/${kid.slug}`}
+                      onClick={() => setSidebarOpen(false)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                      style={{ background: col.bg, color: col.text, border: `0.5px solid ${col.border}` }}>
+                      {initials(kid.full_name)}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Mode anak: avatar anak aktif */}
+            {isAnakMode && activeChild && (
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '0.5px solid rgba(255,255,255,0.25)' }}>
+                {initials(activeChild.full_name)}
+              </div>
+            )}
+
+            <div className="flex-1" />
+
+            {/* Kanan: nama user + label portal */}
+            {!isAnakMode ? (
+              <div className="text-right flex-shrink-0">
+                <p className="text-[12px] font-semibold leading-tight"
+                  style={{ color: 'var(--ortu-text)' }}>
+                  {profile.full_name.split(' ')[0]}
+                </p>
+                <p className="text-[10px] leading-tight"
+                  style={{ color: isDark ? '#C4B89A' : '#854F0B' }}>
+                  Portal Orang Tua
+                </p>
+              </div>
+            ) : (
+              <div className="text-right flex-shrink-0">
+                <p className="text-[12px] font-semibold leading-tight"
+                  style={{ color: isDark ? '#AFA9EC' : '#3C3489' }}>
+                  {activeChild?.full_name.split(' ')[0]}
+                </p>
+                <p className="text-[10px] leading-tight"
+                  style={{ color: isDark ? '#7B78C4' : '#5C4FE5' }}>
+                  Portal Siswa
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Page content */}
