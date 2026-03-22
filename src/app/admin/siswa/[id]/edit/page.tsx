@@ -94,6 +94,15 @@ export default function SiswaEditPage() {
         .eq('id', student.parent_profile_id)
         .single()
       setParentEmail(parentProfile?.email ?? '')
+    } else if (student.relation_role === 'Diri Sendiri' || !student.parent_profile_id) {
+      // Dewasa yang les sendiri — akun login adalah profileId siswa itu sendiri
+      setParentProfileId(student.profile_id)
+      const { data: selfProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', student.profile_id)
+        .single()
+      setParentEmail(selfProfile?.email ?? '')
     }
 
     setLoading(false)
@@ -186,7 +195,8 @@ export default function SiswaEditPage() {
       const res = await fetch('/api/admin/create-user', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile_id: parentProfileId, password: parentPassword }),
+        // Untuk 'Diri Sendiri': reset profileId siswa, bukan parentProfileId
+      body: JSON.stringify({ profile_id: form.relation_role === 'Diri Sendiri' ? profileId : parentProfileId, password: parentPassword }),
       })
       const json = await res.json()
       if (!res.ok) { setParentError(json.error ?? 'Gagal reset password.'); setSavingParent(false); return }
