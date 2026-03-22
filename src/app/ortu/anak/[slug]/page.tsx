@@ -272,9 +272,12 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
       {/* ── JADWAL HARI INI ── */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[12px] font-bold text-stone-700">
-            📅 Jadwal Hari Ini
-          </p>
+          <div className="flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5C4FE5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/>
+            </svg>
+            <p className="text-[12px] font-bold text-stone-700">Jadwal Hari Ini</p>
+          </div>
           <Link href={`/ortu/anak/${studentId}/jadwal`}
             className="text-[11px] text-[#5C4FE5] hover:underline">
             Lihat semua →
@@ -424,9 +427,12 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
       {/* ── REVIEW MATERI ── */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[12px] font-bold text-stone-700">
-            🎬 Review Materi Sebelumnya
-          </p>
+          <div className="flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5C4FE5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
+            </svg>
+            <p className="text-[12px] font-bold text-stone-700">Review Materi Sebelumnya</p>
+          </div>
           <Link href={`/ortu/anak/${studentId}/materi`}
             className="text-[11px] text-[#5C4FE5] hover:underline">
             Lihat semua →
