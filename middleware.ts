@@ -1,19 +1,9 @@
+import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// ─── Mapping role → route yang diizinkan ──────────────────
-const ROLE_ROUTES: Record<string, string> = {
-  admin:   '/admin',
-  tutor:   '/tutor',
-  student: '/siswa',
-  parent:  '/siswa',  // ortu akses portal yang sama dengan siswa
-}
-
-// Route yang butuh login
-const PROTECTED_PREFIXES = ['/admin', '/tutor', '/siswa']
-
-// Route yang tidak boleh diakses user yang sudah login
-const AUTH_ONLY_ROUTES = ['/login']
+const PROTECTED_PREFIXES = ['/admin', '/tutor', '/siswa', '/ortu']
+const AUTH_ONLY_ROUTES   = ['/login']
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -23,87 +13,137 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+            supabaseResponse.cookies.set(name, value, options))
         },
       },
     }
   )
 
-  // Refresh session
   const { data: { user } } = await supabase.auth.getUser()
-
   const pathname = request.nextUrl.pathname
 
-  // ── Redirect /admin → /admin/dashboard ──
+  // ── Redirects root portal ──
   if (pathname === '/admin') {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/admin/dashboard'
-    return NextResponse.redirect(redirectUrl)
+    const u = request.nextUrl.clone(); u.pathname = '/admin/dashboard'
+    return NextResponse.redirect(u)
   }
-
-  // ── Redirect /tutor → /tutor/dashboard ──
   if (pathname === '/tutor' || pathname === '/tutor/') {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/tutor/dashboard'
-    return NextResponse.redirect(redirectUrl)
+    const u = request.nextUrl.clone(); u.pathname = '/tutor/dashboard'
+    return NextResponse.redirect(u)
   }
-
-  // ── Redirect /siswa → /siswa/dashboard ──
   if (pathname === '/siswa' || pathname === '/siswa/') {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/siswa/dashboard'
-    return NextResponse.redirect(redirectUrl)
+    const u = request.nextUrl.clone(); u.pathname = '/siswa/dashboard'
+    return NextResponse.redirect(u)
+  }
+  if (pathname === '/ortu' || pathname === '/ortu/') {
+    const u = request.nextUrl.clone(); u.pathname = '/ortu/dashboard'
+    return NextResponse.redirect(u)
   }
 
-  // ── Jika belum login dan akses protected route → ke /login ──
+  // ── Belum login + protected → /login ──
   const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
   if (!user && isProtected) {
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/login'
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
+    const u = request.nextUrl.clone()
+    u.pathname = '/login'
+    u.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(u)
   }
 
-  // ── Jika sudah login dan buka /login → redirect ke portal sesuai role ──
-  if (user && AUTH_ONLY_ROUTES.includes(pathname)) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+  // ── Helper: get role + cek apakah punya parent_profile_id ──
+  async function getPortalInfo() {
+    if (!user) return null
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles').select('role').eq('id', user.id).single()
 
     const role = profile?.role ?? 'student'
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = ROLE_ROUTES[role] ?? '/siswa'
-    return NextResponse.redirect(redirectUrl)
+
+    // Cek apakah user ini punya parent_profile_id di tabel students
+    // (berlaku untuk student "Diri Sendiri" dan parent)
+    const { data: asParent } = await supabaseAdmin
+      .from('students').select('id')
+      .eq('parent_profile_id', user.id)
+      .limit(1)
+
+    const isParentOrSelf = (asParent ?? []).length > 0
+
+    return { role, isParentOrSelf }
+  }
+
+  // ── Sudah login + buka /login → redirect ke portal ──
+  if (user && AUTH_ONLY_ROUTES.includes(pathname)) {
+    const info = await getPortalInfo()
+    if (!info) return supabaseResponse
+
+    const u = request.nextUrl.clone()
+
+    if (info.role === 'admin') {
+      u.pathname = '/admin/dashboard'
+    } else if (info.role === 'tutor') {
+      u.pathname = '/tutor/dashboard'
+    } else if (info.role === 'parent' || info.isParentOrSelf) {
+      // parent role ATAU student yang punya parent_profile_id → /ortu
+      u.pathname = '/ortu/dashboard'
+    } else {
+      u.pathname = '/siswa/dashboard'
+    }
+
+    return NextResponse.redirect(u)
   }
 
   // ── Cek akses role ke route yang dituju ──
   if (user && isProtected) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const info = await getPortalInfo()
+    if (!info) return supabaseResponse
 
-    const role = profile?.role ?? 'student'
-    const allowedPrefix = ROLE_ROUTES[role]
+    const { role, isParentOrSelf } = info
 
-    // Jika akses route role lain → redirect ke portal sendiri
-    if (!pathname.startsWith(allowedPrefix)) {
-      const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = allowedPrefix
-      return NextResponse.redirect(redirectUrl)
+    // Parent tidak boleh akses /siswa/*
+    if (role === 'parent' && pathname.startsWith('/siswa')) {
+      const u = request.nextUrl.clone()
+      u.pathname = '/ortu/dashboard'
+      return NextResponse.redirect(u)
+    }
+
+    // Student "Diri Sendiri" tidak boleh akses /siswa/* → ke /ortu
+    if (role === 'student' && isParentOrSelf && pathname.startsWith('/siswa')) {
+      const u = request.nextUrl.clone()
+      u.pathname = '/ortu/dashboard'
+      return NextResponse.redirect(u)
+    }
+
+    // Student/tutor/admin tidak boleh akses /ortu/*
+    if (role !== 'parent' && !isParentOrSelf && pathname.startsWith('/ortu')) {
+      const u = request.nextUrl.clone()
+      if (role === 'admin') u.pathname = '/admin/dashboard'
+      else if (role === 'tutor') u.pathname = '/tutor/dashboard'
+      else u.pathname = '/siswa/dashboard'
+      return NextResponse.redirect(u)
+    }
+
+    // Admin tidak boleh akses /tutor/* atau /siswa/* atau /ortu/*
+    if (role === 'admin' && !pathname.startsWith('/admin')) {
+      const u = request.nextUrl.clone()
+      u.pathname = '/admin/dashboard'
+      return NextResponse.redirect(u)
+    }
+
+    // Tutor tidak boleh akses /admin/* atau /siswa/* atau /ortu/*
+    if (role === 'tutor' && !pathname.startsWith('/tutor')) {
+      const u = request.nextUrl.clone()
+      u.pathname = '/tutor/dashboard'
+      return NextResponse.redirect(u)
     }
   }
 

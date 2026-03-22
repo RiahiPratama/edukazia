@@ -351,11 +351,9 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                         <p className="text-[11px] font-semibold truncate" style={{ color: col.text }}>
                           {kid.full_name}
                         </p>
-                        {kid.grade && (
-                          <p className="text-[9px] opacity-60 truncate" style={{ color: col.text }}>
-                            {kid.grade}
-                          </p>
-                        )}
+                        <p className="text-[9px] opacity-60 truncate" style={{ color: col.text }}>
+                          {kid.relation_role === 'Diri Sendiri' ? 'Diri Sendiri (Siswa)' : (kid.grade ?? kid.relation_role ?? '')}
+                        </p>
                       </div>
                       <ChevronRight size={11} style={{ color: col.text, opacity: 0.5, flexShrink: 0 }} />
                     </Link>
