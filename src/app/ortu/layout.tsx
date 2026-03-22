@@ -333,7 +333,14 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                 Daftar Relasi
               </p>
               <div className="flex flex-col gap-1.5">
-                {kids.map((kid, idx) => {
+                {[...kids]
+                  .sort((a, b) => {
+                    // Anak dulu, Diri Sendiri di bawah
+                    const aIsSelf = a.relation_role === 'Diri Sendiri' ? 1 : 0
+                    const bIsSelf = b.relation_role === 'Diri Sendiri' ? 1 : 0
+                    return aIsSelf - bIsSelf
+                  })
+                  .map((kid, idx) => {
                   const col = CHILD_COLORS[idx % CHILD_COLORS.length]
                   return (
                     <Link
@@ -359,23 +366,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
                     </Link>
                   )
                 })}
-                {isAlsoStudent && (
-                  <button
-                    onClick={() => { router.push('/siswa/dashboard'); setSidebarOpen(false) }}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg w-full text-left"
-                    style={{ border: '0.5px dashed #CECBF6', background: isDark ? '#1E1E2E' : '#EEEDFE40' }}>
-                    <div
-                      className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                      style={{ background: '#EEEDFE', color: '#3C3489' }}>
-                      {initials(profile.full_name)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold text-[#5C4FE5] truncate">Diri Sendiri</p>
-                      <p className="text-[9px] text-[#7B78A8]">Sebagai siswa</p>
-                    </div>
-                    <ArrowLeftRight size={10} style={{ color: '#5C4FE5', opacity: 0.6, flexShrink: 0 }} />
-                  </button>
-                )}
+
               </div>
             </div>
           )}
