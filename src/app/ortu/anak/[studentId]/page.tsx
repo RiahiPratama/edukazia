@@ -135,10 +135,70 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ stude
   const { data: reports } = completedIds.length > 0
     ? await supabase
         .from('session_reports')
-        .select('session_id, materi, perkembangan, saran_ortu')
+        .select('session_id, materi, perkembangan, saran_ortu, recording_url')
         .eq('student_id', studentId)
         .in('session_id', completedIds)
     : { data: [] }
+
+  // Materi live_zoom dari tabel materials (untuk review materi)
+  const { data: materiLiveZoom } = cgIds.length > 0
+    ? await supabase
+        .from('materials')
+        .select('id, title, url, class_group_id, created_at, sessions(id, scheduled_at, status)')
+        .eq('type', 'live_zoom')
+        .eq('is_published', true)
+        .in('class_group_id', cgIds)
+        .order('created_at', { ascending: false })
+        .limit(10)
+    : { data: [] }
+
+  // Susun review materi — gabungan recording_url dari laporan + materials live_zoom
+  const reviewItems: Array<{
+    id: string
+    title: string
+    url: string
+    date: string
+    source: 'recording' | 'materi'
+    classLabel: string
+  }> = []
+
+  // Dari session_reports.recording_url
+  ;(reports ?? [])
+    .filter((r: any) => r.recording_url)
+    .forEach((r: any) => {
+      const sesi = (completedSessions ?? []).find((s: any) => s.id === r.session_id)
+      const cg   = (classGroups ?? []).find((c: any) => c.id === sesi?.class_group_id)
+      reviewItems.push({
+        id:         r.session_id,
+        title:      r.materi ? `Rekaman · ${r.materi}` : 'Rekaman Sesi',
+        url:        r.recording_url,
+        date:       sesi?.scheduled_at ?? '',
+        source:     'recording',
+        classLabel: cg?.label ?? '—',
+      })
+    })
+
+  // Dari materials live_zoom
+  ;(materiLiveZoom ?? [])
+    .filter((m: any) => m.url)
+    .forEach((m: any) => {
+      const cg = (classGroups ?? []).find((c: any) => c.id === m.class_group_id)
+      // Hindari duplikat kalau sudah ada di recording
+      const alreadyIn = reviewItems.some(r => r.url === m.url)
+      if (!alreadyIn) {
+        reviewItems.push({
+          id:         m.id,
+          title:      m.title,
+          url:        m.url,
+          date:       m.created_at,
+          source:     'materi',
+          classLabel: cg?.label ?? '—',
+        })
+      }
+    })
+
+  // Sort by date descending
+  reviewItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   const hadirCount = (attendances ?? []).filter((a: any) => a.status === 'hadir').length
   const totalAtt   = (attendances ?? []).length
@@ -333,6 +393,69 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ stude
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ── REVIEW MATERI ── */}
+      {reviewItems.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[12px] font-bold text-stone-700">
+              🎬 Review Materi Sebelumnya
+            </p>
+            <Link href={`/ortu/anak/${studentId}/materi`}
+              className="text-[11px] text-[#5C4FE5] hover:underline">
+              Lihat semua →
+            </Link>
+          </div>
+          <div className="flex flex-col gap-2">
+            {reviewItems.slice(0, 4).map(item => (
+              <a
+                key={item.id}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-stone-100 rounded-xl overflow-hidden flex items-center gap-3 px-3 py-2.5 hover:border-[#CECBF6] transition-colors group"
+                style={{ borderLeft: '3px solid #5C4FE5' }}>
+                {/* Icon */}
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: item.source === 'recording' ? '#FEE2E2' : '#EEEDFE',
+                  }}>
+                  {item.source === 'recording' ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="7" stroke="#DC2626" strokeWidth="1.2"/>
+                      <path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="#DC2626"/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <rect x="1" y="2" width="14" height="12" rx="2" stroke="#5C4FE5" strokeWidth="1.2"/>
+                      <path d="M6 6l4 2-4 2V6z" fill="#5C4FE5"/>
+                    </svg>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold text-stone-700 truncate group-hover:text-[#5C4FE5] transition-colors">
+                    {item.title}
+                  </p>
+                  <p className="text-[10px] text-stone-400 mt-0.5">
+                    {item.classLabel}
+                    {item.date && ` · ${fmtDate(item.date)}`}
+                  </p>
+                </div>
+
+                {/* Arrow */}
+                <div className="flex-shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M5 3l4 4-4 4" stroke="#9CA3AF" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
+                </div>
+              </a>
+            ))}
+          </div>
         </div>
       )}
 
