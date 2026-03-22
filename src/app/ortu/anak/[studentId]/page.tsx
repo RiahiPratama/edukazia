@@ -397,17 +397,17 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ stude
       )}
 
       {/* ── REVIEW MATERI ── */}
-      {reviewItems.length > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[12px] font-bold text-stone-700">
-              🎬 Review Materi Sebelumnya
-            </p>
-            <Link href={`/ortu/anak/${studentId}/materi`}
-              className="text-[11px] text-[#5C4FE5] hover:underline">
-              Lihat semua →
-            </Link>
-          </div>
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[12px] font-bold text-stone-700">
+            🎬 Review Materi Sebelumnya
+          </p>
+          <Link href={`/ortu/anak/${studentId}/materi`}
+            className="text-[11px] text-[#5C4FE5] hover:underline">
+            Lihat semua →
+          </Link>
+        </div>
+        {reviewItems.length > 0 ? (
           <div className="flex flex-col gap-2">
             {reviewItems.slice(0, 4).map(item => (
               <a
@@ -456,8 +456,24 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ stude
               </a>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="bg-white border border-stone-100 rounded-xl px-4 py-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: '#EEEDFE' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="2" width="14" height="12" rx="2" stroke="#5C4FE5" strokeWidth="1.2"/>
+                <path d="M6 6l4 2-4 2V6z" fill="#5C4FE5"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[12px] font-semibold text-stone-500">Belum ada rekaman tersedia</p>
+              <p className="text-[10px] text-stone-400 mt-0.5">
+                Rekaman akan muncul setelah tutor menginput link di laporan sesi
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Laporan terbaru */}
       {(reports ?? []).length > 0 && (
