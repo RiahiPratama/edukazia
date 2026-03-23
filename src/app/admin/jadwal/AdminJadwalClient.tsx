@@ -61,7 +61,7 @@ export default function AdminJadwalClient({
     return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   }
 
-  const sessionDates = new Set(sessionsBulanIni.map(s => fmtKey(s.scheduled_at)))
+  const sessionDates = new Set(sessions.map(s => fmtKey(s.scheduled_at)))
   const sessionsByDate: Record<string, any[]> = {}
   sessions.forEach(s => {
     const k = fmtKey(s.scheduled_at)

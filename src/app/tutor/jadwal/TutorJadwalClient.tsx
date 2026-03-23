@@ -39,7 +39,7 @@ export default function TutorJadwalClient({
   const fmtMonth  = (d: Date)     => d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura' })
   const dKey      = (d: Date)     => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
 
-  const sessionDates = new Set(sessionsBulanIni.map(s => fmtKey(s.scheduled_at)))
+  const sessionDates = new Set(sessions.map(s => fmtKey(s.scheduled_at)))
   const sessionsByDate: Record<string, any[]> = {}
   sessions.forEach(s => {
     const k = fmtKey(s.scheduled_at)
