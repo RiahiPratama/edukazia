@@ -57,10 +57,12 @@ export default function KelasPage() {
   const [jadwalSuccess, setJadwalSuccess] = useState('')
 
   // Modal hapus
-  const [deleteId,    setDeleteId]    = useState<string | null>(null)
-  const [deleteLabel, setDeleteLabel] = useState('')
-  const [deleting,    setDeleting]    = useState(false)
-  const [deleteError, setDeleteError] = useState('')
+  const [deleteId,       setDeleteId]       = useState<string | null>(null)
+  const [deleteLabel,    setDeleteLabel]    = useState('')
+  const [deleting,       setDeleting]       = useState(false)
+  const [deleteError,    setDeleteError]    = useState('')
+  const [deleteWarning,  setDeleteWarning]  = useState<{ enrollments: number; payments: number } | null>(null)
+  const [checkingDelete, setCheckingDelete] = useState(false)
 
   function today() {
     const d = new Date()
@@ -122,21 +124,59 @@ export default function KelasPage() {
     fetchKelas()
   }
 
-  function openDelete(k: Kelas) {
+  async function openDelete(k: Kelas) {
     setDeleteId(k.id)
     setDeleteLabel(k.label)
     setDeleteError('')
+    setDeleteWarning(null)
+    setCheckingDelete(true)
+
+    // Cek apakah ada enrollment atau payment terkait
+    const { count: enrollCount } = await supabase
+      .from('enrollments')
+      .select('*', { count: 'exact', head: true })
+      .eq('class_group_id', k.id)
+
+    const { data: enrIds } = await supabase
+      .from('enrollments')
+      .select('id')
+      .eq('class_group_id', k.id)
+
+    let payCount = 0
+    if (enrIds && enrIds.length > 0) {
+      const { count } = await supabase
+        .from('payments')
+        .select('*', { count: 'exact', head: true })
+        .in('enrollment_id', enrIds.map((e: any) => e.id))
+      payCount = count ?? 0
+    }
+
+    setCheckingDelete(false)
+    if ((enrollCount ?? 0) > 0 || payCount > 0) {
+      setDeleteWarning({ enrollments: enrollCount ?? 0, payments: payCount })
+    }
   }
 
   async function handleDelete() {
     if (!deleteId) return
     setDeleting(true); setDeleteError('')
+
+    // Hapus payments dulu (jika ada)
+    const { data: enrIds } = await supabase
+      .from('enrollments').select('id').eq('class_group_id', deleteId)
+    if (enrIds && enrIds.length > 0) {
+      await supabase.from('payments').delete().in('enrollment_id', enrIds.map((e: any) => e.id))
+    }
+    await supabase.from('attendances').delete().in('session_id',
+      (await supabase.from('sessions').select('id').eq('class_group_id', deleteId)).data?.map((s: any) => s.id) ?? []
+    )
     await supabase.from('sessions').delete().eq('class_group_id', deleteId)
     await supabase.from('enrollments').delete().eq('class_group_id', deleteId)
     const { error } = await supabase.from('class_groups').delete().eq('id', deleteId)
     if (error) { setDeleteError(error.message); setDeleting(false); return }
     setDeleting(false)
     setDeleteId(null)
+    setDeleteWarning(null)
     fetchKelas()
   }
 
@@ -357,15 +397,71 @@ export default function KelasPage() {
         onCancel={() => setRestoreId(null)}
       />
 
-      <ConfirmModal
-        open={!!deleteId}
-        title="Hapus Kelas?"
-        description={`Kelas "${deleteLabel}" akan dihapus permanen beserta semua jadwal/sesi dan data enrollment siswa.`}
-        confirmText="Ya, Hapus"
-        loading={deleting}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteId(null)}
-      />
+      {/* Modal Hapus Kelas — dengan pengecekan enrollment/payment */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={20} className="text-red-500"/>
+            </div>
+            <h2 className="text-base font-bold text-[#1A1640] text-center mb-2">Hapus Kelas?</h2>
+
+            {checkingDelete ? (
+              <p className="text-sm text-[#7B78A8] text-center py-2">Memeriksa data terkait...</p>
+            ) : deleteWarning && (deleteWarning.enrollments > 0 || deleteWarning.payments > 0) ? (
+              <div className="space-y-3">
+                <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-xs font-bold text-amber-800 mb-1">⚠️ Kelas ini memiliki data terkait:</p>
+                  {deleteWarning.enrollments > 0 && (
+                    <p className="text-xs text-amber-700">• {deleteWarning.enrollments} siswa terdaftar</p>
+                  )}
+                  {deleteWarning.payments > 0 && (
+                    <p className="text-xs text-amber-700">• {deleteWarning.payments} riwayat pembayaran</p>
+                  )}
+                  <p className="text-xs text-amber-700 mt-1.5 font-medium">
+                    Semua data akan ikut terhapus permanen.
+                  </p>
+                </div>
+                <p className="text-xs text-[#7B78A8] text-center">
+                  Pertimbangkan <strong>Arsipkan</strong> daripada hapus — data tetap tersimpan dan kelas bisa diaktifkan kembali.
+                </p>
+                {deleteError && <p className="text-xs text-red-600 text-center">{deleteError}</p>}
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => { setDeleteId(null); setDeleteWarning(null) }}
+                    className="flex-1 py-2.5 border border-[#E5E3FF] text-[#4A4580] font-semibold rounded-xl text-sm hover:bg-[#F7F6FF] transition">
+                    Batal
+                  </button>
+                  <button onClick={() => { setDeleteId(null); setDeleteWarning(null); const k = kelasList.find(k => k.id === deleteId); if (k) openArchive(k) }}
+                    className="flex-1 py-2.5 bg-[#5C4FE5] text-white font-bold rounded-xl text-sm hover:bg-[#3D34C4] transition">
+                    Arsipkan
+                  </button>
+                  <button onClick={handleDelete} disabled={deleting}
+                    className="flex-1 py-2.5 bg-red-500 text-white font-bold rounded-xl text-sm hover:bg-red-600 transition disabled:opacity-60">
+                    {deleting ? '...' : 'Hapus'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-[#7B78A8] text-center">
+                  Kelas &quot;{deleteLabel}&quot; akan dihapus permanen beserta semua jadwal dan sesi.
+                </p>
+                {deleteError && <p className="text-xs text-red-600 text-center">{deleteError}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => { setDeleteId(null); setDeleteWarning(null) }}
+                    className="flex-1 py-2.5 border border-[#E5E3FF] text-[#4A4580] font-semibold rounded-xl text-sm hover:bg-[#F7F6FF] transition">
+                    Batal
+                  </button>
+                  <button onClick={handleDelete} disabled={deleting}
+                    className="flex-1 py-2.5 bg-red-500 text-white font-bold rounded-xl text-sm hover:bg-red-600 transition disabled:opacity-60">
+                    {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MODAL JADWALKAN */}
       {showJadwal && selectedKelas && (

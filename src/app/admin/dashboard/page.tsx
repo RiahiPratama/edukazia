@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import {
   CalendarDays, GraduationCap, Users, BookOpen,
-  CreditCard, Coins, DollarSign
+  Coins, DollarSign, UserPlus
 } from 'lucide-react'
 import SesiHariIniAdminClient from './SesiHariIniAdminClient'
 
@@ -146,14 +146,13 @@ export default async function AdminDashboard() {
       {/* Quick actions */}
       <div className="mt-4 bg-white rounded-2xl border border-[#E5E3FF] p-5">
         <h2 className="font-bold text-[#1A1640] mb-4">Aksi Cepat</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { href: '/admin/siswa/baru',      icon: <GraduationCap size={18}/>, label: 'Tambah Siswa' },
-            { href: '/admin/tutor/baru',      icon: <Users size={18}/>,         label: 'Tambah Tutor' },
-            { href: '/admin/kelas/baru',      icon: <BookOpen size={18}/>,      label: 'Buat Kelas' },
-            { href: '/admin/jadwal?new=1',    icon: <CalendarDays size={18}/>,  label: 'Buat Jadwal' },
-            { href: '/admin/pembayaran?new=1',icon: <CreditCard size={18}/>,    label: 'Catat Bayar' },
-            { href: '/admin/honor',           icon: <Coins size={18}/>,         label: 'Honor Tutor' },
+            { href: '/admin/siswa/baru',   icon: <GraduationCap size={18}/>, label: 'Tambah Siswa' },
+            { href: '/admin/daftarkan',    icon: <UserPlus size={18}/>,      label: 'Daftarkan ke Kelas' },
+            { href: '/admin/jadwal?new=1', icon: <CalendarDays size={18}/>,  label: 'Buat Jadwal' },
+            { href: '/admin/tutor/baru',   icon: <Users size={18}/>,         label: 'Tambah Tutor' },
+            { href: '/admin/honor',        icon: <Coins size={18}/>,         label: 'Honor Tutor' },
           ].map((item) => (
             <Link key={item.href} href={item.href}
               className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
