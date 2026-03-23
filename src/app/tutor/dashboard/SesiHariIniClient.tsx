@@ -9,26 +9,44 @@ function getDurasiMenit(classTypeName: string, courseName: string): number {
   return 60
 }
 
-function CountdownBadge({ scheduledAt, classTypeName, courseName }: {
+function CountdownBadge({ scheduledAt, classTypeName, courseName, status }: {
   scheduledAt: string
   classTypeName: string
   courseName: string
+  status: string
 }) {
   const [diffMs, setDiffMs] = useState(() => new Date(scheduledAt).getTime() - Date.now())
 
   useEffect(() => {
+    if (status === 'rescheduled' || status === 'holiday') return
     const interval = setInterval(() => {
       setDiffMs(new Date(scheduledAt).getTime() - Date.now())
     }, 1000)
     return () => clearInterval(interval)
-  }, [scheduledAt])
+  }, [scheduledAt, status])
+
+  // Holiday — countdown berhenti, tampilkan banner libur
+  if (status === 'holiday') {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-green-50 text-green-700 border border-green-200 w-fit flex items-center gap-1">
+        🏖️ Hari Libur
+      </span>
+    )
+  }
+
+  // Rescheduled — countdown berhenti
+  if (status === 'rescheduled') {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 border border-amber-200 w-fit flex items-center gap-1">
+        🔄 Dijadwal Ulang
+      </span>
+    )
+  }
 
   const durasiMs = getDurasiMenit(classTypeName, courseName) * 60 * 1000
 
-  // Lebih dari 3 jam ke depan → tidak tampil
   if (diffMs > 3 * 60 * 60 * 1000) return null
 
-  // Sudah lewat durasi kelas → Telah dilaksanakan
   if (diffMs < -durasiMs) {
     return (
       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-stone-100 text-stone-500 w-fit flex items-center gap-1">
@@ -37,7 +55,6 @@ function CountdownBadge({ scheduledAt, classTypeName, courseName }: {
     )
   }
 
-  // Sedang berlangsung
   if (diffMs <= 0) {
     return (
       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 flex items-center gap-1 w-fit">
@@ -47,7 +64,6 @@ function CountdownBadge({ scheduledAt, classTypeName, courseName }: {
     )
   }
 
-  // Countdown mundur
   const totalSec = Math.floor(diffMs / 1000)
   const jam      = Math.floor(totalSec / 3600)
   const menit    = Math.floor((totalSec % 3600) / 60)
@@ -73,13 +89,15 @@ export default function SesiHariIniClient({ sesiHariIni }: { sesiHariIni: any[] 
     scheduled:   'bg-blue-50 text-blue-700',
     completed:   'bg-green-50 text-green-700',
     cancelled:   'bg-red-50 text-red-700',
-    rescheduled: 'bg-yellow-50 text-yellow-700',
+    rescheduled: 'bg-amber-50 text-amber-700',
+    holiday:     'bg-teal-50 text-teal-700',
   }
   const statusLabel: Record<string, string> = {
     scheduled:   'Terjadwal',
     completed:   'Selesai',
     cancelled:   'Dibatalkan',
     rescheduled: 'Reschedule',
+    holiday:     'Libur',
   }
 
   if (!sesiHariIni || sesiHariIni.length === 0) {
@@ -101,11 +119,19 @@ export default function SesiHariIniClient({ sesiHariIni }: { sesiHariIni: any[] 
     <div className="space-y-3">
       {sesiHariIni.map((s: any) => {
         const classTypeName = s.class_groups?.class_types?.name ?? ''
+        const isHoliday     = s.status === 'holiday'
+        const isRescheduled = s.status === 'rescheduled'
         return (
           <div key={s.id}
-            className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]">
+            className={`flex items-center gap-3 p-3 rounded-xl transition-colors border ${
+              isHoliday     ? 'border-teal-200 bg-teal-50/40' :
+              isRescheduled ? 'border-amber-200 bg-amber-50/40' :
+              'border-[#F0EFFF] hover:bg-[#F7F6FF]'
+            }`}>
             <div className="w-14 text-center flex-shrink-0">
-              <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+              <div className={`text-sm font-black ${isHoliday ? 'text-teal-600' : isRescheduled ? 'text-amber-600' : 'text-[#5C4FE5]'}`}>
+                {fmtTime(s.scheduled_at)}
+              </div>
               <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
             </div>
             <div className="flex-1 min-w-0">
@@ -116,11 +142,16 @@ export default function SesiHariIniClient({ sesiHariIni }: { sesiHariIni: any[] 
                 {s.class_groups?.courses?.name ?? '—'}
               </div>
               <div className="mt-1">
-                <CountdownBadge scheduledAt={s.scheduled_at} classTypeName={classTypeName} courseName={s.class_groups?.courses?.name ?? ''} />
+                <CountdownBadge
+                  scheduledAt={s.scheduled_at}
+                  classTypeName={classTypeName}
+                  courseName={s.class_groups?.courses?.name ?? ''}
+                  status={s.status}
+                />
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {s.zoom_link && (
+              {s.zoom_link && !isHoliday && (
                 <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
                   className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
                   Buka Zoom

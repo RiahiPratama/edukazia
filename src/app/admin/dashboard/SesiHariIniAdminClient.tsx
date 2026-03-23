@@ -28,6 +28,15 @@ function CountdownBadge({ scheduledAt, classTypeName, courseName, status }: {
     return () => clearInterval(interval)
   }, [scheduledAt, status])
 
+  // Holiday — countdown berhenti
+  if (status === 'holiday') {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-teal-50 text-teal-700 border border-teal-200 w-fit flex items-center gap-1">
+        🏖️ Hari Libur
+      </span>
+    )
+  }
+
   // Rescheduled — countdown berhenti, tampilkan badge khusus
   if (status === 'rescheduled') {
     return (
@@ -134,12 +143,14 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
     completed:   'bg-green-50 text-green-700',
     cancelled:   'bg-red-50 text-red-700',
     rescheduled: 'bg-amber-50 text-amber-700',
+    holiday:     'bg-teal-50 text-teal-700',
   }
   const statusLabel: Record<string, string> = {
     scheduled:   'Terjadwal',
     completed:   'Selesai',
     cancelled:   'Dibatalkan',
     rescheduled: 'Reschedule',
+    holiday:     'Libur',
   }
 
   const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
@@ -229,11 +240,16 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
           const classTypeName = s.class_groups?.class_types?.name ?? ''
           const courseName    = s.class_groups?.courses?.name ?? ''
           const isRescheduled = s.status === 'rescheduled'
+          const isHoliday     = s.status === 'holiday'
           return (
             <div key={s.id}
-              className={`flex items-center gap-3 p-3 rounded-xl transition-colors border ${isRescheduled ? 'border-amber-200 bg-amber-50/40' : 'border-[#F0EFFF] hover:bg-[#F7F6FF]'}`}>
+              className={`flex items-center gap-3 p-3 rounded-xl transition-colors border ${
+                isHoliday     ? 'border-teal-200 bg-teal-50/40' :
+                isRescheduled ? 'border-amber-200 bg-amber-50/40' :
+                'border-[#F0EFFF] hover:bg-[#F7F6FF]'
+              }`}>
               <div className="w-12 text-center flex-shrink-0">
-                <div className={`text-sm font-bold ${isRescheduled ? 'text-amber-600' : 'text-[#5C4FE5]'}`}>{fmtTime(s.scheduled_at)}</div>
+                <div className={`text-sm font-bold ${isHoliday ? 'text-teal-600' : isRescheduled ? 'text-amber-600' : 'text-[#5C4FE5]'}`}>{fmtTime(s.scheduled_at)}</div>
                 <div className="text-[10px] text-[#7B78A8]">WIT</div>
               </div>
               <div className="flex-1 min-w-0">
@@ -256,7 +272,7 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
                 />
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {s.zoom_link && !isRescheduled && (
+                {s.zoom_link && !isRescheduled && !isHoliday && (
                   <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
                     className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
                     Zoom

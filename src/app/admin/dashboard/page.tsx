@@ -5,6 +5,7 @@ import {
   Coins, DollarSign, UserPlus, CreditCard
 } from 'lucide-react'
 import SesiHariIniAdminClient from './SesiHariIniAdminClient'
+import AnnouncementSection from './AnnouncementSection'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -13,6 +14,16 @@ export default async function AdminDashboard() {
   const todayWIT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const startUTC = `${todayWIT}T00:00:00+09:00`
   const endUTC   = `${todayWIT}T23:59:59+09:00`
+
+  // Fetch announcements aktif hari ini
+  const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+  const { data: announcements } = await supabase
+    .from('announcements')
+    .select('*')
+    .eq('is_active', true)
+    .lte('start_date', todayDate)
+    .gte('end_date', todayDate)
+    .order('priority', { ascending: true })
 
   const [
     { count: totalSiswa },
@@ -58,6 +69,9 @@ export default async function AdminDashboard() {
           {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura' })}
         </p>
       </div>
+
+      {/* Pengumuman */}
+      <AnnouncementSection announcements={announcements ?? []} />
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
