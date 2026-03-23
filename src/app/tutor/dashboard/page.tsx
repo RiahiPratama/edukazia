@@ -50,13 +50,17 @@ export default async function TutorDashboardPage() {
   const totalSiswa  = (kelasAktif ?? []).reduce((acc, k) =>
     acc + (k.enrollments?.filter((e: any) => e.status === 'active').length ?? 0), 0)
 
-  // Sesi minggu ini — todayWIT adalah tanggal WIT yang benar (sekali convert)
+  // Gunakan noon WIT agar .getDay() tidak salah akibat UTC day boundary
   const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-  const nowWIT      = new Date(todayWITStr + 'T00:00:00+09:00')
-  const monday = new Date(nowWIT)
-  monday.setDate(nowWIT.getDate() - (nowWIT.getDay() === 0 ? 6 : nowWIT.getDay() - 1))
+  const noonWIT     = new Date(todayWITStr + 'T12:00:00+09:00')
+  const rawDay      = noonWIT.getDay()
+  const dayOfWeek   = rawDay === 0 ? 6 : rawDay - 1
+  const monday = new Date(noonWIT)
+  monday.setDate(noonWIT.getDate() - dayOfWeek)
+  monday.setHours(0, 0, 0, 0)
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
 
   const cgIds = (kelasAktif ?? []).map(k => k.id)
   const { count: sesiMingguIni } = cgIds.length > 0

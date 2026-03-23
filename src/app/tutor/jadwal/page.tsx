@@ -30,15 +30,18 @@ export default async function TutorJadwalPage({
   const params     = await searchParams
   const weekOffset = parseInt(params.week ?? '0')
 
-  // Satu kali konversi WIT — tidak double
+  // Gunakan tengah hari WIT (12:00+09:00 = 03:00 UTC) agar .getDay() tidak salah hari
   const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-  const todayWIT    = new Date(todayWITStr + 'T00:00:00+09:00')
-  const dayOfWeek   = todayWIT.getDay() === 0 ? 6 : todayWIT.getDay() - 1
+  const noonWIT     = new Date(todayWITStr + 'T12:00:00+09:00') // 03:00 UTC — aman dari day boundary
+  const rawDay      = noonWIT.getDay() // 0=Sun, 1=Mon, ..., 6=Sat — akurat karena pakai noon
+  const dayOfWeek   = rawDay === 0 ? 6 : rawDay - 1 // Mon=0 ... Sun=6
 
-  const monday = new Date(todayWIT)
-  monday.setDate(todayWIT.getDate() - dayOfWeek + weekOffset * 7)
+  const monday = new Date(noonWIT)
+  monday.setDate(noonWIT.getDate() - dayOfWeek + weekOffset * 7)
+  monday.setHours(0, 0, 0, 0)
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
 
   const toUTC = (d: Date) => new Date(d.getTime() - 9 * 60 * 60 * 1000).toISOString()
 
