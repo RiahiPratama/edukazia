@@ -116,7 +116,7 @@ export default function AdminJadwalClient({
           </Link>
           <span className="text-sm font-bold text-[#1A1640]">
             {monday.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jayapura' })} –{' '}
-            {sunday.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jayapura' })}
+            {weekDates[6].toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jayapura' })}
           </span>
           <Link href={`/admin/jadwal?week=${weekOffset + 1}`}
             className="px-3 py-1.5 rounded-xl border border-[#E5E3FF] text-sm font-semibold text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5] transition">
