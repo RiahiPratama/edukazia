@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SesiHariIniClient from './SesiHariIniClient'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
+import { CalendarDays, BookOpen, Users, Coins } from 'lucide-react'
 
 function fmtTanggal() {
   return new Date().toLocaleDateString('id-ID', {
@@ -137,20 +138,34 @@ export default async function TutorDashboardPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { icon: '📅', value: sesiMingguIni ?? 0, label: 'Sesi minggu ini', color: 'bg-[#EEEDFE]', text: '#5C4FE5' },
-          { icon: '📚', value: totalKelas,          label: 'Kelas aktif',     color: 'bg-[#E1F5EE]', text: '#1D9E75' },
-          { icon: '👥', value: totalSiswa,          label: 'Siswa diajar',    color: 'bg-[#E6F1FB]', text: '#185FA5' },
-          { icon: '💰', value: formatRp(totalHonor), label: 'Honor bulan ini', color: 'bg-[#FAEEDA]', text: '#BA7517' },
-        ].map((s, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
-            <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center text-lg mb-3`}>
-              {s.icon}
-            </div>
-            <div className="text-2xl font-black" style={{ color: s.text }}>{s.value}</div>
-            <div className="text-xs text-[#7B78A8] font-semibold mt-1">{s.label}</div>
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
+          <div className="w-10 h-10 rounded-xl bg-[#EEEDFE] flex items-center justify-center mb-3">
+            <CalendarDays size={18} color="#5C4FE5" strokeWidth={2}/>
           </div>
-        ))}
+          <div className="text-2xl font-black text-[#5C4FE5]">{sesiMingguIni ?? 0}</div>
+          <div className="text-xs text-[#7B78A8] font-semibold mt-1">Sesi minggu ini</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
+          <div className="w-10 h-10 rounded-xl bg-[#E1F5EE] flex items-center justify-center mb-3">
+            <BookOpen size={18} color="#1D9E75" strokeWidth={2}/>
+          </div>
+          <div className="text-2xl font-black text-[#1D9E75]">{totalKelas}</div>
+          <div className="text-xs text-[#7B78A8] font-semibold mt-1">Kelas aktif</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
+          <div className="w-10 h-10 rounded-xl bg-[#E6F1FB] flex items-center justify-center mb-3">
+            <Users size={18} color="#185FA5" strokeWidth={2}/>
+          </div>
+          <div className="text-2xl font-black text-[#185FA5]">{totalSiswa}</div>
+          <div className="text-xs text-[#7B78A8] font-semibold mt-1">Siswa diajar</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
+          <div className="w-10 h-10 rounded-xl bg-[#FAEEDA] flex items-center justify-center mb-3">
+            <Coins size={18} color="#BA7517" strokeWidth={2}/>
+          </div>
+          <div className="text-2xl font-black text-[#BA7517]">{formatRp(totalHonor)}</div>
+          <div className="text-xs text-[#7B78A8] font-semibold mt-1">Honor bulan ini</div>
+        </div>
       </div>
 
       {/* Sesi Hari Ini */}

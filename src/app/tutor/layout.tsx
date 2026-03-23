@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, BookOpen,
-  FolderOpen, Coins, LogOut, Menu, Globe2,
+  FolderOpen, Coins, LogOut, Menu,
   ClipboardList, BarChart2, Settings, Archive
 } from 'lucide-react'
 
@@ -120,18 +120,13 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        <header className="flex items-center gap-4 px-4 lg:px-6"
-          style={{ height: '64px', background: 'white', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580] transition-colors">
+        {/* Top bar — hanya tampil di mobile untuk hamburger menu */}
+        <header className="flex items-center gap-3 px-4 lg:hidden"
+          style={{ height: '56px', background: 'white', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
+          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580] transition-colors">
             <Menu size={20}/>
           </button>
-          <div className="flex-1"/>
-          <a href="/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
-            <Globe2 size={15}/>
-            <span className="hidden sm:inline">Lihat Landing Page</span>
-          </a>
-          <div className="flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-            style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#5C4FE5' }}>T</div>
+          <span className="text-sm font-bold text-[#1A1640]">EduKazia</span>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>
