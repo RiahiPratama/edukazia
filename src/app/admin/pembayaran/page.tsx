@@ -71,6 +71,20 @@ function PembayaranContent() {
   const [allKelas,       setAllKelas]       = useState<any[]>([])
   const [savingEnroll,   setSavingEnroll]   = useState(false)
   const [enrollError,    setEnrollError]    = useState('')
+
+  // Buat kelas baru inline
+  const [showBuatKelas,  setShowBuatKelas]  = useState(false)
+  const [allTutors,      setAllTutors]      = useState<any[]>([])
+  const [allCourses,     setAllCourses]     = useState<any[]>([])
+  const [allClassTypes,  setAllClassTypes]  = useState<any[]>([])
+  const [nLabel,         setNLabel]         = useState('')
+  const [nCourseId,      setNCourseId]      = useState('')
+  const [nClassTypeId,   setNClassTypeId]   = useState('')
+  const [nTutorId,       setNTutorId]       = useState('')
+  const [nSessions,      setNSessions]      = useState(8)
+  const [nZoomLink,      setNZoomLink]      = useState('')
+  const [savingKelas,    setSavingKelas]    = useState(false)
+  const [kelasError,     setKelasError]     = useState('')
   const [saving,       setSaving]       = useState(false)
   const [formError,    setFormError]    = useState('')
   const [search,       setSearch]       = useState('')
@@ -188,6 +202,16 @@ function PembayaranContent() {
       .order('label')
     setAllKelas(allKelasData ?? [])
 
+    // Data untuk form buat kelas
+    const [{ data: tutorsData }, { data: coursesData }, { data: classTypesData }] = await Promise.all([
+      supabase.from('tutors').select('id, profiles(full_name)').eq('is_active', true),
+      supabase.from('courses').select('id, name').order('name'),
+      supabase.from('class_types').select('id, name, base_price').order('name'),
+    ])
+    setAllTutors(tutorsData ?? [])
+    setAllCourses(coursesData ?? [])
+    setAllClassTypes(classTypesData ?? [])
+
     setLoading(false)
   }
 
@@ -271,6 +295,41 @@ function PembayaranContent() {
       .from('enrollments').select('id')
       .eq('student_id', fStudentId).eq('class_group_id', eClassGroupId).single()
     if (newEnroll) handleEnrollmentChange(newEnroll.id)
+  }
+
+  async function handleBuatKelas() {
+    if (!nLabel.trim())   { setKelasError('Nama kelas tidak boleh kosong.'); return }
+    if (!nCourseId)       { setKelasError('Pilih mata pelajaran.'); return }
+    if (!nClassTypeId)    { setKelasError('Pilih tipe kelas.'); return }
+    setSavingKelas(true); setKelasError('')
+
+    const { data: newKelas, error } = await supabase
+      .from('class_groups')
+      .insert({
+        label:         nLabel.trim(),
+        course_id:     nCourseId,
+        class_type_id: nClassTypeId,
+        tutor_id:      nTutorId || null,
+        zoom_link:     nZoomLink.trim() || null,
+        status:        'active',
+      })
+      .select('id, label, class_types(name, base_price)')
+      .single()
+
+    setSavingKelas(false)
+    if (error) { setKelasError(error.message); return }
+
+    // Refresh daftar kelas
+    await fetchAll()
+
+    // Auto-pilih kelas yang baru dibuat di dropdown enroll
+    setEClassGroupId(newKelas.id)
+    setESessionsTotal(nSessions)
+
+    // Reset form
+    setNLabel(''); setNCourseId(''); setNClassTypeId('')
+    setNTutorId(''); setNSessions(8); setNZoomLink('')
+    setShowBuatKelas(false)
   }
 
   function buildWaMessage(p: Payment) {
@@ -548,32 +607,94 @@ function PembayaranContent() {
       {/* Modal Enroll ke Kelas Baru */}
       {showEnrollModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF] sticky top-0 bg-white z-10">
               <h3 className="text-sm font-bold text-[#1A1640]">Daftarkan ke Kelas</h3>
-              <button onClick={() => setShowEnrollModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]">
+              <button onClick={() => { setShowEnrollModal(false); setShowBuatKelas(false) }}
+                className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]">
                 <X size={15}/>
               </button>
             </div>
             <div className="px-5 py-4 space-y-3">
+              {/* Pilih kelas yang sudah ada */}
               <div>
-                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Kelas</label>
+                  <button type="button"
+                    onClick={() => { setShowBuatKelas(prev => !prev); setKelasError('') }}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
+                    <Plus size={10}/> {showBuatKelas ? 'Batal Buat Kelas' : 'Buat Kelas Baru'}
+                  </button>
+                </div>
                 <select value={eClassGroupId} onChange={e => setEClassGroupId(e.target.value)} className={inputCls}>
                   <option value="">-- Pilih Kelas --</option>
                   {allKelas.map((k: any) => (
                     <option key={k.id} value={k.id}>{k.label} ({k.class_types?.name ?? '—'})</option>
                   ))}
                 </select>
-                {allKelas.length === 0 && (
-                  <p className="text-[11px] text-amber-600 mt-1.5">
-                    Belum ada kelas aktif.{' '}
-                    <a href="/admin/kelas/baru" target="_blank" rel="noopener noreferrer"
-                      className="text-[#5C4FE5] font-semibold inline-flex items-center gap-0.5">
-                      Buat kelas baru <ExternalLink size={10}/>
-                    </a>
-                  </p>
-                )}
               </div>
+
+              {/* Form buat kelas baru inline */}
+              {showBuatKelas && (
+                <div className="border border-[#E5E3FF] rounded-xl p-4 space-y-3 bg-[#F7F6FF]">
+                  <p className="text-[10px] font-bold text-[#5C4FE5] uppercase tracking-wider">Buat Kelas Baru</p>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Nama Kelas *</label>
+                    <input type="text" value={nLabel} onChange={e => setNLabel(e.target.value)}
+                      placeholder="Contoh: Privat Matematika Kelas 7A" className={inputCls}/>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Mata Pelajaran *</label>
+                      <select value={nCourseId} onChange={e => setNCourseId(e.target.value)} className={inputCls}>
+                        <option value="">-- Pilih --</option>
+                        {allCourses.map((c: any) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tipe *</label>
+                      <select value={nClassTypeId} onChange={e => setNClassTypeId(e.target.value)} className={inputCls}>
+                        <option value="">-- Pilih --</option>
+                        {allClassTypes.map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tutor</label>
+                    <select value={nTutorId} onChange={e => setNTutorId(e.target.value)} className={inputCls}>
+                      <option value="">-- Pilih Tutor (opsional) --</option>
+                      {allTutors.map((t: any) => {
+                        const name = Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name
+                        return <option key={t.id} value={t.id}>{name ?? 'Tutor'}</option>
+                      })}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jumlah Sesi</label>
+                      <input type="number" min={1} max={100} value={nSessions}
+                        onChange={e => setNSessions(Number(e.target.value))} className={inputCls}/>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Link Zoom</label>
+                      <input type="url" value={nZoomLink} onChange={e => setNZoomLink(e.target.value)}
+                        placeholder="https://zoom.us/..." className={inputCls}/>
+                    </div>
+                  </div>
+                  {kelasError && (
+                    <p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-lg border border-red-200">{kelasError}</p>
+                  )}
+                  <button onClick={handleBuatKelas} disabled={savingKelas}
+                    className="w-full py-2 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-xs transition disabled:opacity-60">
+                    {savingKelas ? 'Membuat kelas...' : '✓ Buat & Pilih Kelas Ini'}
+                  </button>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jumlah Sesi Paket</label>
                 <input type="number" min={1} max={100} value={eSessionsTotal}
@@ -584,7 +705,7 @@ function PembayaranContent() {
                   {enrollError}
                 </div>
               )}
-              <button onClick={handleEnroll} disabled={savingEnroll}
+              <button onClick={handleEnroll} disabled={savingEnroll || !eClassGroupId}
                 className="w-full py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
                 {savingEnroll ? 'Mendaftarkan...' : 'Daftarkan & Pilih Kelas Ini'}
               </button>
