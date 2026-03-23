@@ -565,12 +565,10 @@ export default function TutorAbsensiPage() {
   }
 
   function buildWAAdminSiswa(siswa: any) {
-    const status     = absensiMap[siswa.studentId]
-    const sesiLabel  = selectedSesi?.class_groups?.label ?? 'kelas'
-    const waktu      = fmtTime(selectedSesi?.scheduled_at ?? '')
-    const statusText = status === 'izin' ? 'izin' : 'sakit'
-    const notes      = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
-    return encodeURIComponent(`Halo Admin EduKazia, siswa ${siswa.name} ${statusText} pada sesi ${sesiLabel} pukul ${waktu} WIT.${notes} Mohon ditindaklanjuti. Terima kasih.`)
+    const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
+    const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
+    const notes     = notesMap[siswa.studentId] ? ` Keterangan: ${notesMap[siswa.studentId]}.` : ''
+    return encodeURIComponent(`Halo Admin EduKazia, siswa ${siswa.name} tidak hadir pada sesi ${sesiLabel} pukul ${waktu} WIT.${notes} Mohon ditindaklanjuti. Terima kasih.`)
   }
 
   const statusColor: Record<string, string> = {
