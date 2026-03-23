@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { CalendarDays, FileText, ChevronRight, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import AnnouncementFetcher from '@/components/AnnouncementFetcher'
 
 interface Props {
   profile: { full_name: string; email: string }
