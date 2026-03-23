@@ -10,6 +10,7 @@ type Course    = { id: string; name: string; color: string | null }
 type Tutor     = { id: string; profiles: { full_name: string } | null }
 type ClassType = { id: string; name: string; max_participants: number; base_price: number }
 type Student   = { id: string; profiles: { full_name: string } | null; is_new: boolean }
+type Level     = { id: string; name: string; description: string | null; target_age: string | null }
 
 export default function BuatKelasPage() {
   const router   = useRouter()
@@ -21,6 +22,9 @@ export default function BuatKelasPage() {
   const [classTypes, setClassTypes] = useState<ClassType[]>([])
   const [students,   setStudents]   = useState<Student[]>([])
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
+
+  const [levels,         setLevels]         = useState<Level[]>([])
+  const [selectedLevels, setSelectedLevels] = useState<string[]>([])
 
   const [siswaOpen,   setSiswaOpen]   = useState(false)
   const [siswaSearch, setSiswaSearch] = useState('')
@@ -95,7 +99,35 @@ export default function BuatKelasPage() {
     }
   }
 
-  function getStudentName(id: string) {
+  // Fetch levels saat course_id berubah
+  useEffect(() => {
+    if (!form.course_id) { setLevels([]); setSelectedLevels([]); return }
+    supabase
+      .from('levels')
+      .select('id, name, description, target_age')
+      .eq('course_id', form.course_id)
+      .eq('is_active', true)
+      .order('sort_order')
+      .then(({ data }) => {
+        setLevels(data ?? [])
+        setSelectedLevels([])
+      })
+  }, [form.course_id])
+
+  function toggleLevel(id: string) {
+    setSelectedLevels(prev =>
+      prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
+    )
+  }
+
+  function getLevelTargetAge(val: string | null) {
+    if (!val) return ''
+    const map: Record<string, string> = {
+      all: 'Semua', kids: 'Anak', teen: 'Remaja',
+      adult: 'Dewasa', kids_teen: 'Anak & Remaja', teen_adult: 'Remaja & Dewasa',
+    }
+    return map[val] ?? val
+  }
     return (students.find(s => s.id === id) as any)?.profiles?.full_name ?? 'Siswa'
   }
 
@@ -166,6 +198,16 @@ export default function BuatKelasPage() {
       )
     }
 
+    // Insert class_group_levels
+    if (selectedLevels.length > 0 && classGroupData) {
+      await supabase.from('class_group_levels').insert(
+        selectedLevels.map(levelId => ({
+          class_group_id: classGroupData.id,
+          level_id:       levelId,
+        }))
+      )
+    }
+
     router.push('/admin/kelas')
     router.refresh()
   }
@@ -205,6 +247,53 @@ export default function BuatKelasPage() {
               </select>
             </div>
           </div>
+
+          {/* Level — muncul setelah mata pelajaran dipilih */}
+          {form.course_id && (
+            <div>
+              <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                Level Kurikulum
+                <span className="normal-case font-normal text-[#7B78A8] ml-1">(opsional, bisa diatur nanti)</span>
+              </label>
+              {levels.length === 0 ? (
+                <div className="px-4 py-3 rounded-xl border border-dashed border-[#E5E3FF] text-xs text-[#7B78A8]">
+                  Belum ada level untuk kursus ini. Tambahkan di menu Kursus & Paket.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {levels.map(l => {
+                    const isSelected = selectedLevels.includes(l.id)
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => toggleLevel(l.id)}
+                        className={[
+                          'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
+                          isSelected
+                            ? 'bg-[#5C4FE5] text-white border-[#5C4FE5]'
+                            : 'bg-[#F7F6FF] text-[#4A4580] border-[#E5E3FF] hover:border-[#5C4FE5]'
+                        ].join(' ')}
+                      >
+                        {isSelected && <Check size={11}/>}
+                        {l.name}
+                        {l.target_age && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-[#E5E3FF] text-[#7B78A8]'}`}>
+                            {getLevelTargetAge(l.target_age)}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {selectedLevels.length > 0 && (
+                <p className="text-xs text-[#5C4FE5] font-semibold mt-2">
+                  ✓ {selectedLevels.length} level dipilih
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Tarif per siswa */}
           <div>
