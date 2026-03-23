@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import Link from 'next/link'
-import { Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, ChevronLeft, ChevronRight, RefreshCw, UserPlus } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
 interface Siswa {
@@ -58,6 +59,7 @@ export default function SiswaPage() {
   const [deleteId,     setDeleteId]     = useState<string | null>(null)
   const [deleting,     setDeleting]     = useState(false)
   const [updatingId,   setUpdatingId]   = useState<string | null>(null)
+  const [parentMap,    setParentMap]    = useState<Record<string, { email: string; phone: string }>>({})
 
   const PER_PAGE = 10
 
@@ -72,16 +74,19 @@ export default function SiswaPage() {
     const q = search.toLowerCase()
     setFiltered(
       siswaList.filter(s => {
-        const matchSearch =
+        const parent = parentMap[s.id]
+        const matchSearch = !q ||
           s.profiles?.full_name?.toLowerCase().includes(q) ||
           s.profiles?.email?.toLowerCase().includes(q) ||
-          s.profiles?.phone?.toLowerCase().includes(q)
+          s.profiles?.phone?.toLowerCase().includes(q) ||
+          parent?.email?.toLowerCase().includes(q) ||
+          parent?.phone?.toLowerCase().includes(q)
         const matchStatus = filterStatus === 'all' || s.status === filterStatus
         return matchSearch && matchStatus
       })
     )
     setPage(1)
-  }, [search, filterStatus, siswaList])
+  }, [search, filterStatus, siswaList, parentMap])
 
   async function fetchSiswa() {
     setLoading(true); setError(null)
@@ -106,6 +111,30 @@ export default function SiswaPage() {
         (a.profiles?.full_name ?? '').localeCompare(b.profiles?.full_name ?? '', 'id')
       )
       setSiswaList(sorted); setFiltered(sorted)
+
+      // Fetch parent data untuk search via ortu
+      const { data: studentRows } = await supabase
+        .from('students')
+        .select('id, parent_profile_id, relation_phone')
+        .in('id', students.map((s: any) => s.id))
+
+      const parentProfileIds = [...new Set(
+        (studentRows ?? []).map((s: any) => s.parent_profile_id).filter(Boolean)
+      )]
+      const { data: parentProfiles } = parentProfileIds.length > 0
+        ? await supabase.from('profiles').select('id, email, phone').in('id', parentProfileIds)
+        : { data: [] }
+
+      const parentProfMap = Object.fromEntries((parentProfiles ?? []).map((p: any) => [p.id, p]))
+      const pMap: Record<string, { email: string; phone: string }> = {}
+      ;(studentRows ?? []).forEach((s: any) => {
+        const pp = parentProfMap[s.parent_profile_id]
+        pMap[s.id] = {
+          email: pp?.email ?? '',
+          phone: (pp?.phone ?? '') + ' ' + (s.relation_phone ?? ''),
+        }
+      })
+      setParentMap(pMap)
     } catch (err: any) {
       setError(err.message ?? 'Gagal memuat data siswa')
     } finally {
@@ -147,11 +176,18 @@ export default function SiswaPage() {
           <h1 className="text-2xl font-bold text-[#1A1640]">Daftar Siswa</h1>
           <p className="text-sm text-[#7B78A8] mt-0.5">{loading ? '...' : `${siswaList.length} siswa terdaftar`}</p>
         </div>
-        <Link href="/admin/siswa/baru"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
-          style={{ backgroundColor: '#5C4FE5' }}>
-          <Plus size={16}/> Tambah Siswa
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/daftarkan"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-95 border"
+            style={{ borderColor: '#5C4FE5', color: '#5C4FE5', backgroundColor: '#EEEDFE' }}>
+            <UserPlus size={16}/> Daftarkan ke Kelas
+          </Link>
+          <Link href="/admin/siswa/baru"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
+            style={{ backgroundColor: '#5C4FE5' }}>
+            <Plus size={16}/> Tambah Siswa
+          </Link>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -176,7 +212,7 @@ export default function SiswaPage() {
       <div className="flex gap-3 mb-5">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8]"/>
-          <input type="text" placeholder="Cari nama, email, atau no. telepon..."
+          <input type="text" placeholder="Cari nama, email, no. HP siswa atau orang tua..."
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border outline-none transition-all focus:ring-2 focus:ring-[#5C4FE5]/30 focus:border-[#5C4FE5]"
             style={{ borderColor: '#E5E3FF', backgroundColor: '#F7F6FF', color: '#1A1640' }}/>
@@ -249,7 +285,12 @@ export default function SiswaPage() {
                           style={{ backgroundColor: AVATAR_COLORS[siswa.status] ?? '#5C4FE5' }}>
                           {getInitials(nama)}
                         </div>
-                        <span className={`font-medium ${siswa.status === 'inactive' ? 'text-gray-400' : 'text-[#1A1640]'}`}>{nama}</span>
+                        <div>
+                          <span className={`font-medium ${siswa.status === 'inactive' ? 'text-gray-400' : 'text-[#1A1640]'}`}>{nama}</span>
+                          {search && !nama.toLowerCase().includes(search.toLowerCase()) && parentMap[siswa.id] && (
+                            <p className="text-[10px] text-[#7B78A8] mt-0.5">ditemukan via orang tua</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 hidden md:table-cell">
