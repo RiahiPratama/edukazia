@@ -174,58 +174,7 @@ export default function TutorJadwalClient({
         )}
       </div>
 
-      {/* ── Edit Modal ── */}
-      {editSesi && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF] rounded-t-2xl">
-              <div>
-                <h3 className="font-bold text-[#1A1640] text-sm">Edit Sesi</h3>
-                <p className="text-xs text-[#7B78A8] mt-0.5">{editSesi.class_groups?.label}</p>
-              </div>
-              <button onClick={() => setEditSesi(null)} className="p-1.5 rounded-lg hover:bg-[#E5E3FF] text-[#7B78A8]">
-                <X size={16}/>
-              </button>
-            </div>
-            <div className="px-5 py-4 flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Tanggal</label>
-                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className={inputCls}/>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Jam WIT</label>
-                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} className={inputCls}/>
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Status</label>
-                <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className={inputCls}>
-                  {Object.entries(STATUS_MAP).map(([v, { label }]) => (
-                    <option key={v} value={v}>{label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Zoom Link</label>
-                <input type="url" value={editZoom} onChange={e => setEditZoom(e.target.value)}
-                  placeholder="https://zoom.us/j/..." className={inputCls}/>
-              </div>
-              {msg && <p className="text-xs text-red-600 px-3 py-2 bg-red-50 rounded-xl">{msg}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setEditSesi(null)}
-                  className="flex-1 py-2.5 border border-[#E5E3FF] text-[#7B78A8] font-semibold rounded-xl text-sm hover:bg-[#F7F6FF] transition">
-                  Batal
-                </button>
-                <button onClick={handleSave} disabled={saving}
-                  className="flex-1 py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                  {saving ? 'Menyimpan...' : 'Simpan'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   )
 }
