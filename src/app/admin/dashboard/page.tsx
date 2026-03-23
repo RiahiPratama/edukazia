@@ -4,9 +4,15 @@ import {
   CalendarDays, GraduationCap, Users, BookOpen,
   CreditCard, Coins, DollarSign
 } from 'lucide-react'
+import SesiHariIniAdminClient from './SesiHariIniAdminClient'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
+
+  // Rentang hari ini WIT
+  const todayWIT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+  const startUTC = `${todayWIT}T00:00:00+09:00`
+  const endUTC   = `${todayWIT}T23:59:59+09:00`
 
   const [
     { count: totalSiswa },
@@ -19,9 +25,10 @@ export default async function AdminDashboard() {
     supabase.from('tutors').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('class_groups').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('sessions')
-      .select(`id, scheduled_at, zoom_link, status, class_groups(label, courses(name))`)
-      .gte('scheduled_at', new Date().toISOString().split('T')[0] + 'T00:00:00')
-      .lte('scheduled_at', new Date().toISOString().split('T')[0] + 'T23:59:59')
+      .select(`id, scheduled_at, zoom_link, status,
+        class_groups(label, courses(name), class_types(name))`)
+      .gte('scheduled_at', startUTC)
+      .lte('scheduled_at', endUTC)
       .order('scheduled_at'),
     supabase.from('payments')
       .select(`id, amount, method, paid_at, students(profiles(full_name))`)
@@ -39,24 +46,8 @@ export default async function AdminDashboard() {
   function formatRupiah(n: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
-  function formatTime(iso: string) {
-    return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Makassar' })
-  }
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-  }
-
-  const statusColor: Record<string, string> = {
-    scheduled:   'bg-blue-50 text-blue-700',
-    completed:   'bg-green-50 text-green-700',
-    cancelled:   'bg-red-50 text-red-700',
-    rescheduled: 'bg-yellow-50 text-yellow-700',
-  }
-  const statusLabel: Record<string, string> = {
-    scheduled:   'Terjadwal',
-    completed:   'Selesai',
-    cancelled:   'Dibatalkan',
-    rescheduled: 'Reschedule',
   }
 
   return (
@@ -64,7 +55,7 @@ export default async function AdminDashboard() {
       <div className="mb-6">
         <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Dashboard</h1>
         <p className="text-sm text-[#7B78A8] mt-1">
-          {new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Makassar' })}
+          {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura' })}
         </p>
       </div>
 
@@ -101,62 +92,28 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Sesi hari ini */}
+        {/* Sesi hari ini — client component untuk countdown */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1640]">Sesi Hari Ini</h2>
-            <Link href="/admin/jadwal" className="text-xs text-[#5C4FE5] font-semibold hover:underline">Lihat semua →</Link>
+            <Link href="/admin/jadwal" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
+              Lihat semua →
+            </Link>
           </div>
-          {!sesiHariIni || sesiHariIni.length === 0 ? (
-            <div className="text-center py-8 text-[#7B78A8] text-sm">
-              <div className="flex justify-center mb-2">
-                <CalendarDays size={32} strokeWidth={1.5} className="text-[#C4BFFF]"/>
-              </div>
-              Tidak ada sesi hari ini
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {sesiHariIni.map((s: any) => (
-                <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F7F6FF] transition-colors border border-[#F0EFFF]">
-                  <div className="w-12 text-center flex-shrink-0">
-                    <div className="text-sm font-bold text-[#5C4FE5]">{formatTime(s.scheduled_at)}</div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-[#1A1640] truncate">{s.class_groups?.label ?? '—'}</div>
-                    <div className="text-xs text-[#7B78A8]">{s.class_groups?.courses?.name ?? '—'}</div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {s.zoom_link && (
-                      <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                        className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
-                        Zoom
-                      </a>
-                    )}
-                    <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${statusColor[s.status] ?? 'bg-gray-50 text-gray-700'}`}>
-                      {statusLabel[s.status] ?? s.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <Link href="/admin/jadwal?new=1"
-            className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold">
-            + Tambah Sesi Baru
-          </Link>
+          <SesiHariIniAdminClient sesiHariIni={sesiHariIni ?? []} />
         </div>
 
         {/* Pembayaran terbaru */}
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1640]">Pembayaran Terbaru</h2>
-            <Link href="/admin/pembayaran" className="text-xs text-[#5C4FE5] font-semibold hover:underline">Lihat semua →</Link>
+            <Link href="/admin/pembayaran" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
+              Lihat semua →
+            </Link>
           </div>
           {!pembayaranTerbaru || pembayaranTerbaru.length === 0 ? (
             <div className="text-center py-8 text-[#7B78A8] text-sm">
-              <div className="flex justify-center mb-2">
-                <CreditCard size={32} strokeWidth={1.5} className="text-[#C4BFFF]"/>
-              </div>
+              <CreditCard size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
               Belum ada pembayaran
             </div>
           ) : (
@@ -167,10 +124,14 @@ export default async function AdminDashboard() {
                     {(p.students?.profiles?.full_name ?? 'S').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-[#1A1640] truncate">{p.students?.profiles?.full_name ?? '—'}</div>
+                    <div className="text-xs font-semibold text-[#1A1640] truncate">
+                      {p.students?.profiles?.full_name ?? '—'}
+                    </div>
                     <div className="text-xs text-[#7B78A8]">{formatDate(p.paid_at)}</div>
                   </div>
-                  <div className="text-xs font-bold text-green-600 flex-shrink-0">+{formatRupiah(p.amount)}</div>
+                  <div className="text-xs font-bold text-green-600 flex-shrink-0">
+                    +{formatRupiah(p.amount)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -186,48 +147,26 @@ export default async function AdminDashboard() {
       <div className="mt-4 bg-white rounded-2xl border border-[#E5E3FF] p-5">
         <h2 className="font-bold text-[#1A1640] mb-4">Aksi Cepat</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Link href="/admin/siswa/baru"
-            className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
-            <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-              <GraduationCap size={18} className="text-[#5C4FE5] group-hover:text-white transition-colors" strokeWidth={2}/>
-            </div>
-            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">Tambah Siswa</span>
-          </Link>
-          <Link href="/admin/tutor/baru"
-            className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
-            <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-              <Users size={18} className="text-[#5C4FE5] group-hover:text-white transition-colors" strokeWidth={2}/>
-            </div>
-            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">Tambah Tutor</span>
-          </Link>
-          <Link href="/admin/kelas/baru"
-            className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
-            <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-              <BookOpen size={18} className="text-[#5C4FE5] group-hover:text-white transition-colors" strokeWidth={2}/>
-            </div>
-            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">Buat Kelas</span>
-          </Link>
-          <Link href="/admin/jadwal?new=1"
-            className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
-            <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-              <CalendarDays size={18} className="text-[#5C4FE5] group-hover:text-white transition-colors" strokeWidth={2}/>
-            </div>
-            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">Buat Jadwal</span>
-          </Link>
-          <Link href="/admin/pembayaran?new=1"
-            className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
-            <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-              <CreditCard size={18} className="text-[#5C4FE5] group-hover:text-white transition-colors" strokeWidth={2}/>
-            </div>
-            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">Catat Bayar</span>
-          </Link>
-          <Link href="/admin/honor"
-            className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
-            <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-              <Coins size={18} className="text-[#5C4FE5] group-hover:text-white transition-colors" strokeWidth={2}/>
-            </div>
-            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">Honor Tutor</span>
-          </Link>
+          {[
+            { href: '/admin/siswa/baru',      icon: <GraduationCap size={18}/>, label: 'Tambah Siswa' },
+            { href: '/admin/tutor/baru',      icon: <Users size={18}/>,         label: 'Tambah Tutor' },
+            { href: '/admin/kelas/baru',      icon: <BookOpen size={18}/>,      label: 'Buat Kelas' },
+            { href: '/admin/jadwal?new=1',    icon: <CalendarDays size={18}/>,  label: 'Buat Jadwal' },
+            { href: '/admin/pembayaran?new=1',icon: <CreditCard size={18}/>,    label: 'Catat Bayar' },
+            { href: '/admin/honor',           icon: <Coins size={18}/>,         label: 'Honor Tutor' },
+          ].map((item) => (
+            <Link key={item.href} href={item.href}
+              className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
+              <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
+                <span className="text-[#5C4FE5] group-hover:text-white transition-colors">
+                  {item.icon}
+                </span>
+              </div>
+              <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">
+                {item.label}
+              </span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
