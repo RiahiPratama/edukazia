@@ -63,9 +63,25 @@ export default async function AdminJadwalPage({
     .lte('scheduled_at', toUTC(lastOfMonth))
     .neq('status', 'cancelled')
 
+  // Sesi hari ini
+  const prevDate   = new Date(todayWITStr + 'T00:00:00+09:00')
+  prevDate.setDate(prevDate.getDate() - 1)
+  const todayStart = prevDate.toLocaleDateString('en-CA') + 'T15:00:00+00:00'
+  const todayEnd   = todayWITStr + 'T14:59:59+00:00'
+
+  const { data: sesiHariIni } = await supabase
+    .from('sessions')
+    .select(`id, scheduled_at, status, zoom_link,
+      class_groups(id, label, courses(name), class_types(name),
+        tutors(profiles(full_name)))`)
+    .gte('scheduled_at', todayStart)
+    .lte('scheduled_at', todayEnd)
+    .order('scheduled_at')
+
   return (
     <AdminJadwalClient
       sessions={sessions ?? []}
+      sesiHariIni={sesiHariIni ?? []}
       sessionsBulanIni={sessionsBulanIni ?? []}
       todayWITStr={todayWITStr}
       weekOffset={weekOffset}

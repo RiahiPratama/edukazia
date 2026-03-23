@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { CalendarDays, ExternalLink, X } from 'lucide-react'
+import { CalendarDays, ExternalLink } from 'lucide-react'
 
 const STATUS_MAP: Record<string, { label: string; pill: string }> = {
   scheduled:   { label: 'Terjadwal',      pill: 'bg-[#EEEDFE] text-[#3C3489]' },
@@ -29,17 +28,10 @@ type Props = {
 export default function TutorJadwalClient({
   sessions, sesiHariIni, sessionsBulanIni, todayWITStr, weekOffset, mondayISO, sundayISO,
 }: Props) {
-  const router  = useRouter()
   const monday  = new Date(mondayISO)
   const sunday  = new Date(sundayISO)
 
-  const [editSesi,   setEditSesi]   = useState<any | null>(null)
-  const [editDate,   setEditDate]   = useState('')
-  const [editTime,   setEditTime]   = useState('')
-  const [editStatus, setEditStatus] = useState('')
-  const [editZoom,   setEditZoom]   = useState('')
-  const [saving,     setSaving]     = useState(false)
-  const [msg,        setMsg]        = useState('')
+
 
   const fmtKey    = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const fmtTime   = (iso: string) => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura' })
@@ -59,40 +51,9 @@ export default function TutorJadwalClient({
     const d = new Date(monday); d.setDate(monday.getDate() + i); return d
   })
 
-  function openEdit(s: any) {
-    const localDate = new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-    const localTime = new Date(s.scheduled_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura' })
-    setEditSesi(s); setEditDate(localDate); setEditTime(localTime)
-    setEditStatus(s.status); setEditZoom(s.zoom_link ?? ''); setMsg('')
-  }
 
-  async function handleSave() {
-    if (!editSesi) return
-    setSaving(true); setMsg('')
-    const scheduledAt = new Date(`${editDate}T${editTime}:00+09:00`).toISOString()
-    const res  = await fetch('/api/sessions/update', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: editSesi.id, scheduled_at: scheduledAt, status: editStatus, zoom_link: editZoom || null }),
-    })
-    const data = await res.json()
-    setSaving(false)
-    if (!res.ok) { setMsg(data.error ?? 'Gagal menyimpan'); return }
-    setEditSesi(null)
-    router.refresh()
-  }
 
-  function EditBtn({ s }: { s: any }) {
-    return (
-      <button onClick={() => openEdit(s)}
-        className="p-1.5 rounded-lg text-[#7B78A8] hover:bg-[#F0EFFF] hover:text-[#5C4FE5] transition flex-shrink-0">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-      </button>
-    )
-  }
+
 
   function SesiRow({ s, compact = false }: { s: any; compact?: boolean }) {
     const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
@@ -115,7 +76,6 @@ export default function TutorJadwalClient({
               Zoom
             </a>
           )}
-          <EditBtn s={s}/>
         </div>
       </div>
     )

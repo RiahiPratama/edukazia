@@ -19,6 +19,7 @@ const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-sm bg
 
 type Props = {
   sessions: any[]
+  sesiHariIni: any[]
   sessionsBulanIni: any[]
   todayWITStr: string
   weekOffset: number
@@ -27,7 +28,7 @@ type Props = {
 }
 
 export default function AdminJadwalClient({
-  sessions, sessionsBulanIni, todayWITStr, weekOffset, mondayISO, sundayISO,
+  sessions, sesiHariIni, sessionsBulanIni, todayWITStr, weekOffset, mondayISO, sundayISO,
 }: Props) {
   const router = useRouter()
 
@@ -138,6 +139,62 @@ export default function AdminJadwalClient({
           })}
         </div>
       </div>
+
+      {/* Sesi Hari Ini */}
+      {weekOffset === 0 && (
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden mb-4">
+          <div className="px-5 py-3 bg-[#5C4FE5] flex items-center justify-between">
+            <span className="text-sm font-bold text-white">
+              Sesi Hari Ini — {new Date(todayWITStr + 'T00:00:00+09:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jayapura' })}
+            </span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+              {sesiHariIni.length} sesi
+            </span>
+          </div>
+          {sesiHariIni.length === 0 ? (
+            <div className="p-6 text-center">
+              <CalendarDays size={28} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
+              <p className="text-sm text-[#7B78A8]">Tidak ada sesi hari ini</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#F0EFFF]">
+              {sesiHariIni.map((s: any) => {
+                const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
+                const tutorName = s.class_groups?.tutors?.profiles?.full_name ?? '—'
+                return (
+                  <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F6FF] transition">
+                    <div className="w-14 flex-shrink-0 text-center">
+                      <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+                      <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
+                    </div>
+                    <div className="w-0.5 h-10 bg-[#E5E3FF] flex-shrink-0 rounded-full"/>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-[#1A1640] truncate">{s.class_groups?.label ?? '—'}</div>
+                      <div className="text-xs text-[#7B78A8] mt-0.5">{s.class_groups?.courses?.name ?? '—'} · {tutorName}</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${st.pill}`}>{st.label}</span>
+                      {s.zoom_link && (
+                        <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                          className="text-[#5C4FE5] hover:opacity-70 p-1.5 rounded-lg hover:bg-[#F0EFFF] transition">
+                          <ExternalLink size={13}/>
+                        </a>
+                      )}
+                      <button onClick={() => openEdit(s)}
+                        className="p-1.5 rounded-lg text-[#7B78A8] hover:bg-[#F0EFFF] hover:text-[#5C4FE5] transition">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Session List */}
       <div className="space-y-4">
