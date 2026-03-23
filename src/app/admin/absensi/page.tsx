@@ -124,10 +124,16 @@ export default function AdminAbsensiPage() {
   async function handleReschedule() {
     if (!rescheduleSession) return
     setSavingReschedule(true); setRescheduleMsg('')
+    const { data: { user } } = await supabase.auth.getUser()
     const res = await fetch('/api/sessions/reschedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: rescheduleSession.id, alasan: rescheduleAlasan }),
+      body: JSON.stringify({
+        session_id:         rescheduleSession.id,
+        alasan:             rescheduleAlasan,
+        reschedued_by_role: 'admin',
+        reschedued_by_id:   user?.id ?? null,
+      }),
     })
     const data = await res.json()
     setSavingReschedule(false)

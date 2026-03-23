@@ -543,10 +543,16 @@ export default function TutorAbsensiPage() {
   async function handleReschedule() {
     if (!selectedSesi) return
     setSavingReschedule(true); setRescheduleMsg('')
+    const { data: { user } } = await supabase.auth.getUser()
     const res = await fetch('/api/sessions/reschedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: selectedSesi.id, alasan: rescheduleAlasan }),
+      body: JSON.stringify({
+        session_id:          selectedSesi.id,
+        alasan:              rescheduleAlasan,
+        reschedued_by_role:  'tutor',
+        reschedued_by_id:    user?.id ?? null,
+      }),
     })
     const data = await res.json()
     setSavingReschedule(false)

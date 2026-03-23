@@ -1,566 +1,464 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronLeft, ChevronRight, Plus, X, Check, Pencil, Trash2, ExternalLink, Minus, ChevronDown, ChevronUp, Users, CalendarDays } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, X, Minus, Calendar, Trash2, Archive, ChevronDown, ChevronUp } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
-type Session = {
-  id: string
-  class_group_id: string
-  scheduled_at: string
-  status: string
-  zoom_link: string | null
-  class_group?: { label: string; tutor_name: string; course_name: string; color: string }
-}
-
-type ClassGroup = {
+type Kelas = {
   id: string
   label: string
-  tutor_id: string
-  course_id: string
-  zoom_link: string | null
-}
-
-type SiswaItem = {
-  id: string
-  name: string
-  sessionsTotal: number
-  sessionStartOffset: number
-  sessionNumber: number
+  status: string
+  max_participants: number
+  courses: { name: string; color: string | null } | null
+  class_types: { name: string } | null
+  tutors: { profiles: { full_name: string } | null } | null
+  enrollments: { id: string; status: string }[]
 }
 
 type JadwalRow = { date: string; time: string; repeat: number }
 
-const STATUS_MAP: Record<string, { label: string; pill: string }> = {
-  scheduled:   { label: 'Terjadwal',      pill: 'bg-[#EEEDFE] text-[#3C3489]' },
-  completed:   { label: 'Selesai',        pill: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  cancelled:   { label: 'Dibatalkan',     pill: 'bg-[#FEE9E9] text-[#991B1B]' },
-  rescheduled: { label: 'Dijadwal Ulang', pill: 'bg-[#FEF3E2] text-[#92400E]' },
-}
-
-const COURSE_COLORS  = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED']
-const AVATAR_COLORS  = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED','#BE185D','#065F46','#92400E','#1E40AF']
 const MAX_ROWS   = 5
 const MAX_REPEAT = 16
-const DAY_NAMES  = ['Sen','Sel','Rab','Kam','Jum','Sab','Min']
 
-function getWeekDates(base: Date) {
-  const day = base.getDay()
-  const monday = new Date(base)
-  monday.setDate(base.getDate() - (day === 0 ? 6 : day - 1))
-  return Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
-}
-function fmtDate(d: Date) {
-  const offset = d.getTimezoneOffset()
-  const local  = new Date(d.getTime() - offset * 60 * 1000)
-  return local.toISOString().split('T')[0]
-}
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
-}
-function fmtDayLabel(d: Date) {
-  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
-function getInitials(name: string) {
-  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
-}
-function generateSessions(row: JadwalRow): string[] {
+function generateSessions(row: JadwalRow, classGroupId: string) {
   return Array.from({ length: row.repeat }, (_, i) => {
     const d = new Date(`${row.date}T${row.time}:00`)
     d.setDate(d.getDate() + i * 7)
-    return d.toISOString()
+    return { class_group_id: classGroupId, scheduled_at: d.toISOString(), status: 'scheduled', zoom_link: null }
   })
 }
 
-function JadwalContent() {
+export default function KelasPage() {
   const supabase = createClient()
-  const searchParams = useSearchParams()
 
-  const [sessions,     setSessions]     = useState<Session[]>([])
-  const [classGroups,  setClassGroups]  = useState<ClassGroup[]>([])
-  const [weekBase,     setWeekBase]     = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
-  const [loading,      setLoading]      = useState(true)
+  const [kelasList,   setKelasList]   = useState<Kelas[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [showArsip,   setShowArsip]   = useState(false)
 
-  const [expandedId,    setExpandedId]    = useState<string | null>(null)
-  const [siswaMap,      setSiswaMap]      = useState<Record<string, SiswaItem[]>>({})
-  const [loadingSiswa,  setLoadingSiswa]  = useState<string | null>(null)
+  // Modal arsip
+  const [archiveId,    setArchiveId]    = useState<string | null>(null)
+  const [archiveLabel, setArchiveLabel] = useState('')
+  const [archiving,    setArchiving]    = useState(false)
 
-  const [showModal,   setShowModal]   = useState(false)
-  const [editSession, setEditSession] = useState<Session | null>(null)
-  const [delConfirm,  setDelConfirm]  = useState<string | null>(null)
-  const [saving,      setSaving]      = useState(false)
-  const [formError,   setFormError]   = useState('')
+  // Modal restore
+  const [restoreId,    setRestoreId]    = useState<string | null>(null)
+  const [restoreLabel, setRestoreLabel] = useState('')
+  const [restoring,    setRestoring]    = useState(false)
 
-  const [fClassGroup, setFClassGroup] = useState('')
-  const [fStatus,     setFStatus]     = useState('scheduled')
-  const [fZoom,       setFZoom]       = useState('')
-  const [fDate,       setFDate]       = useState(fmtDate(new Date()))
-  const [fTime,       setFTime]       = useState('08:00')
-  const [jadwalRows,  setJadwalRows]  = useState<JadwalRow[]>([{ date: fmtDate(new Date()), time: '08:00', repeat: 1 }])
+  // Modal jadwal
+  const [showJadwal,    setShowJadwal]    = useState(false)
+  const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null)
+  const [jadwalRows,    setJadwalRows]    = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
+  const [fZoom,         setFZoom]         = useState('')
+  const [saving,        setSaving]        = useState(false)
+  const [jadwalError,   setJadwalError]   = useState('')
+  const [jadwalSuccess, setJadwalSuccess] = useState('')
 
-  const weekDates  = getWeekDates(weekBase)
-  const isEditMode = !!editSession
-  const totalSesi  = jadwalRows.reduce((acc, r) => acc + r.repeat, 0)
+  // Modal hapus
+  const [deleteId,    setDeleteId]    = useState<string | null>(null)
+  const [deleteLabel, setDeleteLabel] = useState('')
+  const [deleting,    setDeleting]    = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
-  useEffect(() => { fetchAll() }, [])
+  function today() {
+    const d = new Date()
+    const offset = d.getTimezoneOffset()
+    const local  = new Date(d.getTime() - offset * 60 * 1000)
+    return local.toISOString().split('T')[0]
+  }
 
-  useEffect(() => {
-    if (searchParams.get('new') === '1' && classGroups.length > 0) {
-      openAdd()
-    }
-  }, [classGroups])
+  useEffect(() => { fetchKelas() }, [])
 
-  async function fetchAll() {
+  async function fetchKelas() {
     setLoading(true)
-    const start = new Date(weekBase); start.setMonth(start.getMonth() - 1)
-    const end   = new Date(weekBase); end.setMonth(end.getMonth() + 2)
-
-    const { data: sess } = await supabase
-      .from('sessions')
-      .select('id, class_group_id, scheduled_at, status, zoom_link')
-      .gte('scheduled_at', start.toISOString())
-      .lte('scheduled_at', end.toISOString())
-      .order('scheduled_at', { ascending: true })
-
-    const { data: cg } = await supabase
+    const { data } = await supabase
       .from('class_groups')
-      .select('id, label, tutor_id, course_id, zoom_link')
-    const cgList = (cg ?? []) as ClassGroup[]
-    setClassGroups(cgList)
-
-    const tutorIds = [...new Set(cgList.map(c => c.tutor_id).filter(Boolean))]
-    let tutorMap: Record<string, string> = {}
-    if (tutorIds.length > 0) {
-      const { data: tutors } = await supabase.from('tutors').select('id, profile_id').in('id', tutorIds)
-      const profIds = (tutors ?? []).map((t: any) => t.profile_id).filter(Boolean)
-      if (profIds.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', profIds)
-        const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]))
-        tutorMap = Object.fromEntries((tutors ?? []).map((t: any) => [t.id, profMap[t.profile_id] ?? 'Tutor']))
-      }
-    }
-
-    const courseIds = [...new Set(cgList.map(c => c.course_id).filter(Boolean))]
-    let courseMap: Record<string, string> = {}
-    const courseColorMap: Record<string, string> = {}
-    if (courseIds.length > 0) {
-      const { data: courses } = await supabase.from('courses').select('id, name').in('id', courseIds)
-      courseMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.name]))
-      courseIds.forEach((id, i) => { courseColorMap[id] = COURSE_COLORS[i % COURSE_COLORS.length] })
-    }
-
-    const cgMap = Object.fromEntries(cgList.map(c => [c.id, {
-      label:       c.label,
-      tutor_name:  tutorMap[c.tutor_id] ?? '—',
-      course_name: courseMap[c.course_id] ?? '—',
-      color:       courseColorMap[c.course_id] ?? '#5C4FE5',
-    }]))
-
-    setSessions((sess ?? []).map((s: any) => ({ ...s, class_group: cgMap[s.class_group_id] })))
+      .select(`id, label, status, max_participants,
+        courses(name, color), class_types(name),
+        tutors(profiles(full_name)),
+        enrollments(id, status)`)
+      .order('created_at', { ascending: false })
+    setKelasList((data as any[]) ?? [])
     setLoading(false)
   }
 
-  async function fetchSiswa(session: Session) {
-    const sid = session.id
-    if (siswaMap[sid]) { setExpandedId(prev => prev === sid ? null : sid); return }
-    setLoadingSiswa(sid); setExpandedId(sid)
-
-    const { data: enrollments } = await supabase
-      .from('enrollments').select('id, student_id, sessions_total, session_start_offset')
-      .eq('class_group_id', session.class_group_id)
-
-    if (!enrollments || enrollments.length === 0) {
-      setSiswaMap(prev => ({ ...prev, [sid]: [] })); setLoadingSiswa(null); return
-    }
-
-    const studentIds = enrollments.map((e: any) => e.student_id).filter(Boolean)
-    const { data: students } = await supabase.from('students').select('id, profile_id').in('id', studentIds)
-    const profIds = (students ?? []).map((s: any) => s.profile_id).filter(Boolean)
-    let nameMap: Record<string, string> = {}
-    if (profIds.length > 0) {
-      const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', profIds)
-      const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]))
-      nameMap = Object.fromEntries((students ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
-    }
-
-    // FIX: hitung hadir per siswa hanya dari sesi SEBELUM sesi ini
-    const { data: allSessForCG } = await supabase
-      .from('sessions').select('id, scheduled_at')
-      .eq('class_group_id', session.class_group_id)
-      .eq('status', 'completed')
-      .lt('scheduled_at', session.scheduled_at)  // hanya sesi sebelum ini
-
-    const prevSessIds = (allSessForCG ?? []).map((s: any) => s.id)
-    const { data: hadirAtts } = prevSessIds.length > 0
-      ? await supabase
-          .from('attendances')
-          .select('student_id')
-          .in('session_id', prevSessIds)
-          .eq('status', 'hadir')
-      : { data: [] }
-
-    const hadirPerSiswa: Record<string, number> = {}
-    ;(hadirAtts ?? []).forEach((a: any) => {
-      hadirPerSiswa[a.student_id] = (hadirPerSiswa[a.student_id] ?? 0) + 1
-    })
-
-    const merged: SiswaItem[] = enrollments.map((e: any) => ({
-      id:                 e.student_id,
-      name:               nameMap[e.student_id] ?? 'Siswa',
-      sessionsTotal:      e.sessions_total ?? 8,
-      sessionStartOffset: e.session_start_offset ?? 0,
-      // FIX: progress = session_start_offset + jumlah hadir
-      sessionNumber:      (e.session_start_offset ?? 0) + (hadirPerSiswa[e.student_id] ?? 0),
-    }))
-
-    setSiswaMap(prev => ({ ...prev, [sid]: merged })); setLoadingSiswa(null)
+  function openJadwal(k: Kelas) {
+    setSelectedKelas(k)
+    setJadwalRows([{ date: today(), time: '08:00', repeat: 1 }])
+    setFZoom('')
+    setJadwalError('')
+    setJadwalSuccess('')
+    setShowJadwal(true)
   }
 
-  const sessionsOnDate   = (date: string) => sessions.filter(s => fmtDate(new Date(s.scheduled_at)) === date)
-  const selectedSessions = sessionsOnDate(selectedDate)
+  function openArchive(k: Kelas) {
+    setArchiveId(k.id)
+    setArchiveLabel(k.label)
+  }
+
+  async function handleArchive() {
+    if (!archiveId) return
+    setArchiving(true)
+    // FIX: pakai 'inactive' bukan 'completed'
+    await supabase.from('class_groups').update({ status: 'inactive' }).eq('id', archiveId)
+    setArchiving(false)
+    setArchiveId(null)
+    fetchKelas()
+  }
+
+  function openRestore(k: Kelas) {
+    setRestoreId(k.id)
+    setRestoreLabel(k.label)
+  }
+
+  async function handleRestore() {
+    if (!restoreId) return
+    setRestoring(true)
+    await supabase.from('class_groups').update({ status: 'active' }).eq('id', restoreId)
+    setRestoring(false)
+    setRestoreId(null)
+    fetchKelas()
+  }
+
+  function openDelete(k: Kelas) {
+    setDeleteId(k.id)
+    setDeleteLabel(k.label)
+    setDeleteError('')
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return
+    setDeleting(true); setDeleteError('')
+    await supabase.from('sessions').delete().eq('class_group_id', deleteId)
+    await supabase.from('enrollments').delete().eq('class_group_id', deleteId)
+    const { error } = await supabase.from('class_groups').delete().eq('id', deleteId)
+    if (error) { setDeleteError(error.message); setDeleting(false); return }
+    setDeleting(false)
+    setDeleteId(null)
+    fetchKelas()
+  }
 
   function addRow() {
     if (jadwalRows.length >= MAX_ROWS) return
     const last = jadwalRows[jadwalRows.length - 1]
-    const next = new Date(`${last.date}T00:00:00`); next.setDate(next.getDate() + 7)
-    setJadwalRows(prev => [...prev, { date: fmtDate(next), time: last.time, repeat: 1 }])
+    const next = new Date(`${last.date}T00:00:00`)
+    next.setDate(next.getDate() + 7)
+    const offset = next.getTimezoneOffset()
+    const local  = new Date(next.getTime() - offset * 60 * 1000)
+    setJadwalRows(prev => [...prev, { date: local.toISOString().split('T')[0], time: last.time, repeat: 1 }])
   }
+
   function removeRow(idx: number) { setJadwalRows(prev => prev.filter((_, i) => i !== idx)) }
+
   function updateRow(idx: number, field: keyof JadwalRow, value: string | number) {
     setJadwalRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
   }
 
-  function openAdd() {
-    setEditSession(null)
-    const defaultCg = classGroups[0]?.id ?? ''
-    setFClassGroup(defaultCg)
-    setFStatus('scheduled')
-    setFZoom(classGroups[0]?.zoom_link ?? '')
-    setJadwalRows([{ date: selectedDate, time: '08:00', repeat: 1 }])
-    setFormError('')
-    setShowModal(true)
-  }
-
-  function handleClassGroupChange(id: string) {
-    setFClassGroup(id)
-    const cg = classGroups.find(c => c.id === id)
-    setFZoom(cg?.zoom_link ?? '')
-  }
-
-  function openEdit(s: Session) {
-    setEditSession(s)
-    setFClassGroup(s.class_group_id)
-    const dt     = new Date(s.scheduled_at)
-    const offset = dt.getTimezoneOffset()
-    const local  = new Date(dt.getTime() - offset * 60 * 1000)
-    const dateStr = local.toISOString().split('T')[0]
-    const timeStr = local.toISOString().split('T')[1].slice(0, 5)
-    setFDate(dateStr)
-    setFTime(timeStr)
-    setFStatus(s.status)
-    setFZoom(s.zoom_link ?? '')
-    setFormError('')
-    setShowModal(true)
-  }
-
-  async function handleSave() {
-    if (!fClassGroup) { setFormError('Pilih kelas terlebih dahulu.'); return }
-    setSaving(true); setFormError('')
-
-    const zoomToSave = fZoom || classGroups.find(c => c.id === fClassGroup)?.zoom_link || null
-
-    if (isEditMode && editSession) {
-      const scheduled_at = new Date(`${fDate}T${fTime}:00`).toISOString()
-      const { error } = await supabase.from('sessions').update({
-        class_group_id: fClassGroup,
-        scheduled_at,
-        status:    fStatus,
-        zoom_link: zoomToSave,
-      }).eq('id', editSession.id)
-      if (error) { setFormError(error.message); setSaving(false); return }
-    } else {
-      const all: any[] = []
-      for (const row of jadwalRows) {
-        if (!row.date || !row.time) continue
-        for (const scheduled_at of generateSessions(row)) {
-          all.push({ class_group_id: fClassGroup, scheduled_at, status: fStatus, zoom_link: zoomToSave })
-        }
-      }
-      if (all.length === 0) { setFormError('Isi minimal satu jadwal.'); setSaving(false); return }
-      const { error } = await supabase.from('sessions').insert(all)
-      if (error) { setFormError(error.message); setSaving(false); return }
+  async function handleSaveJadwal() {
+    if (!selectedKelas) return
+    setSaving(true); setJadwalError(''); setJadwalSuccess('')
+    const allSessions: any[] = []
+    for (const row of jadwalRows) {
+      if (!row.date || !row.time) continue
+      generateSessions(row, selectedKelas.id).forEach(s => allSessions.push({ ...s, zoom_link: fZoom || null }))
     }
-
-    setSiswaMap(prev => { const n = { ...prev }; if (editSession?.id) delete n[editSession.id]; return n })
-    setSaving(false); setShowModal(false); fetchAll()
+    if (allSessions.length === 0) { setJadwalError('Isi minimal satu jadwal.'); setSaving(false); return }
+    const { error } = await supabase.from('sessions').insert(allSessions)
+    if (error) { setJadwalError(error.message); setSaving(false); return }
+    setJadwalSuccess(`${allSessions.length} sesi berhasil dijadwalkan!`)
+    setSaving(false)
+    setTimeout(() => setShowJadwal(false), 1500)
   }
 
-  async function handleDelete(id: string) {
-    await supabase.from('sessions').delete().eq('id', id)
-    setDelConfirm(null); fetchAll()
-  }
-  async function markComplete(id: string) {
-    await supabase.from('sessions').update({ status: 'completed' }).eq('id', id); fetchAll()
-  }
+  const totalSesi = jadwalRows.reduce((a, r) => a + r.repeat, 0)
 
-  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+  const statusLabel: Record<string, string> = { active: 'Aktif', inactive: 'Nonaktif' }
+  const statusColor: Record<string, string> = {
+    active:   'bg-green-100 text-green-700',
+    inactive: 'bg-gray-100 text-gray-500',
+  }
+  const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
+
+  const kelasAktif  = kelasList.filter(k => k.status === 'active')
+  const kelasArsip  = kelasList.filter(k => k.status === 'inactive')
+
+  function KelasCard({ k, isArsip = false }: { k: any; isArsip?: boolean }) {
+    const activeEnroll = k.enrollments?.filter((e: any) => e.status === 'active').length ?? 0
+    const isFull = activeEnroll >= k.max_participants
+    return (
+      <div className={`bg-white rounded-2xl border p-5 hover:shadow-sm transition-all ${isArsip ? 'border-gray-200 opacity-80' : 'border-[#E5E3FF]'}`}>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-[#1A1640] truncate">{k.label}</div>
+            <div className="text-xs text-[#7B78A8] mt-0.5">{k.courses?.name} · {k.class_types?.name}</div>
+          </div>
+          <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor[k.status] ?? 'bg-gray-100 text-gray-500'}`}>
+              {statusLabel[k.status] ?? k.status}
+            </span>
+            {!isArsip && (
+              <button onClick={() => openArchive(k)}
+                className="p-1 rounded-lg text-gray-300 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition-colors"
+                title="Arsipkan Kelas">
+                <Archive size={13}/>
+              </button>
+            )}
+            {isArsip && (
+              <button onClick={() => openRestore(k)}
+                className="p-1 rounded-lg text-gray-300 hover:text-green-600 hover:bg-green-50 transition-colors"
+                title="Aktifkan Kembali">
+                <Archive size={13}/>
+              </button>
+            )}
+            <button onClick={() => openDelete(k)}
+              className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Hapus Kelas">
+              <Trash2 size={13}/>
+            </button>
+          </div>
+        </div>
+
+        <div className="text-sm text-[#4A4580] mb-3">
+          👨‍🏫 {k.tutors?.profiles?.full_name ?? '—'}
+        </div>
+
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-[#7B78A8]">Peserta</div>
+          <div className={`text-sm font-bold ${isFull ? 'text-red-600' : 'text-green-600'}`}>
+            {activeEnroll}/{k.max_participants}
+          </div>
+        </div>
+
+        <div className="w-full h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden mb-4">
+          <div className={`h-full rounded-full ${isFull ? 'bg-red-400' : 'bg-[#5C4FE5]'}`}
+            style={{ width: `${Math.min((activeEnroll / k.max_participants) * 100, 100)}%` }}/>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Link href={`/admin/kelas/${k.id}/edit`}
+            className="text-center py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition-colors">
+            Edit
+          </Link>
+          {!isArsip && (
+            <button onClick={() => openJadwal(k)}
+              className="flex items-center justify-center gap-1 py-2 bg-[#E6B800] text-[#7A5C00] text-xs font-bold rounded-lg hover:bg-[#F5C800] transition-colors">
+              <Calendar size={11}/> Jadwal
+            </button>
+          )}
+          {isArsip && (
+            <button onClick={() => openRestore(k)}
+              className="flex items-center justify-center gap-1 py-2 bg-green-100 text-green-700 text-xs font-bold rounded-lg hover:bg-green-200 transition-colors">
+              Aktifkan
+            </button>
+          )}
+          <Link href={`/admin/kelas/${k.id}`}
+            className="text-center py-2 border border-[#E5E3FF] text-[#4A4580] text-xs font-bold rounded-lg hover:bg-[#F0EFFF] transition-colors">
+            Detail
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora, sans-serif' }}>Jadwal</h1>
-          <p className="text-sm text-[#7B78A8] mt-0.5">Kelola sesi kelas mingguan</p>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Manajemen Kelas</h1>
+          <p className="text-sm text-[#7B78A8] mt-1">{kelasAktif.length} kelas aktif</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2.5 bg-[#5C4FE5] text-white text-sm font-semibold rounded-xl hover:bg-[#3D34C4] transition active:scale-95">
-          <Plus size={15} /> Tambah Sesi
-        </button>
+        <Link href="/admin/kelas/baru"
+          className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+          + Buat Kelas
+        </Link>
       </div>
 
-      {/* Week strip */}
-      <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-4">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate()-7); setWeekBase(d) }} className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"><ChevronLeft size={18}/></button>
-          <span className="text-sm font-semibold text-[#1A1640]">
-            {weekDates[0].toLocaleDateString('id-ID',{day:'numeric',month:'long'})} – {weekDates[6].toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}
-          </span>
-          <button onClick={() => { const d = new Date(weekBase); d.setDate(d.getDate()+7); setWeekBase(d) }} className="p-2 rounded-lg hover:bg-[#F7F6FF] text-[#5C4FE5] transition"><ChevronRight size={18}/></button>
-        </div>
-        <div className="grid grid-cols-7 gap-2">
-          {weekDates.map((d, i) => {
-            const key = fmtDate(d); const isToday = key === fmtDate(new Date()); const isSelected = key === selectedDate; const count = sessionsOnDate(key).length
-            return (
-              <button key={key} onClick={() => { setSelectedDate(key); setExpandedId(null) }}
-                className={['flex flex-col items-center py-2.5 px-1 rounded-xl border transition-all',
-                  isSelected?'bg-[#5C4FE5] border-[#5C4FE5]':isToday?'bg-[#F0EEFF] border-[#C4BFFF]':'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]'].join(' ')}>
-                <span className={`text-[10px] font-semibold mb-1 ${isSelected?'text-white/70':'text-[#7B78A8]'}`}>{DAY_NAMES[i]}</span>
-                <span className={`text-sm font-bold ${isSelected?'text-white':isToday?'text-[#5C4FE5]':'text-[#1A1640]'}`}>{d.getDate()}</span>
-                {count > 0
-                  ? <div className="flex gap-0.5 mt-1.5">{Array.from({length:Math.min(count,3)}).map((_,j)=><div key={j} className={`w-1.5 h-1.5 rounded-full ${isSelected?'bg-white':'bg-[#5C4FE5]'}`}/>)}</div>
-                  : <div className="h-3.5 mt-1"/>}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Session list */}
-      <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[#E5E3FF] bg-[#F7F6FF]">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#7B78A8]">{fmtDayLabel(new Date(selectedDate+'T00:00:00'))}</span>
-        </div>
-        {loading ? (
-          <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Memuat jadwal...</div>
-        ) : selectedSessions.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <div className="flex justify-center mb-3">
-              <CalendarDays size={40} strokeWidth={1.5} className="text-[#C4BFFF]"/>
-            </div>
-            <p className="text-sm font-semibold text-[#7B78A8]">Tidak ada sesi pada hari ini</p>
-            <button onClick={openAdd} className="mt-3 text-sm text-[#5C4FE5] font-semibold hover:underline">+ Tambah sesi baru</button>
-          </div>
-        ) : (
-          selectedSessions.map((s, idx) => {
-            const st         = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
-            const isExpanded = expandedId === s.id
-            const siswaList  = siswaMap[s.id] ?? []
-            const isLoading  = loadingSiswa === s.id
-            const isLast     = idx === selectedSessions.length - 1
-            return (
-              <div key={s.id} className={!isLast || isExpanded ? 'border-b border-[#E5E3FF]' : ''}>
-                <div className={`px-4 py-3.5 transition-colors ${isExpanded?'bg-[#F0EEFF] border-l-4 border-l-[#5C4FE5]':'hover:bg-[#F7F6FF]'}`}>
-                  <div className="flex items-center gap-2.5">
-                    <div className="min-w-[40px] text-sm font-bold text-[#5C4FE5] flex-shrink-0">{fmtTime(s.scheduled_at)}</div>
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor: s.class_group?.color ?? '#5C4FE5'}}/>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-[#1A1640] truncate leading-tight">{s.class_group?.label ?? '—'}</div>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${st.pill}`}>{st.label}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1.5 pl-[52px]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs text-[#7B78A8] truncate">{s.class_group?.tutor_name} · {s.class_group?.course_name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                      <button onClick={() => fetchSiswa(s)}
-                        className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-xs font-semibold transition ${isExpanded?'bg-[#5C4FE5] text-white':'bg-[#F0EEFF] text-[#5C4FE5] hover:bg-[#E0DCFF]'}`}
-                        title="Lihat siswa">
-                        <Users size={11}/>{isExpanded?<ChevronUp size={11}/>:<ChevronDown size={11}/>}
-                      </button>
-                      {s.zoom_link && (
-                        <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex-shrink-0">
-                          <ExternalLink size={13}/>
-                        </a>
-                      )}
-                      <div className="w-px h-4 bg-[#E5E3FF] mx-0.5"/>
-                      {s.status === 'scheduled' && (
-                        <button onClick={() => markComplete(s.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
-                          <Check size={13}/>
-                        </button>
-                      )}
-                      <button onClick={() => openEdit(s)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EEFF] transition" title="Edit">
-                        <Pencil size={13}/>
-                      </button>
-                      <button onClick={() => setDelConfirm(s.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
-                        <Trash2 size={13}/>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div className="px-5 py-4 bg-[#F7F6FF] border-t border-[#E5E3FF]">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#7B78A8] mb-3">
-                      Siswa terdaftar{siswaList.length > 0 && <span className="ml-1 normal-case font-normal">({siswaList.length} siswa)</span>}
-                    </p>
-                    {isLoading ? (
-                      <p className="text-sm text-[#7B78A8]">Memuat data siswa...</p>
-                    ) : siswaList.length === 0 ? (
-                      <p className="text-sm text-[#7B78A8]">Belum ada siswa terdaftar di kelas ini.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {siswaList.map((siswa, si) => (
-                          <div key={siswa.id} className="flex items-center gap-2.5 bg-white border border-[#E5E3FF] rounded-xl px-3 py-2.5">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                              style={{backgroundColor: AVATAR_COLORS[si % AVATAR_COLORS.length]}}>
-                              {getInitials(siswa.name)}
-                            </div>
-                            <div>
-                              <div className="text-xs font-semibold text-[#1A1640]">{siswa.name}</div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <div className="w-20 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full bg-[#5C4FE5] transition-all"
-                                    style={{width:`${Math.min((siswa.sessionNumber/siswa.sessionsTotal)*100,100)}%`}}/>
-                                </div>
-                                <span className="text-[10px] font-bold text-[#5C4FE5]">{siswa.sessionNumber}/{siswa.sessionsTotal}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({length: 3}).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-[#E5E3FF] p-5 animate-pulse">
+              <div className="h-4 w-32 bg-gray-200 rounded mb-2"/>
+              <div className="h-3 w-24 bg-gray-200 rounded mb-4"/>
+              <div className="h-3 w-full bg-gray-200 rounded mb-6"/>
+              <div className="flex gap-2">
+                <div className="flex-1 h-8 bg-gray-200 rounded-lg"/>
+                <div className="flex-1 h-8 bg-gray-200 rounded-lg"/>
+                <div className="flex-1 h-8 bg-gray-200 rounded-lg"/>
               </div>
-            )
-          })
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Kelas Aktif */}
+          {kelasAktif.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center mb-6">
+              <div className="text-5xl mb-4">🏫</div>
+              <p className="font-bold text-[#1A1640] mb-2">Belum ada kelas aktif</p>
+              <p className="text-sm text-[#7B78A8] mb-4">Buat kelas pertama untuk mulai mendaftarkan siswa</p>
+              <Link href="/admin/kelas/baru"
+                className="inline-flex items-center gap-2 bg-[#5C4FE5] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+                + Buat Kelas Pertama
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {kelasAktif.map((k: any) => <KelasCard key={k.id} k={k} />)}
+            </div>
+          )}
 
-      {/* Modal Tambah/Edit */}
-      {showModal && (
+          {/* Arsip Kelas */}
+          {kelasArsip.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowArsip(prev => !prev)}
+                className="flex items-center gap-2 w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-semibold text-[#7B78A8] hover:bg-gray-100 transition-colors mb-3">
+                <Archive size={15} className="text-gray-400"/>
+                Arsip Kelas
+                <span className="ml-1 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-bold">
+                  {kelasArsip.length}
+                </span>
+                <span className="ml-auto">
+                  {showArsip ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
+                </span>
+              </button>
+
+              {showArsip && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {kelasArsip.map((k: any) => <KelasCard key={k.id} k={k} isArsip />)}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <ConfirmModal
+        open={!!archiveId}
+        title="Arsipkan Kelas?"
+        description={`Kelas "${archiveLabel}" akan diarsipkan. Kelas tidak muncul di jadwal aktif, tapi semua data tetap tersimpan. Bisa diaktifkan kembali kapan saja.`}
+        confirmText="Ya, Arsipkan"
+        cancelText="Batal"
+        loading={archiving}
+        onConfirm={handleArchive}
+        onCancel={() => setArchiveId(null)}
+      />
+
+      <ConfirmModal
+        open={!!restoreId}
+        title="Aktifkan Kembali?"
+        description={`Kelas "${restoreLabel}" akan diaktifkan kembali.`}
+        confirmText="Ya, Aktifkan"
+        cancelText="Batal"
+        loading={restoring}
+        onConfirm={handleRestore}
+        onCancel={() => setRestoreId(null)}
+      />
+
+      <ConfirmModal
+        open={!!deleteId}
+        title="Hapus Kelas?"
+        description={`Kelas "${deleteLabel}" akan dihapus permanen beserta semua jadwal/sesi dan data enrollment siswa.`}
+        confirmText="Ya, Hapus"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteId(null)}
+      />
+
+      {/* MODAL JADWALKAN */}
+      {showJadwal && selectedKelas && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF] sticky top-0 bg-white z-10">
-              <h2 className="text-base font-bold text-[#1A1640]">{isEditMode?'Edit Sesi':'Tambah Sesi Baru'}</h2>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
+              <div>
+                <h2 className="text-base font-bold text-[#1A1640]">Jadwalkan Sesi</h2>
+                <p className="text-xs text-[#7B78A8] mt-0.5">{selectedKelas.label}</p>
+              </div>
+              <button onClick={() => setShowJadwal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]">
+                <X size={16}/>
+              </button>
             </div>
+
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas <span className="text-red-500">*</span></label>
-                <select value={fClassGroup} onChange={e => handleClassGroupChange(e.target.value)} className={inputCls}>
-                  <option value="">-- Pilih Kelas --</option>
-                  {classGroups.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-              </div>
-              {isEditMode && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tanggal</label>
-                    <input type="date" value={fDate} onChange={e => setFDate(e.target.value)} className={inputCls}/>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jam Mulai</label>
-                    <input type="time" value={fTime} onChange={e => setFTime(e.target.value)} className={inputCls}/>
-                  </div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jadwal</label>
+                  <span className="text-xs text-[#7B78A8]">{jadwalRows.length}/{MAX_ROWS} jadwal</span>
                 </div>
-              )}
-              {!isEditMode && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jadwal</label>
-                    <span className="text-xs text-[#7B78A8]">{jadwalRows.length}/{MAX_ROWS} jadwal</span>
-                  </div>
-                  <div className="space-y-3">
-                    {jadwalRows.map((row, idx) => (
-                      <div key={idx} className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3">
-                        <div className="flex items-center justify-between mb-2.5">
-                          <span className="text-xs font-semibold text-[#5C4FE5]">Jadwal {idx+1}</span>
-                          {jadwalRows.length > 1 && (
-                            <button onClick={() => removeRow(idx)} className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition"><Minus size={13}/></button>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          <div>
-                            <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tanggal</label>
-                            <input type="date" value={row.date} onChange={e => updateRow(idx,'date',e.target.value)}
-                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jam Mulai</label>
-                            <input type="time" value={row.time} onChange={e => updateRow(idx,'time',e.target.value)}
-                              className="w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-                          </div>
+                <div className="space-y-3">
+                  {jadwalRows.map((row, idx) => (
+                    <div key={idx} className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-xs font-semibold text-[#5C4FE5]">Jadwal {idx + 1}</span>
+                        {jadwalRows.length > 1 && (
+                          <button onClick={() => removeRow(idx)} className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition">
+                            <Minus size={13}/>
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tanggal</label>
+                          <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className={inputCls}/>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                            Ulangi setiap minggu <span className="normal-case font-normal text-[#7B78A8]">(1 = sekali saja, maks {MAX_REPEAT})</span>
-                          </label>
-                          <div className="flex items-center gap-3">
-                            <input type="range" min={1} max={MAX_REPEAT} value={row.repeat}
-                              onChange={e => updateRow(idx,'repeat',Number(e.target.value))} className="flex-1 accent-[#5C4FE5]"/>
-                            <span className="text-sm font-bold text-[#5C4FE5] min-w-[60px] text-right">
-                              {row.repeat}x{row.repeat>1&&<span className="text-[10px] font-normal text-[#7B78A8] block">≈ {Math.ceil(row.repeat/4)} bln</span>}
-                            </span>
-                          </div>
+                          <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jam Mulai</label>
+                          <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)} className={inputCls}/>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  {jadwalRows.length < MAX_ROWS && (
-                    <button onClick={addRow} className="mt-3 w-full py-2.5 border-2 border-dashed border-[#C4BFFF] rounded-xl text-sm font-semibold text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex items-center justify-center gap-2">
-                      <Plus size={14}/> Tambah Jadwal Lain
-                    </button>
-                  )}
-                  <div className="mt-3 flex items-center justify-between px-4 py-2.5 bg-[#EEEDFE] rounded-xl">
-                    <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
-                    <span className="text-sm font-bold text-[#5C4FE5]">
-                      {totalSesi} sesi{totalSesi>=8&&<span className="text-[10px] font-normal ml-1">(≈ {Math.ceil(totalSesi/8)} periode)</span>}
-                    </span>
-                  </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
+                          Ulangi setiap minggu <span className="normal-case font-normal">(1 = sekali saja, maks {MAX_REPEAT})</span>
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <input type="range" min={1} max={MAX_REPEAT} value={row.repeat}
+                            onChange={e => updateRow(idx, 'repeat', Number(e.target.value))}
+                            className="flex-1 accent-[#5C4FE5]"/>
+                          <span className="text-sm font-bold text-[#5C4FE5] min-w-[60px] text-right">
+                            {row.repeat}x
+                            {row.repeat > 1 && <span className="text-[10px] font-normal text-[#7B78A8] block">≈ {Math.ceil(row.repeat / 4)} bln</span>}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Status</label>
-                <select value={fStatus} onChange={e => setFStatus(e.target.value)} className={inputCls}>
-                  <option value="scheduled">Terjadwal</option>
-                  <option value="completed">Selesai</option>
-                  <option value="cancelled">Dibatalkan</option>
-                  <option value="rescheduled">Dijadwal Ulang</option>
-                </select>
+                {jadwalRows.length < MAX_ROWS && (
+                  <button onClick={addRow}
+                    className="mt-3 w-full py-2.5 border-2 border-dashed border-[#C4BFFF] rounded-xl text-sm font-semibold text-[#5C4FE5] hover:bg-[#F0EEFF] transition flex items-center justify-center gap-2">
+                    <Plus size={14}/> Tambah Jadwal Lain
+                  </button>
+                )}
+                <div className="mt-3 flex items-center justify-between px-4 py-2.5 bg-[#EEEDFE] rounded-xl">
+                  <span className="text-xs font-semibold text-[#3C3489]">Total sesi yang akan dibuat</span>
+                  <span className="text-sm font-bold text-[#5C4FE5]">
+                    {totalSesi} sesi
+                    {totalSesi >= 8 && <span className="text-[10px] font-normal ml-1">(≈ {Math.ceil((totalSesi - 1) / 8)} periode)</span>}
+                  </span>
+                </div>
               </div>
+
               <div>
                 <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
-                  Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(otomatis dari kelas, bisa diubah)</span>
+                  Link Zoom <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
                 </label>
                 <input type="url" placeholder="https://zoom.us/j/..." value={fZoom}
-                  onChange={e => setFZoom(e.target.value)} className={inputCls}/>
+                  onChange={e => setFZoom(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] transition"/>
               </div>
-              {formError && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{formError}</div>}
+
+              {jadwalError   && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{jadwalError}</div>}
+              {jadwalSuccess && <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-semibold">✅ {jadwalSuccess}</div>}
             </div>
+
             <div className="px-6 pb-5 flex gap-3 sticky bottom-0 bg-white border-t border-[#E5E3FF] pt-4">
-              <button onClick={handleSave} disabled={saving}
+              <button onClick={handleSaveJadwal} disabled={saving}
                 className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                {saving?'Menyimpan...':isEditMode?'Simpan Perubahan':`Tambah ${totalSesi} Sesi`}
+                {saving ? 'Menyimpan...' : `Jadwalkan ${totalSesi} Sesi`}
               </button>
-              <button onClick={() => setShowModal(false)}
+              <button onClick={() => setShowJadwal(false)}
                 className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
                 Batal
               </button>
@@ -568,23 +466,6 @@ function JadwalContent() {
           </div>
         </div>
       )}
-
-      <ConfirmModal
-        open={!!delConfirm}
-        title="Hapus Sesi?"
-        description="Data sesi ini akan dihapus permanen."
-        confirmText="Ya, Hapus"
-        onConfirm={() => delConfirm && handleDelete(delConfirm)}
-        onCancel={() => setDelConfirm(null)}
-      />
     </div>
-  )
-}
-
-export default function JadwalPage() {
-  return (
-    <Suspense fallback={<div className="p-6 text-sm text-[#7B78A8]">Memuat jadwal...</div>}>
-      <JadwalContent />
-    </Suspense>
   )
 }
