@@ -31,10 +31,12 @@ const PRESET_COLORS = [
 ]
 
 const TARGET_AGE_OPTIONS = [
-  { value: 'all',   label: 'Semua Usia' },
-  { value: 'kids',  label: 'Anak-anak' },
-  { value: 'teen',  label: 'Remaja' },
-  { value: 'adult', label: 'Dewasa' },
+  { value: 'all',        label: 'Semua Usia' },
+  { value: 'kids',       label: 'Anak-anak' },
+  { value: 'teen',       label: 'Remaja' },
+  { value: 'adult',      label: 'Dewasa' },
+  { value: 'kids_teen',  label: 'Anak & Remaja' },
+  { value: 'teen_adult', label: 'Remaja & Dewasa' },
 ]
 
 export default function KursusEditClient({
