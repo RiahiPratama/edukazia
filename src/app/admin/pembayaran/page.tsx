@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, X, Check, Search, MessageCircle, Eye } from 'lucide-react'
+import { Plus, X, Check, Search, MessageCircle, Eye, ExternalLink } from 'lucide-react'
 
 type Payment = {
   id: string
@@ -64,7 +64,13 @@ function PembayaranContent() {
   const [students,     setStudents]     = useState<StudentOption[]>([])
   const [loading,      setLoading]      = useState(true)
   const [showModal,    setShowModal]    = useState(false)
-  const [showDetail,   setShowDetail]   = useState<Payment | null>(null)
+  const [showDetail,     setShowDetail]     = useState<Payment | null>(null)
+  const [showEnrollModal, setShowEnrollModal] = useState(false)
+  const [eClassGroupId,  setEClassGroupId]  = useState('')
+  const [eSessionsTotal, setESessionsTotal] = useState(8)
+  const [allKelas,       setAllKelas]       = useState<any[]>([])
+  const [savingEnroll,   setSavingEnroll]   = useState(false)
+  const [enrollError,    setEnrollError]    = useState('')
   const [saving,       setSaving]       = useState(false)
   const [formError,    setFormError]    = useState('')
   const [search,       setSearch]       = useState('')
@@ -175,6 +181,13 @@ function PembayaranContent() {
       setStudents(studentOptions)
     }
 
+    const { data: allKelasData } = await supabase
+      .from('class_groups')
+      .select('id, label, class_types(name, base_price)')
+      .eq('status', 'active')
+      .order('label')
+    setAllKelas(allKelasData ?? [])
+
     setLoading(false)
   }
 
@@ -228,6 +241,36 @@ function PembayaranContent() {
       confirmed_at: new Date().toISOString(), paid_at: new Date().toISOString(),
     }).eq('id', payment.id)
     fetchAll()
+  }
+
+  async function handleEnroll() {
+    if (!fStudentId)    { setEnrollError('Pilih siswa terlebih dahulu.'); return }
+    if (!eClassGroupId) { setEnrollError('Pilih kelas.'); return }
+    setSavingEnroll(true); setEnrollError('')
+
+    const { data: existing } = await supabase
+      .from('enrollments').select('id')
+      .eq('student_id', fStudentId).eq('class_group_id', eClassGroupId).eq('status', 'active')
+      .single()
+    if (existing) { setEnrollError('Siswa sudah terdaftar di kelas ini.'); setSavingEnroll(false); return }
+
+    const { error } = await supabase.from('enrollments').insert({
+      student_id:     fStudentId,
+      class_group_id: eClassGroupId,
+      sessions_total: eSessionsTotal,
+      status:         'active',
+    })
+    if (error) { setEnrollError(error.message); setSavingEnroll(false); return }
+
+    setSavingEnroll(false)
+    setShowEnrollModal(false)
+    setEClassGroupId('')
+    setESessionsTotal(8)
+    await fetchAll()
+    const { data: newEnroll } = await supabase
+      .from('enrollments').select('id')
+      .eq('student_id', fStudentId).eq('class_group_id', eClassGroupId).single()
+    if (newEnroll) handleEnrollmentChange(newEnroll.id)
   }
 
   function buildWaMessage(p: Payment) {
@@ -403,13 +446,25 @@ function PembayaranContent() {
               </div>
               {fStudentId && (
                 <div>
-                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas <span className="text-red-500">*</span></label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Kelas <span className="text-red-500">*</span></label>
+                    <button type="button"
+                      onClick={() => { setEnrollError(''); setShowEnrollModal(true) }}
+                      className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
+                      <Plus size={11}/> Daftarkan ke Kelas Baru
+                    </button>
+                  </div>
                   <select value={fEnrollmentId} onChange={e => handleEnrollmentChange(e.target.value)} className={inputCls}>
                     <option value="">-- Pilih Kelas --</option>
                     {selectedStudent?.enrollments.map(e => (
                       <option key={e.id} value={e.id}>{e.class_label} ({e.class_type})</option>
                     ))}
                   </select>
+                  {selectedStudent?.enrollments.length === 0 && (
+                    <p className="text-[11px] text-amber-600 mt-1.5 font-medium">
+                      ⚠️ Siswa belum terdaftar di kelas. Klik "+ Daftarkan ke Kelas Baru" di atas.
+                    </p>
+                  )}
                 </div>
               )}
               <div>
@@ -485,6 +540,54 @@ function PembayaranContent() {
               </button>
               <button onClick={() => setShowModal(false)}
                 className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">Batal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Enroll ke Kelas Baru */}
+      {showEnrollModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF]">
+              <h3 className="text-sm font-bold text-[#1A1640]">Daftarkan ke Kelas</h3>
+              <button onClick={() => setShowEnrollModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]">
+                <X size={15}/>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas</label>
+                <select value={eClassGroupId} onChange={e => setEClassGroupId(e.target.value)} className={inputCls}>
+                  <option value="">-- Pilih Kelas --</option>
+                  {allKelas.map((k: any) => (
+                    <option key={k.id} value={k.id}>{k.label} ({k.class_types?.name ?? '—'})</option>
+                  ))}
+                </select>
+                {allKelas.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1.5">
+                    Belum ada kelas aktif.{' '}
+                    <a href="/admin/kelas/baru" target="_blank" rel="noopener noreferrer"
+                      className="text-[#5C4FE5] font-semibold inline-flex items-center gap-0.5">
+                      Buat kelas baru <ExternalLink size={10}/>
+                    </a>
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jumlah Sesi Paket</label>
+                <input type="number" min={1} max={100} value={eSessionsTotal}
+                  onChange={e => setESessionsTotal(Number(e.target.value))} className={inputCls}/>
+              </div>
+              {enrollError && (
+                <div className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-lg border border-red-200 font-medium">
+                  {enrollError}
+                </div>
+              )}
+              <button onClick={handleEnroll} disabled={savingEnroll}
+                className="w-full py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                {savingEnroll ? 'Mendaftarkan...' : 'Daftarkan & Pilih Kelas Ini'}
+              </button>
             </div>
           </div>
         </div>
