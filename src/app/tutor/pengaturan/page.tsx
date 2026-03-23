@@ -6,7 +6,7 @@ import { Save, Eye, EyeOff, CheckCircle2, AlertCircle, Mail, Camera } from 'luci
 
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
 const JAM  = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00',
-               '14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
+               '14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00']
 
 function initials(name: string) {
   return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
@@ -94,10 +94,11 @@ export default function TutorPengaturanPage() {
       }
 
       const { data: tutor } = await supabase.from('tutors')
-        .select('id, availability').eq('profile_id', session.user.id).single()
+        .select('id, availability, timezone').eq('profile_id', session.user.id).single()
       if (tutor) {
         setTutorId(tutor.id)
         setAvailability(tutor.availability ?? {})
+        setTimezone(tutor.timezone ?? 'WIT')
       }
     }
     load()
@@ -164,7 +165,7 @@ export default function TutorPengaturanPage() {
     if (!tutorId) return
     setSavingAvail(true); setAvailMsg(null)
     const { error } = await supabase.from('tutors')
-      .update({ availability }).eq('id', tutorId)
+      .update({ availability, timezone }).eq('id', tutorId)
     setSavingAvail(false)
     setAvailMsg(error ? { type: 'err', text: error.message } : { type: 'ok', text: 'Ketersediaan berhasil disimpan!' })
   }
@@ -319,6 +320,31 @@ export default function TutorPengaturanPage() {
             <p className="text-[11px] text-[#7B78A8] leading-relaxed">
               Tandai jam dan hari kamu tersedia untuk mengajar. Admin akan menggunakan info ini saat menjadwalkan kelas.
             </p>
+          </div>
+
+          {/* Pilihan Timezone */}
+          <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#F0EFFF] bg-[#F7F6FF]">
+              <p className="text-sm font-bold text-[#1A1640]">Zona Waktu Kamu</p>
+              <p className="text-[11px] text-[#7B78A8] mt-0.5">Jam ketersediaan akan dicatat dalam zona waktu ini</p>
+            </div>
+            <div className="px-4 py-4">
+              <div className="grid grid-cols-3 gap-2">
+                {(['WIB', 'WITA', 'WIT'] as const).map(tz => (
+                  <button key={tz} onClick={() => setTimezone(tz)}
+                    className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                      timezone === tz
+                        ? 'bg-[#5C4FE5] text-white border-[#5C4FE5]'
+                        : 'bg-white text-[#7B78A8] border-[#E5E3FF] hover:border-[#5C4FE5] hover:text-[#5C4FE5]'
+                    }`}>
+                    {tz}
+                    <span className="block text-[10px] font-normal mt-0.5 opacity-70">
+                      {tz === 'WIB' ? 'UTC+7' : tz === 'WITA' ? 'UTC+8' : 'UTC+9'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {HARI.map(hari => {

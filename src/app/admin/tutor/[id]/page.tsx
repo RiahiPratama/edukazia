@@ -28,6 +28,13 @@ function getInitials(name: string) {
   return name.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase()
 }
 
+function convertToWIT(jam: string, timezone: string): string {
+  const [h, m] = jam.split(':').map(Number)
+  const offsetDiff = timezone === 'WIB' ? 2 : timezone === 'WITA' ? 1 : 0
+  const witHour = (h + offsetDiff) % 24
+  return `${String(witHour).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 export default function TutorDetailPage() {
   const params   = useParams()
   const tutorId  = params.id as string
@@ -51,6 +58,7 @@ export default function TutorDetailPage() {
         education_level, education_major, education_university, education_year,
         subjects, teaching_experience_years, previous_workplaces, bio, achievements,
         availability,
+        timezone,
         profiles:profile_id(full_name, phone, email),
         tutor_courses(courses(name, color))`)
       .eq('id', tutorId).single()
@@ -352,33 +360,77 @@ export default function TutorDetailPage() {
         <div className="space-y-3">
           {(() => {
             const availability = (tutor.availability ?? {}) as Record<string, string[]>
-            const adaData = HARI.some(h => (availability[h] ?? []).length > 0)
-            if (!adaData) return (
-              <div className="bg-white rounded-2xl border border-[#E5E3FF] p-8 text-center">
-                <p className="text-sm text-[#7B78A8]">Tutor belum mengisi ketersediaan mengajar.</p>
-              </div>
-            )
-            return HARI.map(hari => {
-              const jam = availability[hari] ?? []
-              if (jam.length === 0) return null
-              return (
-                <div key={hari} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[#F0EFFF] bg-[#EEEDFE] flex items-center justify-between">
-                    <p className="text-sm font-bold text-[#3C3489]">{hari}</p>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#5C4FE5] text-white">
-                      {jam.length} jam
-                    </span>
-                  </div>
-                  <div className="px-4 py-3 flex flex-wrap gap-2">
-                    {jam.map((j: string) => (
-                      <span key={j} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#EEEDFE] text-[#3C3489] border border-[#CECBF6]">
-                        {j}
-                      </span>
-                    ))}
+            const tz           = tutor.timezone ?? 'WIT'
+            const isWIT        = tz === 'WIT'
+            const adaData      = HARI.some(h => (availability[h] ?? []).length > 0)
+
+            return (
+              <>
+                {/* Info zona waktu tutor */}
+                <div className={`px-4 py-3 rounded-xl flex items-center gap-3 border ${
+                  tz === 'WIT'  ? 'bg-[#EEEDFE] border-[#CECBF6]' :
+                  tz === 'WITA' ? 'bg-[#E1F5EE] border-[#9FE1CB]' :
+                  'bg-[#E6F1FB] border-[#85B7EB]'
+                }`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${
+                    tz === 'WIT' ? 'bg-[#5C4FE5]' : tz === 'WITA' ? 'bg-[#1D9E75]' : 'bg-[#185FA5]'
+                  }`}>{tz}</div>
+                  <div>
+                    <p className="text-xs font-bold text-[#1A1640]">Zona waktu tutor: {tz} ({tz === 'WIB' ? 'UTC+7' : tz === 'WITA' ? 'UTC+8' : 'UTC+9'})</p>
+                    {!isWIT && (
+                      <p className="text-[11px] text-[#7B78A8] mt-0.5">
+                        Jam dalam {tz} — kolom WIT menampilkan konversi otomatis
+                      </p>
+                    )}
                   </div>
                 </div>
-              )
-            })
+
+                {!adaData ? (
+                  <div className="bg-white rounded-2xl border border-[#E5E3FF] p-8 text-center">
+                    <p className="text-sm text-[#7B78A8]">Tutor belum mengisi ketersediaan mengajar.</p>
+                  </div>
+                ) : (
+                  HARI.map(hari => {
+                    const jam = availability[hari] ?? []
+                    if (jam.length === 0) return null
+                    return (
+                      <div key={hari} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+                        <div className="px-4 py-3 border-b border-[#F0EFFF] bg-[#EEEDFE] flex items-center justify-between">
+                          <p className="text-sm font-bold text-[#3C3489]">{hari}</p>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#5C4FE5] text-white">
+                            {jam.length} jam
+                          </span>
+                        </div>
+                        <div className="px-4 py-3">
+                          {!isWIT && (
+                            <div className="grid grid-cols-2 gap-1 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-2 px-1">
+                              <span>{tz}</span><span>WIT</span>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {jam.map((j: string) => (
+                              <div key={j} className="flex items-center gap-1.5">
+                                <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#EEEDFE] text-[#3C3489] border border-[#CECBF6]">
+                                  {j}
+                                </span>
+                                {!isWIT && (
+                                  <>
+                                    <span className="text-[10px] text-[#7B78A8]">→</span>
+                                    <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0EFFF] text-[#5C4FE5] border border-[#E5E3FF]">
+                                      {convertToWIT(j, tz)} WIT
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </>
+            )
           })()}
         </div>
       )}
