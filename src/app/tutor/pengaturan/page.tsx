@@ -77,6 +77,7 @@ export default function TutorPengaturanPage() {
   const [availability, setAvailability] = useState<Record<string, string[]>>({})
   const [savingAvail,  setSavingAvail]  = useState(false)
   const [availMsg,     setAvailMsg]     = useState<{ type: 'ok'|'err'; text: string } | null>(null)
+  const [timezone,     setTimezone]     = useState<'WIB'|'WITA'|'WIT'>('WIT')
 
   const fileRef = useRef<HTMLInputElement>(null)
 
