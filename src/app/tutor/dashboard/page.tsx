@@ -50,15 +50,13 @@ export default async function TutorDashboardPage() {
   const totalSiswa  = (kelasAktif ?? []).reduce((acc, k) =>
     acc + (k.enrollments?.filter((e: any) => e.status === 'active').length ?? 0), 0)
 
-  // Sesi minggu ini
-  const now   = new Date()
-  const nowWIT = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+  // Sesi minggu ini — todayWIT adalah tanggal WIT yang benar (sekali convert)
+  const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+  const nowWIT      = new Date(todayWITStr + 'T00:00:00+09:00')
   const monday = new Date(nowWIT)
   monday.setDate(nowWIT.getDate() - (nowWIT.getDay() === 0 ? 6 : nowWIT.getDay() - 1))
-  monday.setHours(0, 0, 0, 0)
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
-  sunday.setHours(23, 59, 59, 999)
 
   const cgIds = (kelasAktif ?? []).map(k => k.id)
   const { count: sesiMingguIni } = cgIds.length > 0
@@ -70,7 +68,7 @@ export default async function TutorDashboardPage() {
     : { count: 0 }
 
   // Honor bulan ini
-  const firstOfMonth = new Date(nowWIT.getFullYear(), nowWIT.getMonth(), 1).toISOString()
+  const firstOfMonth = new Date(todayWITStr.slice(0, 7) + '-01T00:00:00+09:00').toISOString()
   const { data: honorBulanIni } = await supabase
     .from('tutor_payments')
     .select('total')
@@ -86,8 +84,8 @@ export default async function TutorDashboardPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
 
-  // Sesi hari ini WIT
-  const todayWIT = nowWIT.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+  // Sesi hari ini WIT — range UTC yang tepat
+  const todayWIT    = todayWITStr
   const prevDateObj = new Date(todayWIT + 'T00:00:00+09:00')
   prevDateObj.setDate(prevDateObj.getDate() - 1)
   const prevDate = prevDateObj.toLocaleDateString('en-CA')
