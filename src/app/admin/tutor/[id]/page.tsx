@@ -2,291 +2,268 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronLeft, ExternalLink } from 'lucide-react'
 
-type KelasDetail = {
-  id: string
-  label: string
-  status: string
-  max_participants: number
-  zoom_link: string | null
-  courses: { name: string } | null
-  class_types: { name: string } | null
-  tutors: { id: string; profiles: { full_name: string } | null } | null
+type Achievement = { name: string; category: string; issuer: string; year: string }
+
+const CATEGORIES: Record<string, { label: string; bg: string; color: string; icon: string }> = {
+  pelatihan:   { label: 'Pelatihan',   bg: '#EEEDFE', color: '#3C3489', icon: '📚' },
+  sertifikasi: { label: 'Sertifikasi', bg: '#E6F4EC', color: '#1A5C36', icon: '🎓' },
+  prestasi:    { label: 'Prestasi',    bg: '#FEF3E2', color: '#92400E', icon: '🏆' },
+  komunitas:   { label: 'Komunitas',   bg: '#E6F1FB', color: '#185FA5', icon: '🤝' },
 }
 
-type Enrollment = {
-  id: string
-  student_id: string
-  sessions_total: number
-  session_start_offset: number
-  sessions_used: number
-  status: string
-  student_name: string
+function fmtRp(n: number) {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
-
-type Session = {
-  id: string
-  scheduled_at: string
-  status: string
-  zoom_link: string | null
-}
-
-type Payment = {
-  id: string
-  amount: number
-  status: string
-  period_label: string | null
-  method: string
-  created_at: string
-  student_name: string
-}
-
-const STATUS_SESI: Record<string, { label: string; cls: string }> = {
-  scheduled:   { label: 'Terjadwal',      cls: 'bg-[#EEEDFE] text-[#3C3489]' },
-  completed:   { label: 'Selesai',        cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  cancelled:   { label: 'Dibatalkan',     cls: 'bg-[#FEE9E9] text-[#991B1B]' },
-  rescheduled: { label: 'Dijadwal Ulang', cls: 'bg-[#FEF3E2] text-[#92400E]' },
-}
-
-const STATUS_BAYAR: Record<string, { label: string; cls: string }> = {
-  unpaid:  { label: 'Belum Bayar',        cls: 'bg-[#FEE9E9] text-[#991B1B]' },
-  pending: { label: 'Menunggu',           cls: 'bg-[#FEF3E2] text-[#92400E]' },
-  paid:    { label: 'Lunas',              cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  overdue: { label: 'Terlambat',          cls: 'bg-[#FEE9E9] text-[#7F1D1D]' },
-}
-
-const AVATAR_COLORS = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED','#BE185D','#065F46']
-
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
-function fmtRp(n: number) {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
-}
 function getInitials(name: string) {
-  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
+  return name.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase()
 }
 
-export default function KelasDetailPage() {
-  const params  = useParams()
-  const kelasId = params.id as string
+export default function TutorDetailPage() {
+  const params   = useParams()
+  const tutorId  = params.id as string
   const supabase = createClient()
 
-  const [kelas,       setKelas]       = useState<KelasDetail | null>(null)
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
-  const [sessions,    setSessions]    = useState<Session[]>([])
-  const [payments,    setPayments]    = useState<Payment[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [activeTab,   setActiveTab]   = useState<'siswa' | 'jadwal' | 'pembayaran'>('siswa')
+  const [tutor,    setTutor]    = useState<any>(null)
+  const [kelas,    setKelas]    = useState<any[]>([])
+  const [sessions, setSessions] = useState<any[]>([])
+  const [honors,   setHonors]   = useState<any[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [tab,      setTab]      = useState<'profil'|'kelas'|'jadwal'|'honor'|'ketersediaan'>('profil')
 
-  useEffect(() => { fetchAll() }, [kelasId])
+  useEffect(() => { fetchAll() }, [tutorId])
 
   async function fetchAll() {
     setLoading(true)
 
-    // Fetch kelas
-    const { data: k } = await supabase
+    const { data: t } = await supabase
+      .from('tutors')
+      .select(`id, rate_per_session, bank_name, bank_account, bank_holder, is_active,
+        education_level, education_major, education_university, education_year,
+        subjects, teaching_experience_years, previous_workplaces, bio, achievements,
+        availability,
+        profiles:profile_id(full_name, phone, email),
+        tutor_courses(courses(name, color))`)
+      .eq('id', tutorId).single()
+    setTutor(t)
+
+    const { data: cg } = await supabase
       .from('class_groups')
-      .select('id, label, status, max_participants, zoom_link, courses(name), class_types(name), tutors(id, profiles(full_name))')
-      .eq('id', kelasId).single()
-    setKelas(k as any)
+      .select('id, label, status, class_types(name), enrollments(id, status)')
+      .eq('tutor_id', tutorId)
+    setKelas(cg ?? [])
 
-    // Fetch enrollments + nama siswa
-    const { data: enr } = await supabase
-      .from('enrollments')
-      .select('id, student_id, sessions_total, session_start_offset, sessions_used, status')
-      .eq('class_group_id', kelasId)
-
-    if (enr && enr.length > 0) {
-      const sIds = enr.map((e: any) => e.student_id)
-      const { data: studs } = await supabase.from('students').select('id, profile_id').in('id', sIds)
-      const profIds = (studs ?? []).map((s: any) => s.profile_id).filter(Boolean)
-      let nameMap: Record<string, string> = {}
-      if (profIds.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', profIds)
-        const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]))
-        nameMap = Object.fromEntries((studs ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
-      }
-      setEnrollments(enr.map((e: any) => ({ ...e, student_name: nameMap[e.student_id] ?? 'Siswa' })))
+    const now   = new Date()
+    const start = new Date(now); start.setDate(now.getDate() - now.getDay() + 1)
+    const end   = new Date(start); end.setDate(start.getDate() + 6)
+    const cgIds = (cg ?? []).map((c: any) => c.id)
+    if (cgIds.length > 0) {
+      const { data: sess } = await supabase
+        .from('sessions')
+        .select('id, class_group_id, scheduled_at, status, zoom_link')
+        .in('class_group_id', cgIds)
+        .gte('scheduled_at', start.toISOString())
+        .lte('scheduled_at', end.toISOString())
+        .order('scheduled_at')
+      const cgMap = Object.fromEntries((cg ?? []).map((c: any) => [c.id, c.label]))
+      setSessions((sess ?? []).map((s: any) => ({ ...s, class_label: cgMap[s.class_group_id] ?? '—' })))
     }
 
-    // Fetch sessions
-    const { data: sess } = await supabase
-      .from('sessions')
-      .select('id, scheduled_at, status, zoom_link')
-      .eq('class_group_id', kelasId)
-      .order('scheduled_at', { ascending: true })
-    setSessions((sess ?? []) as Session[])
-
-    // Fetch payments
-    const { data: pays } = await supabase
-      .from('payments')
-      .select('id, amount, status, period_label, method, created_at, student_id')
-      .eq('enrollment_id', kelasId) // fallback, coba via enrollment
+    const { data: hon } = await supabase
+      .from('tutor_payments')
+      .select('id, period_label, sessions_done, students_count, class_type, rate_per_session, subtotal, bonus, total, status, created_at, class_group_id')
+      .eq('tutor_id', tutorId)
       .order('created_at', { ascending: false })
-
-    // Fetch via enrollments jika perlu
-    const enrollIds = (enr ?? []).map((e: any) => e.id)
-    let payList: any[] = []
-    if (enrollIds.length > 0) {
-      const { data: pays2 } = await supabase
-        .from('payments')
-        .select('id, amount, status, period_label, method, created_at, student_id')
-        .in('enrollment_id', enrollIds)
-        .order('created_at', { ascending: false })
-      payList = pays2 ?? []
-    }
-
-    // Nama siswa untuk payment
-    const sIds2 = [...new Set(payList.map((p: any) => p.student_id))]
-    let payNameMap: Record<string, string> = {}
-    if (sIds2.length > 0) {
-      const { data: studs2 } = await supabase.from('students').select('id, profile_id').in('id', sIds2)
-      const profIds2 = (studs2 ?? []).map((s: any) => s.profile_id).filter(Boolean)
-      if (profIds2.length > 0) {
-        const { data: profs2 } = await supabase.from('profiles').select('id, full_name').in('id', profIds2)
-        const profMap2 = Object.fromEntries((profs2 ?? []).map((p: any) => [p.id, p.full_name]))
-        payNameMap = Object.fromEntries((studs2 ?? []).map((s: any) => [s.id, profMap2[s.profile_id] ?? 'Siswa']))
-      }
-    }
-    setPayments(payList.map((p: any) => ({ ...p, student_name: payNameMap[p.student_id] ?? '—' })))
+    const cgMap2 = Object.fromEntries((cg ?? []).map((c: any) => [c.id, c.label]))
+    setHonors((hon ?? []).map((h: any) => ({ ...h, class_label: cgMap2[h.class_group_id] ?? '—' })))
 
     setLoading(false)
   }
 
-  async function markSessionComplete(id: string) {
-    await supabase.from('sessions').update({ status: 'completed' }).eq('id', id)
-    fetchAll()
+  if (loading) return <div className="p-6 text-sm text-[#7B78A8]">Memuat data tutor...</div>
+  if (!tutor)  return <div className="p-6 text-sm text-red-500">Tutor tidak ditemukan.</div>
+
+  const profile      = tutor.profiles
+  const achievements = (tutor.achievements ?? []) as Achievement[]
+  const subjects     = (tutor.subjects ?? []) as string[]
+  const activeKelas  = kelas.filter((c: any) => c.status === 'active')
+  const totalHonorLunas  = honors.filter(h => h.status === 'paid').reduce((a, h) => a + h.total, 0)
+  const totalHonorUnpaid = honors.filter(h => h.status === 'unpaid').reduce((a, h) => a + h.total, 0)
+
+  const STATUS_SESI: Record<string, { label: string; cls: string }> = {
+    scheduled:   { label: 'Terjadwal', cls: 'bg-[#EEEDFE] text-[#3C3489]' },
+    completed:   { label: 'Selesai',   cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
+    cancelled:   { label: 'Batal',     cls: 'bg-[#FEE9E9] text-[#991B1B]' },
   }
 
-  async function deleteSession(id: string) {
-    await supabase.from('sessions').delete().eq('id', id)
-    fetchAll()
+  const labelCls = "text-xs text-[#7B78A8]"
+  const inputCls = "text-sm text-[#1A1640] font-medium"
+
+  function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+    return value ? (
+      <div><p className={labelCls}>{label}</p><p className={inputCls}>{value}</p></div>
+    ) : null
   }
 
-  const statusLabel: Record<string, string> = { active: 'Aktif', inactive: 'Nonaktif', completed: 'Selesai' }
-  const statusColor: Record<string, string>  = {
-    active: 'bg-green-100 text-green-700', inactive: 'bg-gray-100 text-gray-500', completed: 'bg-blue-100 text-blue-700'
-  }
-
-  const selesai    = sessions.filter(s => s.status === 'completed').length
-  const terjadwal  = sessions.filter(s => s.status === 'scheduled').length
-  const totalLunas = payments.filter(p => p.status === 'paid').reduce((a, p) => a + p.amount, 0)
-
-  if (loading) return <div className="p-6 text-sm text-[#7B78A8]">Memuat detail kelas...</div>
-  if (!kelas)  return <div className="p-6 text-sm text-red-500">Kelas tidak ditemukan.</div>
+  const HARI = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu']
 
   return (
-    <div className="max-w-3xl">
-      {/* Header */}
+    <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/kelas" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
+        <Link href="/admin/tutor" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">
           <ChevronLeft size={20}/>
         </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-[#1A1640] truncate" style={{fontFamily:'Sora,sans-serif'}}>{kelas.label}</h1>
-            <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${statusColor[kelas.status] ?? 'bg-gray-100 text-gray-500'}`}>
-              {statusLabel[kelas.status] ?? kelas.status}
-            </span>
-          </div>
-          <p className="text-sm text-[#7B78A8] mt-0.5">
-            {kelas.courses?.name} · {kelas.class_types?.name} · {(kelas.tutors as any)?.profiles?.full_name ?? '—'}
-          </p>
-        </div>
-        <Link href={`/admin/kelas/${kelasId}/edit`}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition">
-          <Pencil size={12}/> Edit
+        <div className="flex-1"/>
+        <Link href={`/admin/tutor/${tutorId}/edit`}
+          className="px-4 py-2 bg-[#5C4FE5] text-white text-sm font-bold rounded-xl hover:bg-[#3D34C4] transition">
+          Edit
         </Link>
       </div>
 
-      {/* Info bar */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 text-center">
-          <div className="text-2xl font-black text-[#5C4FE5]">{enrollments.filter(e => e.status === 'active').length}/{kelas.max_participants}</div>
-          <div className="text-xs text-[#7B78A8] mt-0.5 font-semibold">Peserta Aktif</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 text-center">
-          <div className="text-2xl font-black text-[#27A05A]">{selesai}</div>
-          <div className="text-xs text-[#7B78A8] mt-0.5 font-semibold">Sesi Selesai</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 text-center">
-          <div className="text-2xl font-black text-[#1A1640]">{fmtRp(totalLunas)}</div>
-          <div className="text-xs text-[#7B78A8] mt-0.5 font-semibold">Total Lunas</div>
+      {/* Profile card */}
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5 mb-4">
+        <div className="flex items-start gap-4">
+          <div className="w-14 h-14 rounded-full bg-[#5C4FE5] flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+            {getInitials(profile?.full_name ?? 'T')}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-lg font-bold text-[#1A1640]">{profile?.full_name ?? '—'}</h1>
+              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${tutor.is_active ? 'bg-[#E6F4EC] text-[#1A5C36]' : 'bg-gray-100 text-gray-500'}`}>
+                {tutor.is_active ? '● Aktif' : '● Nonaktif'}
+              </span>
+            </div>
+            {tutor.education_major && (
+              <p className="text-sm text-[#7B78A8] mb-2">{tutor.education_major}{tutor.teaching_experience_years ? ` · ${tutor.teaching_experience_years} tahun pengalaman` : ''}</p>
+            )}
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {profile?.phone && <span className="text-xs text-[#7B78A8]">📱 {profile.phone}</span>}
+              {profile?.email && <span className="text-xs text-[#7B78A8]">✉️ {profile.email}</span>}
+              {tutor.bank_name && tutor.bank_account && (
+                <span className="text-xs text-[#7B78A8]">🏦 {tutor.bank_name} · {tutor.bank_account}{tutor.bank_holder ? ` a/n ${tutor.bank_holder}` : ''}</span>
+              )}
+            </div>
+            {subjects.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {subjects.map(s => (
+                  <span key={s} className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#EEEDFE] text-[#3C3489]">{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Zoom link */}
-      {kelas.zoom_link && (
-        <div className="bg-[#EEEDFE] rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-[#3C3489]">Link Zoom</p>
-            <p className="text-xs text-[#5C4FE5] truncate max-w-[280px]">{kelas.zoom_link}</p>
-          </div>
-          <a href={kelas.zoom_link} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1 px-3 py-1.5 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition">
-            <ExternalLink size={12}/> Buka
-          </a>
-        </div>
-      )}
-
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#F7F6FF] p-1 rounded-xl mb-5 border border-[#E5E3FF]">
+      <div className="flex gap-1 bg-[#F7F6FF] p-1 rounded-xl mb-4 border border-[#E5E3FF]">
         {([
-          { key: 'siswa',      label: 'Siswa',      icon: <Users size={13}/>,       count: enrollments.length },
-          { key: 'jadwal',     label: 'Jadwal',     icon: <Calendar size={13}/>,    count: sessions.length },
-          { key: 'pembayaran', label: 'Pembayaran', icon: <CreditCard size={13}/>,  count: payments.length },
-        ] as const).map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all',
-              activeTab === tab.key ? 'bg-white text-[#5C4FE5] shadow-sm' : 'text-[#7B78A8] hover:text-[#1A1640]'
-            ].join(' ')}>
-            {tab.icon} {tab.label}
-            {tab.count > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.key ? 'bg-[#EEEDFE] text-[#5C4FE5]' : 'bg-[#E5E3FF] text-[#7B78A8]'}`}>
-                {tab.count}
-              </span>
-            )}
+          { key: 'profil',       label: 'Profil' },
+          { key: 'kelas',        label: `Kelas (${activeKelas.length})` },
+          { key: 'jadwal',       label: 'Jadwal' },
+          { key: 'honor',        label: 'Honor' },
+          { key: 'ketersediaan', label: 'Ketersediaan' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${tab === t.key ? 'bg-white text-[#5C4FE5] shadow-sm border border-[#E5E3FF]' : 'text-[#7B78A8] hover:text-[#1A1640]'}`}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Tab: Siswa */}
-      {activeTab === 'siswa' && (
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-          {enrollments.length === 0 ? (
-            <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Belum ada siswa terdaftar.</div>
-          ) : (
-            enrollments.map((enr, idx) => {
-              const pct = Math.min(((enr.session_start_offset - 1 + (enr.sessions_used ?? 0)) / enr.sessions_total) * 100, 100)
-              const st  = enr.status === 'active' ? { label: 'Aktif', cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
-                        : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
-                        : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
-              return (
-                <div key={enr.id} className={`flex items-center gap-3 px-5 py-4 ${idx < enrollments.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                    style={{backgroundColor: AVATAR_COLORS[idx % AVATAR_COLORS.length]}}>
-                    {getInitials(enr.student_name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-[#1A1640]">{enr.student_name}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-24 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#5C4FE5] rounded-full" style={{width: `${pct}%`}}/>
+      {/* Tab: Profil */}
+      {tab === 'profil' && (
+        <div className="space-y-4">
+          {(tutor.education_level || tutor.education_major || tutor.education_university) && (
+            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
+              <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-4">Riwayat Akademik</p>
+              <div className="grid grid-cols-2 gap-4">
+                <InfoRow label="Jenjang" value={tutor.education_level}/>
+                <InfoRow label="Jurusan" value={tutor.education_major}/>
+                <InfoRow label="Universitas" value={tutor.education_university}/>
+                <InfoRow label="Tahun Lulus" value={tutor.education_year}/>
+              </div>
+            </div>
+          )}
+          {achievements.length > 0 && (
+            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
+              <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-4">Pelatihan, Sertifikasi & Prestasi</p>
+              <div className="space-y-2">
+                {achievements.map((a, i) => {
+                  const cat = CATEGORIES[a.category] ?? CATEGORIES['pelatihan']
+                  return (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{background: cat.bg + '55'}}>
+                      <span style={{fontSize:16}}>{cat.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-[#1A1640]">{a.name}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                            style={{background: cat.bg, color: cat.color}}>{cat.label}</span>
+                        </div>
+                        {(a.issuer || a.year) && (
+                          <p className="text-xs text-[#7B78A8] mt-0.5">{[a.issuer, a.year].filter(Boolean).join(' · ')}</p>
+                        )}
                       </div>
-                      <span className="text-[10px] font-bold text-[#5C4FE5]">
-                        {enr.session_start_offset}/{enr.sessions_total} sesi
-                      </span>
                     </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {(tutor.teaching_experience_years || tutor.previous_workplaces || tutor.bio) && (
+            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
+              <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-4">Pengalaman & Bio</p>
+              <div className="grid grid-cols-2 gap-4 mb-3">
+                <InfoRow label="Lama Mengajar" value={tutor.teaching_experience_years ? `${tutor.teaching_experience_years} tahun` : null}/>
+                <InfoRow label="Tempat Sebelumnya" value={tutor.previous_workplaces}/>
+              </div>
+              {tutor.bio && (
+                <div>
+                  <p className="text-xs text-[#7B78A8] mb-1">Bio</p>
+                  <p className="text-sm text-[#1A1640] leading-relaxed">{tutor.bio}</p>
+                </div>
+              )}
+            </div>
+          )}
+          {!tutor.education_level && !achievements.length && !tutor.bio && (
+            <div className="bg-white rounded-2xl border border-[#E5E3FF] p-8 text-center">
+              <p className="text-sm text-[#7B78A8]">Belum ada data profil akademik.</p>
+              <Link href={`/admin/tutor/${tutorId}/edit`} className="text-sm text-[#5C4FE5] font-semibold hover:underline mt-2 block">+ Lengkapi profil</Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Kelas */}
+      {tab === 'kelas' && (
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+          {kelas.length === 0 ? (
+            <div className="p-8 text-center text-sm text-[#7B78A8]">Belum ada kelas yang dipegang.</div>
+          ) : (
+            kelas.map((c: any, i) => {
+              const aktif = c.enrollments?.filter((e: any) => e.status === 'active').length ?? 0
+              const stCls = c.status === 'active' ? 'bg-[#E6F4EC] text-[#1A5C36]' : 'bg-gray-100 text-gray-500'
+              const stLbl = c.status === 'active' ? 'Aktif' : c.status === 'completed' ? 'Selesai' : 'Nonaktif'
+              return (
+                <div key={c.id} className={`flex items-center justify-between px-5 py-4 ${i < kelas.length-1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                  <div>
+                    <p className="text-sm font-bold text-[#1A1640]">{c.label}</p>
+                    <p className="text-xs text-[#7B78A8] mt-0.5">{c.class_types?.name} · {aktif} siswa aktif</p>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.cls}`}>{st.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${stCls}`}>{stLbl}</span>
+                    <Link href={`/admin/kelas/${c.id}`} className="p-1.5 rounded-lg text-[#5C4FE5] hover:bg-[#F0EEFF] transition">
+                      <ExternalLink size={13}/>
+                    </Link>
+                  </div>
                 </div>
               )
             })
@@ -295,87 +272,27 @@ export default function KelasDetailPage() {
       )}
 
       {/* Tab: Jadwal */}
-      {activeTab === 'jadwal' && (
+      {tab === 'jadwal' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+          <div className="px-5 py-3 bg-[#F7F6FF] border-b border-[#E5E3FF]">
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jadwal Minggu Ini</p>
+          </div>
           {sessions.length === 0 ? (
-            <div className="px-5 py-12 text-center">
-              <div className="text-3xl mb-3">📅</div>
-              <p className="text-sm text-[#7B78A8] font-semibold">Belum ada sesi dijadwalkan</p>
-              <p className="text-xs text-[#7B78A8] mt-1">Gunakan tombol <strong>Jadwal</strong> di halaman Manajemen Kelas</p>
-            </div>
+            <div className="p-8 text-center text-sm text-[#7B78A8]">Tidak ada sesi minggu ini.</div>
           ) : (
-            <>
-              {/* Summary sesi */}
-              <div className="px-5 py-3 bg-[#F7F6FF] border-b border-[#E5E3FF] flex items-center gap-4 text-xs">
-                <span className="text-[#7B78A8]">Total: <strong className="text-[#1A1640]">{sessions.length} sesi</strong></span>
-                <span className="text-[#7B78A8]">Selesai: <strong className="text-[#27A05A]">{selesai}</strong></span>
-                <span className="text-[#7B78A8]">Terjadwal: <strong className="text-[#5C4FE5]">{terjadwal}</strong></span>
-              </div>
-              {sessions.map((s, idx) => {
-                const st = STATUS_SESI[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' }
-                return (
-                  <div key={s.id} className={`flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F6FF] transition-colors ${idx < sessions.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
-                    <div className="min-w-[36px] text-center">
-                      <div className="text-xs font-bold text-[#5C4FE5]">{idx + 1}</div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-[#1A1640]">{fmtDate(s.scheduled_at)}</div>
-                      <div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div>
-                    </div>
-                    {s.zoom_link && (
-                      <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                        className="text-[#5C4FE5] hover:opacity-70 transition">
-                        <ExternalLink size={13}/>
-                      </a>
-                    )}
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {s.status === 'scheduled' && (
-                        <button onClick={() => markSessionComplete(s.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
-                          <Check size={13}/>
-                        </button>
-                      )}
-                      <button onClick={() => deleteSession(s.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
-                        <Trash2 size={13}/>
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Pembayaran */}
-      {activeTab === 'pembayaran' && (
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-          {payments.length === 0 ? (
-            <div className="px-5 py-12 text-center">
-              <div className="text-3xl mb-3">💳</div>
-              <p className="text-sm text-[#7B78A8] font-semibold">Belum ada data pembayaran</p>
-              <Link href="/admin/pembayaran"
-                className="mt-3 inline-block text-sm text-[#5C4FE5] font-semibold hover:underline">
-                + Buat tagihan di menu Pembayaran
-              </Link>
-            </div>
-          ) : (
-            payments.map((p, idx) => {
-              const st = STATUS_BAYAR[p.status] ?? { label: p.status, cls: 'bg-gray-100 text-gray-600' }
+            sessions.map((s, i) => {
+              const st = STATUS_SESI[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' }
               return (
-                <div key={p.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-[#F7F6FF] transition-colors ${idx < payments.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                <div key={s.id} className={`flex items-center gap-4 px-5 py-3.5 ${i < sessions.length-1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                  <div className="min-w-[44px] text-sm font-bold text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-[#1A1640]">{p.student_name}</div>
-                    <div className="text-xs text-[#7B78A8] mt-0.5">
-                      {p.period_label ?? '—'} · {p.method === 'transfer' ? 'Transfer Bank' : 'Tunai'}
-                    </div>
+                    <p className="text-sm font-semibold text-[#1A1640] truncate">{s.class_label}</p>
+                    <p className="text-xs text-[#7B78A8]">{fmtDate(s.scheduled_at)}</p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-[#1A1640]">{fmtRp(p.amount)}</div>
-                    <div className="text-xs text-[#7B78A8]">{new Date(p.created_at).toLocaleDateString('id-ID', {day:'numeric',month:'short',year:'numeric'})}</div>
-                  </div>
+                  {s.zoom_link && (
+                    <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                      className="text-[#5C4FE5] hover:opacity-70 transition"><ExternalLink size={13}/></a>
+                  )}
                   <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
                 </div>
               )
@@ -384,12 +301,57 @@ export default function KelasDetailPage() {
         </div>
       )}
 
+      {/* Tab: Honor */}
+      {tab === 'honor' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#E6F4EC] rounded-2xl p-4">
+              <p className="text-xs font-bold text-[#1A5C36] mb-1">Sudah Dibayar</p>
+              <p className="text-lg font-black text-[#1A5C36]">{fmtRp(totalHonorLunas)}</p>
+            </div>
+            <div className="bg-[#FEE9E9] rounded-2xl p-4">
+              <p className="text-xs font-bold text-[#991B1B] mb-1">Belum Dibayar</p>
+              <p className="text-lg font-black text-[#991B1B]">{fmtRp(totalHonorUnpaid)}</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+            <div className="px-5 py-3 bg-[#F7F6FF] border-b border-[#E5E3FF]">
+              <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Riwayat Honor</p>
+            </div>
+            {honors.length === 0 ? (
+              <div className="p-8 text-center text-sm text-[#7B78A8]">Belum ada tagihan honor.</div>
+            ) : (
+              honors.map((h, i) => {
+                const isPerSiswa = h.class_type === 'Semi Privat' || h.class_type === 'Reguler'
+                return (
+                  <div key={h.id} className={`flex items-start justify-between px-5 py-4 ${i < honors.length-1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                    <div>
+                      <p className="text-sm font-bold text-[#1A1640]">{h.period_label ?? '—'}</p>
+                      <p className="text-xs text-[#7B78A8] mt-0.5">
+                        {h.sessions_done} sesi · {h.class_label} · {h.class_type}
+                        {isPerSiswa ? ` · ${h.students_count} siswa` : ''}
+                      </p>
+                      {h.bonus > 0 && <p className="text-xs text-[#5C4FE5] font-semibold mt-0.5">+ Bonus {fmtRp(h.bonus)}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-[#1A1640]">{fmtRp(h.total)}</p>
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full mt-1 inline-block ${h.status === 'paid' ? 'bg-[#E6F4EC] text-[#1A5C36]' : 'bg-[#FEE9E9] text-[#991B1B]'}`}>
+                        {h.status === 'paid' ? 'Lunas' : 'Belum Dibayar'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Tab: Ketersediaan */}
       {tab === 'ketersediaan' && (
         <div className="space-y-3">
           {(() => {
             const availability = (tutor.availability ?? {}) as Record<string, string[]>
-            const HARI = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu']
             const adaData = HARI.some(h => (availability[h] ?? []).length > 0)
             if (!adaData) return (
               <div className="bg-white rounded-2xl border border-[#E5E3FF] p-8 text-center">
@@ -420,7 +382,6 @@ export default function KelasDetailPage() {
           })()}
         </div>
       )}
-
     </div>
   )
 }
