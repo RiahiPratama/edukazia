@@ -120,13 +120,18 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Top bar — hanya tampil di mobile untuk hamburger menu */}
-        <header className="flex items-center gap-3 px-4 lg:hidden"
+        {/* Top bar mobile: [☰] [Logo] ←→ [Avatar] */}
+        <header className="flex items-center px-3 lg:hidden"
           style={{ height: '56px', background: 'white', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
-          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580] transition-colors">
+          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-[#F0EFFF] text-[#4A4580] transition-colors flex-shrink-0">
             <Menu size={20}/>
           </button>
-          <span className="text-sm font-bold text-[#1A1640]">EduKazia</span>
+          <div className="flex-1 flex justify-center">
+            <Logo/>
+          </div>
+          <a href="/tutor/pengaturan" className="flex-shrink-0 w-8 h-8 rounded-full bg-[#5C4FE5] flex items-center justify-center text-white text-sm font-bold hover:bg-[#3D34C4] transition-colors">
+            T
+          </a>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>
