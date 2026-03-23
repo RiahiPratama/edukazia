@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, X } from 'lucide-react'
+import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, X, BookOpen, Plus, Trash } from 'lucide-react'
 
 type KelasDetail = {
   id: string
@@ -42,6 +42,20 @@ type Payment = {
   method: string
   created_at: string
   student_name: string
+}
+
+type Level = {
+  id: string
+  name: string
+  description: string | null
+  target_age: string | null
+  sort_order: number
+}
+
+type ClassGroupLevel = {
+  id: string
+  level_id: string
+  level: Level
 }
 
 const STATUS_SESI: Record<string, { label: string; cls: string }> = {
@@ -83,7 +97,14 @@ export default function KelasDetailPage() {
   const [sessions,    setSessions]    = useState<Session[]>([])
   const [payments,    setPayments]    = useState<Payment[]>([])
   const [loading,     setLoading]     = useState(true)
-  const [activeTab,   setActiveTab]   = useState<'siswa' | 'jadwal' | 'pembayaran'>('siswa')
+  const [activeTab,   setActiveTab]   = useState<'siswa' | 'jadwal' | 'pembayaran' | 'level'>('siswa')
+
+  // Level state
+  const [classLevels,     setClassLevels]     = useState<ClassGroupLevel[]>([])
+  const [availableLevels, setAvailableLevels] = useState<Level[]>([])
+  const [selectedLevelId, setSelectedLevelId] = useState('')
+  const [addingLevel,     setAddingLevel]     = useState(false)
+  const [removingLevelId, setRemovingLevelId] = useState<string | null>(null)
 
   // Edit sesi
   const [editSession,  setEditSession]  = useState<Session | null>(null)
@@ -96,6 +117,7 @@ export default function KelasDetailPage() {
   const [eOk,          setEOk]          = useState(false)
 
   useEffect(() => { fetchAll() }, [kelasId])
+  useEffect(() => { if (kelasId) fetchLevels() }, [kelasId])
 
   async function fetchAll() {
     setLoading(true)
@@ -168,6 +190,56 @@ export default function KelasDetailPage() {
     setPayments(payList.map((p: any) => ({ ...p, student_name: payNameMap[p.student_id] ?? '—' })))
 
     setLoading(false)
+  }
+
+  async function fetchLevels() {
+    // Fetch level yang sudah di-assign ke kelas ini
+    const { data: cgl } = await supabase
+      .from('class_group_levels')
+      .select('id, level_id, levels(id, name, description, target_age, sort_order)')
+      .eq('class_group_id', kelasId)
+      .order('levels(sort_order)')
+    setClassLevels((cgl ?? []).map((c: any) => ({ id: c.id, level_id: c.level_id, level: c.levels })))
+
+    // Fetch semua level dari kursus yang sama dengan kelas ini
+    const { data: k } = await supabase
+      .from('class_groups')
+      .select('course_id')
+      .eq('id', kelasId)
+      .single()
+    if (k?.course_id) {
+      const assignedIds = (cgl ?? []).map((c: any) => c.level_id)
+      const { data: allLevels } = await supabase
+        .from('levels')
+        .select('id, name, description, target_age, sort_order')
+        .eq('course_id', k.course_id)
+        .eq('is_active', true)
+        .order('sort_order')
+      // Filter: hanya tampilkan yang belum di-assign
+      setAvailableLevels((allLevels ?? []).filter((l: any) => !assignedIds.includes(l.id)))
+    }
+  }
+
+  async function handleAddLevel() {
+    if (!selectedLevelId) return
+    setAddingLevel(true)
+    const res = await fetch('/api/admin/class-group-levels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_group_id: kelasId, level_id: selectedLevelId }),
+    })
+    if (res.ok) {
+      setSelectedLevelId('')
+      await fetchLevels()
+    }
+    setAddingLevel(false)
+  }
+
+  async function handleRemoveLevel(cglId: string) {
+    setRemovingLevelId(cglId)
+    await fetch(`/api/admin/class-group-levels/${cglId}`, { method: 'DELETE' })
+    await fetchLevels()
+    setRemovingLevelId(null)
   }
 
   function openEditSession(s: Session) {
@@ -284,6 +356,7 @@ export default function KelasDetailPage() {
           { key: 'siswa',      label: 'Siswa',      icon: <Users size={13}/>,       count: enrollments.length },
           { key: 'jadwal',     label: 'Jadwal',     icon: <Calendar size={13}/>,    count: sessions.length },
           { key: 'pembayaran', label: 'Pembayaran', icon: <CreditCard size={13}/>,  count: payments.length },
+          { key: 'level',      label: 'Level',      icon: <BookOpen size={13}/>,    count: classLevels.length },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={[
@@ -429,6 +502,87 @@ export default function KelasDetailPage() {
           )}
         </div>
       )}
+      {/* Tab: Level */}
+      {activeTab === 'level' && (
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+          {/* Tambah level */}
+          <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">Tambah Level ke Kelas Ini</p>
+            {availableLevels.length === 0 ? (
+              <p className="text-xs text-[#7B78A8]">
+                {classLevels.length > 0
+                  ? 'Semua level kursus ini sudah di-assign.'
+                  : 'Belum ada level tersedia. Tambahkan level di menu Kursus & Paket.'}
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  value={selectedLevelId}
+                  onChange={e => setSelectedLevelId(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-[#E5E3FF] text-sm text-[#1A1640] bg-white focus:outline-none focus:border-[#5C4FE5]"
+                >
+                  <option value="">Pilih level...</option>
+                  {availableLevels.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAddLevel}
+                  disabled={!selectedLevelId || addingLevel}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#5C4FE5] text-white text-sm font-semibold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50"
+                >
+                  <Plus size={14}/>
+                  {addingLevel ? 'Menambah...' : 'Tambah'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Daftar level yang sudah di-assign */}
+          {classLevels.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3">
+                <BookOpen size={20} className="text-[#C4BFFF]"/>
+              </div>
+              <p className="text-sm text-[#7B78A8] font-semibold">Belum ada level</p>
+              <p className="text-xs text-[#7B78A8] mt-1">Pilih level di atas untuk ditambahkan ke kelas ini</p>
+            </div>
+          ) : (
+            classLevels.map((cgl, idx) => (
+              <div key={cgl.id} className={`flex items-center gap-3 px-5 py-4 ${idx < classLevels.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                <div className="w-7 h-7 rounded-lg bg-[#E5E3FF] flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-black text-[#5C4FE5]">{idx + 1}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-[#1A1640]">{cgl.level?.name ?? '—'}</div>
+                  {cgl.level?.description && (
+                    <div className="text-xs text-[#7B78A8] truncate">{cgl.level.description}</div>
+                  )}
+                </div>
+                {cgl.level?.target_age && (
+                  <span className="text-xs bg-[#E5E3FF] text-[#5C4FE5] font-semibold px-2 py-0.5 rounded-full flex-shrink-0">
+                    {cgl.level.target_age === 'all'        ? 'Semua Usia'
+                    : cgl.level.target_age === 'kids'      ? 'Anak-anak'
+                    : cgl.level.target_age === 'teen'      ? 'Remaja'
+                    : cgl.level.target_age === 'adult'     ? 'Dewasa'
+                    : cgl.level.target_age === 'kids_teen' ? 'Anak & Remaja'
+                    : 'Remaja & Dewasa'}
+                  </span>
+                )}
+                <button
+                  onClick={() => handleRemoveLevel(cgl.id)}
+                  disabled={removingLevelId === cgl.id}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition disabled:opacity-50"
+                  title="Hapus dari kelas"
+                >
+                  <Trash size={14}/>
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       {/* Modal Edit Sesi */}
       {editSession && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
