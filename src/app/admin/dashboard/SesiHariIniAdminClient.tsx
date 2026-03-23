@@ -108,12 +108,17 @@ export default function SesiHariIniAdminClient({ sesiHariIni }: { sesiHariIni: a
                 <div className="text-[10px] text-[#7B78A8]">WIT</div>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-[#1A1640] truncate">
-                  {s.class_groups?.label ?? '—'}
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-semibold text-[#1A1640] truncate">
+                    {s.class_groups?.label ?? '—'}
+                  </div>
+                  {!s.class_groups?.tutor_id && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-red-100 text-red-600 flex-shrink-0">
+                      ⚠ Tanpa Tutor
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-[#7B78A8] mb-1">
-                  {courseName} {s.class_groups?.tutor_name ? `· ${s.class_groups.tutor_name}` : ''}
-                </div>
+                <div className="text-xs text-[#7B78A8] mb-1">{courseName}</div>
                 <CountdownBadge
                   scheduledAt={s.scheduled_at}
                   classTypeName={classTypeName}

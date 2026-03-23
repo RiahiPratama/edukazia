@@ -26,7 +26,7 @@ export default async function AdminDashboard() {
     supabase.from('class_groups').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('sessions')
       .select(`id, scheduled_at, zoom_link, status,
-        class_groups(label, courses(name), class_types(name))`)
+        class_groups(label, tutor_id, courses(name), class_types(name))`)
       .gte('scheduled_at', startUTC)
       .lte('scheduled_at', endUTC)
       .order('scheduled_at'),

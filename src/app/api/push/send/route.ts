@@ -152,9 +152,100 @@ export async function POST(req: NextRequest) {
       .in('endpoint', expired)
   }
 
+  // ── Reminder perpanjang paket H-3 ──────────────────────────────────────
+  // Jalankan hanya 1x per jam (cek menit = 0-4) untuk efisiensi
+  const nowMinute = new Date().getMinutes()
+  let reminderSent = 0
+
+  if (nowMinute < 5) {
+    // Cari enrollments aktif yang sisa sesi ≤ 3
+    const { data: enrollments } = await supabaseAdmin
+      .from('enrollments')
+      .select(`
+        id, student_id, class_group_id, sessions_total, session_start_offset,
+        class_groups!inner(label)
+      `)
+      .eq('status', 'active')
+
+    if (enrollments && enrollments.length > 0) {
+      // Hitung progress per enrollment
+      for (const e of enrollments as any[]) {
+        // Hitung hadir dari attendances
+        const { data: completedSess } = await supabaseAdmin
+          .from('sessions')
+          .select('id')
+          .eq('class_group_id', e.class_group_id)
+          .eq('status', 'completed')
+
+        const completedIds = (completedSess ?? []).map((s: any) => s.id)
+        const { count: hadirCount } = completedIds.length > 0
+          ? await supabaseAdmin
+              .from('attendances')
+              .select('*', { count: 'exact', head: true })
+              .in('session_id', completedIds)
+              .eq('student_id', e.student_id)
+              .eq('status', 'hadir')
+          : { count: 0 }
+
+        const progress = (e.session_start_offset ?? 0) + (hadirCount ?? 0)
+        const total    = e.sessions_total ?? 8
+        const sisa     = total - progress
+
+        if (sisa > 3 || sisa < 0) continue // Hanya kirim jika sisa ≤ 3
+
+        // Cari parent
+        const { data: student } = await supabaseAdmin
+          .from('students')
+          .select('parent_profile_id')
+          .eq('id', e.student_id)
+          .single()
+
+        if (!student?.parent_profile_id) continue
+
+        // Cek apakah sudah kirim reminder hari ini (cek dari pg — skip jika tidak ada mekanisme)
+        // Untuk simplicity: kirim setiap hari sekali (cron jam 08:00 WIT saja)
+        const nowHourWIT = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jayapura' })).getHours()
+        if (nowHourWIT !== 8) continue // Hanya kirim jam 8 pagi WIT
+
+        const { data: parentSubs } = await supabaseAdmin
+          .from('push_subscriptions')
+          .select('endpoint, p256dh, auth')
+          .eq('user_id', student.parent_profile_id)
+
+        if (!parentSubs || parentSubs.length === 0) continue
+
+        const cg = Array.isArray(e.class_groups) ? e.class_groups[0] : e.class_groups
+        const kelasLabel = cg?.label ?? 'Kelas'
+        const sisaText = sisa === 0 ? 'habis' : `tinggal ${sisa}`
+
+        const payload = JSON.stringify({
+          title: '⚠️ Sesi belajar hampir habis!',
+          body:  `${kelasLabel}: sesi ${sisaText}. Segera perpanjang paket belajar.`,
+          tag:   `renew-${e.class_group_id}-${e.student_id}`,
+          url:   '/ortu/dashboard',
+        })
+
+        for (const sub of parentSubs as any[]) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              payload
+            )
+            reminderSent++
+          } catch (err: any) {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
+            }
+          }
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     sent: sentCount,
     expired: expired.length,
+    reminder_sent: reminderSent,
   })
 }

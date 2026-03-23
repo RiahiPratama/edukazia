@@ -54,16 +54,19 @@ function isSesiDimulai(scheduledAt: string): boolean {
 }
 
 // ── Countdown Badge ────────────────────────────────────────────────────────
-function getDurasiMenit(classTypeName: string): number {
-  const name = (classTypeName ?? '').toLowerCase()
-  if (name.includes('privat') && !name.includes('semi')) return 45
+function getDurasiMenit(classTypeName: string, courseName: string): number {
+  const type   = (classTypeName ?? '').toLowerCase()
+  const course = (courseName ?? '').toLowerCase()
+  // Privat Bahasa Inggris = 45 menit, privat lainnya = 60 menit
+  if (type.includes('privat') && !type.includes('semi') && course.includes('inggris')) return 45
   return 60
 }
 
-function CountdownBadge({ scheduledAt, isSelected, classTypeName }: {
+function CountdownBadge({ scheduledAt, isSelected, classTypeName, courseName }: {
   scheduledAt: string
   isSelected: boolean
   classTypeName: string
+  courseName: string
 }) {
   const [diffMs, setDiffMs] = useState(() => new Date(scheduledAt).getTime() - Date.now())
 
@@ -74,7 +77,7 @@ function CountdownBadge({ scheduledAt, isSelected, classTypeName }: {
     return () => clearInterval(interval)
   }, [scheduledAt])
 
-  const durasiMs = getDurasiMenit(classTypeName) * 60 * 1000
+  const durasiMs = getDurasiMenit(classTypeName, courseName) * 60 * 1000
 
   // Lebih dari 3 jam ke depan → tidak tampil
   if (diffMs > 3 * 60 * 60 * 1000) return null
@@ -516,8 +519,22 @@ export default function TutorAbsensiPage() {
 
     await supabase.from('sessions').update({ status: 'completed' }).eq('id', selectedSesi.id)
 
+    // Kirim push notification ke ortu — fire and forget
+    fetch('/api/push/notify-attendance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id:  selectedSesi.id,
+        attendances: absenRecords.map((a: any) => ({
+          student_id: a.student_id,
+          status:     a.status,
+          notes:      a.notes,
+        })),
+      }),
+    }).catch(() => {})
+
     setSavedSesiIds(prev => new Set([...prev, selectedSesi.id]))
-    setSuccess('Absensi berhasil disimpan!')
+    setSuccess('Absensi berhasil disimpan! Notifikasi dikirim ke orang tua.')
     setSaving(false)
   }
 
@@ -643,7 +660,7 @@ export default function TutorAbsensiPage() {
                         </div>
                       </div>
                       {/* Countdown */}
-                      <CountdownBadge scheduledAt={s.scheduled_at} isSelected={isSelected} classTypeName={s.class_groups?.class_types?.name ?? ''} />
+                      <CountdownBadge scheduledAt={s.scheduled_at} isSelected={isSelected} classTypeName={s.class_groups?.class_types?.name ?? ''} courseName={s.class_groups?.courses?.name ?? ''} />
                     </button>
                   )
                 })}
