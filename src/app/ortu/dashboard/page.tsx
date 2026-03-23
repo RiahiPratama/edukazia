@@ -96,7 +96,7 @@ export default async function OrtuDashboardPage() {
         .from('sessions')
         .select('id, class_group_id, scheduled_at, status, zoom_link')
         .in('class_group_id', classGroupIds)
-        .eq('status', 'scheduled')
+        .in('status', ['scheduled', 'rescheduled'])
         .gte('scheduled_at', toUTC(nowWIT))
         .lte('scheduled_at', toUTC(plus7))
         .order('scheduled_at')
@@ -170,17 +170,20 @@ export default async function OrtuDashboardPage() {
       const progress = (e.session_start_offset ?? 0) + hadirCount
       const total    = e.sessions_total ?? 8
 
-      const nextSesi = (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id)
+      // Prefer scheduled, fallback to rescheduled
+      const nextSesi = (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id && s.status === 'scheduled')
+        ?? (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id && s.status === 'rescheduled')
 
       return {
-        enrollmentId: e.id,
-        classGroupId: e.class_group_id,
-        classLabel:   cg?.label ?? '—',
-        tutorName:    tutor?.full_name ?? '—',
+        enrollmentId:  e.id,
+        classGroupId:  e.class_group_id,
+        classLabel:    cg?.label ?? '—',
+        tutorName:     tutor?.full_name ?? '—',
         progress,
         total,
-        nextSession:  nextSesi?.scheduled_at ?? null,
-        zoomLink:     nextSesi?.zoom_link ?? cg?.zoom_link ?? null,
+        nextSession:   nextSesi?.scheduled_at ?? null,
+        nextStatus:    nextSesi?.status ?? null,
+        zoomLink:      nextSesi?.zoom_link ?? cg?.zoom_link ?? null,
       }
     })
 

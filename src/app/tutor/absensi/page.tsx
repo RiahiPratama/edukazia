@@ -5,13 +5,11 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CalendarDays, Check, MessageCircle, AlertTriangle, Clock, FileText, X, Send } from 'lucide-react'
 
-type StatusAbsen = 'hadir' | 'izin' | 'sakit' | 'alpha'
+type StatusAbsen = 'hadir' | 'tidak_hadir'
 
 const STATUS_OPTIONS: { value: StatusAbsen; label: string; color: string; active: string }[] = [
-  { value: 'hadir', label: 'Hadir', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-green-400 hover:text-green-600',    active: 'border-green-500 bg-green-50 text-green-700 font-bold' },
-  { value: 'izin',  label: 'Izin',  color: 'border-[#E5E3FF] text-[#4A4580] hover:border-blue-400 hover:text-blue-600',     active: 'border-blue-500 bg-blue-50 text-blue-700 font-bold' },
-  { value: 'sakit', label: 'Sakit', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-yellow-400 hover:text-yellow-600', active: 'border-yellow-500 bg-yellow-50 text-yellow-700 font-bold' },
-  { value: 'alpha', label: 'Alpha', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-red-400 hover:text-red-600',       active: 'border-red-500 bg-red-50 text-red-700 font-bold' },
+  { value: 'hadir',      label: 'Hadir',       color: 'border-[#E5E3FF] text-[#4A4580] hover:border-green-400 hover:text-green-600', active: 'border-green-500 bg-green-50 text-green-700 font-bold' },
+  { value: 'tidak_hadir', label: 'Tidak Hadir', color: 'border-[#E5E3FF] text-[#4A4580] hover:border-red-400 hover:text-red-600',   active: 'border-red-500 bg-red-50 text-red-700 font-bold' },
 ]
 
 const AVATAR_COLORS = [
@@ -359,7 +357,11 @@ export default function TutorAbsensiPage() {
   const [saving,         setSaving]         = useState(false)
   const [error,          setError]          = useState('')
   const [success,        setSuccess]        = useState('')
-  const [showLaporan,    setShowLaporan]    = useState(false)
+  const [showLaporan,      setShowLaporan]      = useState(false)
+  const [showReschedule,   setShowReschedule]   = useState(false)
+  const [rescheduleAlasan, setRescheduleAlasan] = useState('')
+  const [savingReschedule, setSavingReschedule] = useState(false)
+  const [rescheduleMsg,    setRescheduleMsg]    = useState('')
 
   useEffect(() => { fetchSesiHariIni() }, [])
 
@@ -538,6 +540,24 @@ export default function TutorAbsensiPage() {
     setSaving(false)
   }
 
+  async function handleReschedule() {
+    if (!selectedSesi) return
+    setSavingReschedule(true); setRescheduleMsg('')
+    const res = await fetch('/api/sessions/reschedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: selectedSesi.id, alasan: rescheduleAlasan }),
+    })
+    const data = await res.json()
+    setSavingReschedule(false)
+    if (!res.ok) { setRescheduleMsg('Gagal: ' + (data.error ?? 'Error')); return }
+    // Update local state
+    setSesiHariIni(prev => prev.map(s => s.id === selectedSesi.id ? { ...s, status: 'rescheduled' } : s))
+    setSelectedSesi((prev: any) => prev ? { ...prev, status: 'rescheduled' } : prev)
+    setShowReschedule(false)
+    setRescheduleAlasan('')
+  }
+
   function buildWAAdmin(keterangan: string) {
     const sesiLabel = selectedSesi?.class_groups?.label ?? 'kelas'
     const waktu     = fmtTime(selectedSesi?.scheduled_at ?? '')
@@ -587,7 +607,55 @@ export default function TutorAbsensiPage() {
         <p className="text-sm text-[#7B78A8] mt-1">{fmtTanggal()}</p>
       </div>
 
-      {/* ── Banner Reminder Laporan Belum Diisi > 5 jam ── */}
+        {/* Modal Reschedule Sesi */}
+      {showReschedule && selectedSesi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF] bg-amber-50 rounded-t-2xl">
+              <div>
+                <h3 className="font-bold text-amber-900 text-sm">Reschedule Sesi</h3>
+                <p className="text-xs text-amber-700 mt-0.5">{selectedSesi.class_groups?.label} · {fmtTime(selectedSesi.scheduled_at)} WIT</p>
+              </div>
+              <button onClick={() => setShowReschedule(false)} className="p-1.5 rounded-lg hover:bg-amber-100 transition">
+                <X size={16} className="text-amber-700"/>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-start gap-2 px-3 py-2.5 bg-blue-50 rounded-xl border border-blue-100">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" className="flex-shrink-0 mt-0.5">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  Sesi akan ditandai sebagai dijadwal ulang dan <strong>tidak terhitung</strong> dari paket siswa. Notifikasi akan dikirim ke orang tua.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1">Alasan Reschedule</label>
+                <textarea
+                  value={rescheduleAlasan}
+                  onChange={e => setRescheduleAlasan(e.target.value)}
+                  placeholder="Contoh: Mati lampu, kendala jaringan, tutor berhalangan..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition resize-none"
+                />
+              </div>
+              {rescheduleMsg && (
+                <p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-xl border border-red-200">{rescheduleMsg}</p>
+              )}
+              <button onClick={handleReschedule} disabled={savingReschedule}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition disabled:opacity-50 flex items-center justify-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M23 4v6h-6M1 20v-6h6"/>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+                {savingReschedule ? 'Memproses...' : 'Konfirmasi Reschedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    {/* ── Banner Reminder Laporan Belum Diisi > 5 jam ── */}
       {reminderSesi.length > 0 && (
         <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -720,7 +788,7 @@ export default function TutorAbsensiPage() {
                     {siswaList.map((s, idx) => {
                       const currentStatus = absensiMap[s.studentId]
                       const avatarColor   = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                      const isIzinSakit   = currentStatus === 'izin' || currentStatus === 'sakit'
+                      const isTidakHadir  = currentStatus === 'tidak_hadir'
                       const canAbsen      = isSesiDimulai(selectedSesi.scheduled_at)
                       return (
                         <div key={s.studentId} className="px-5 py-4">
@@ -733,8 +801,8 @@ export default function TutorAbsensiPage() {
                               <div className="text-sm font-semibold text-[#1A1640]">{s.name}</div>
                               <div className="text-xs text-[#7B78A8]">Sesi {s.sessionDone}/{s.sessionTotal}</div>
                             </div>
-                            {/* Izin/sakit → WA Admin (bukan WA Ortu) */}
-                            {isIzinSakit && adminPhone && canAbsen && (
+                            {/* Tidak hadir → WA Admin */}
+                            {isTidakHadir && adminPhone && canAbsen && (
                               <a href={`https://wa.me/${adminPhone}?text=${buildWAAdminSiswa(s)}`}
                                 target="_blank" rel="noopener noreferrer"
                                 className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-semibold hover:bg-amber-100 transition flex-shrink-0">
@@ -750,8 +818,8 @@ export default function TutorAbsensiPage() {
                               </button>
                             ))}
                           </div>
-                          {isIzinSakit && canAbsen && (
-                            <input type="text" placeholder="Keterangan izin/sakit (opsional)..."
+                          {isTidakHadir && canAbsen && (
+                            <input type="text" placeholder="Keterangan tidak hadir (opsional)..."
                               value={notesMap[s.studentId] ?? ''}
                               onChange={e => setNotes(s.studentId, e.target.value)}
                               className="w-full px-3 py-2 border border-[#E5E3FF] rounded-xl text-xs bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
@@ -778,13 +846,33 @@ export default function TutorAbsensiPage() {
                       </p>
                     )}
 
+                    {/* Tombol Reschedule Sesi */}
+                    {selectedSesi?.status !== 'rescheduled' && (
+                      <button
+                        onClick={() => { setShowReschedule(true); setRescheduleMsg('') }}
+                        className="w-full py-2.5 border border-amber-300 text-amber-700 font-bold rounded-xl text-sm transition hover:bg-amber-50 flex items-center justify-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M23 4v6h-6M1 20v-6h6"/>
+                          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                        Reschedule Sesi Ini
+                      </button>
+                    )}
+                    {selectedSesi?.status === 'rescheduled' && (
+                      <div className="w-full py-2.5 bg-amber-50 border border-amber-200 text-amber-700 font-semibold rounded-xl text-sm text-center">
+                        ✓ Sesi ini sudah di-reschedule
+                      </div>
+                    )}
+
                     {/* Tombol Input/Lihat Laporan — inline modal */}
+                    {selectedSesi?.status !== 'rescheduled' && (
                     <button
                       onClick={() => setShowLaporan(true)}
                       className="w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm transition hover:bg-[#EAE8FD] flex items-center justify-center gap-2">
                       <FileText size={14}/>
                       {laporanSesiIds.has(selectedSesi.id) ? 'Lihat / Edit Laporan Belajar' : 'Input Laporan Belajar'}
                     </button>
+                    )}
                   </div>
                 </>
               )}

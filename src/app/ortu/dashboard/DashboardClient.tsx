@@ -306,11 +306,37 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 )}
               </div>
 
+              {/* ── Banner Reschedule ── */}
+              {child.enrollments.map((enroll: any) => {
+                if (enroll.nextStatus !== 'rescheduled') return null
+                return (
+                  <div key={`reschedule-${enroll.enrollmentId}`}
+                    className="mx-3 mb-2 rounded-xl flex items-center gap-3 px-3 py-2.5"
+                    style={{ background: '#FEFCE8', border: '0.5px solid #FDE68A' }}>
+                    <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
+                      style={{ background: '#F59E0B' }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                        <path d="M23 4v6h-6M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-amber-900 truncate">
+                        {enroll.classLabel} — Sesi dijadwal ulang
+                      </p>
+                      <p className="text-[10px] text-amber-700">
+                        Jadwal pengganti akan diinformasikan segera
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+
               {/* ── Countdown Timer (≤ 3 jam sebelum sesi) ── */}
               {child.enrollments.map((enroll: any) => {
                 if (!enroll.nextSession) return null
+                if (enroll.nextStatus === 'rescheduled') return null
                 const diffMs = new Date(enroll.nextSession).getTime() - Date.now()
-                // Tampil kalau ≤ 3 jam ke depan atau belum 90 menit berlalu
                 if (diffMs > 3 * 60 * 60 * 1000) return null
                 if (diffMs < -90 * 60 * 1000) return null
                 return (
