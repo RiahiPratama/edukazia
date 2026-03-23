@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft } from 'lucide-react'
+import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, X } from 'lucide-react'
 
 type KelasDetail = {
   id: string
@@ -85,6 +85,16 @@ export default function KelasDetailPage() {
   const [loading,     setLoading]     = useState(true)
   const [activeTab,   setActiveTab]   = useState<'siswa' | 'jadwal' | 'pembayaran'>('siswa')
 
+  // Edit sesi
+  const [editSession,  setEditSession]  = useState<Session | null>(null)
+  const [eDate,        setEDate]        = useState('')
+  const [eTime,        setETime]        = useState('')
+  const [eZoom,        setEZoom]        = useState('')
+  const [eStatus,      setEStatus]      = useState('')
+  const [eSaving,      setESaving]      = useState(false)
+  const [eErr,         setEErr]         = useState('')
+  const [eOk,          setEOk]          = useState(false)
+
   useEffect(() => { fetchAll() }, [kelasId])
 
   async function fetchAll() {
@@ -158,6 +168,38 @@ export default function KelasDetailPage() {
     setPayments(payList.map((p: any) => ({ ...p, student_name: payNameMap[p.student_id] ?? '—' })))
 
     setLoading(false)
+  }
+
+  function openEditSession(s: Session) {
+    const dt     = new Date(s.scheduled_at)
+    const witStr = dt.toLocaleString('en-CA', { timeZone: 'Asia/Jayapura', hour12: false })
+    const [datePart, timePart] = witStr.split(', ')
+    setEDate(datePart)
+    setETime(timePart.slice(0, 5))
+    setEZoom(s.zoom_link ?? '')
+    setEStatus(s.status)
+    setEErr('')
+    setEOk(false)
+    setEditSession(s)
+  }
+
+  async function handleSaveSession() {
+    if (!editSession) return
+    setESaving(true); setEErr(''); setEOk(false)
+    const newScheduledAt = new Date(`${eDate}T${eTime}:00+09:00`).toISOString()
+    const { error } = await supabase.from('sessions').update({
+      scheduled_at: newScheduledAt,
+      zoom_link:    eZoom || null,
+      status:       eStatus,
+    }).eq('id', editSession.id)
+    setESaving(false)
+    if (error) { setEErr(error.message); return }
+    setSessions(prev => prev.map(s => s.id === editSession.id
+      ? { ...s, scheduled_at: newScheduledAt, zoom_link: eZoom || null, status: eStatus }
+      : s
+    ))
+    setEOk(true)
+    setTimeout(() => setEditSession(null), 700)
   }
 
   async function markSessionComplete(id: string) {
@@ -336,6 +378,10 @@ export default function KelasDetailPage() {
                           <Check size={13}/>
                         </button>
                       )}
+                      <button onClick={() => openEditSession(s)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EFFF] transition" title="Edit Sesi">
+                        <Pencil size={13}/>
+                      </button>
                       <button onClick={() => deleteSession(s.id)}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
                         <Trash2 size={13}/>
@@ -381,6 +427,72 @@ export default function KelasDetailPage() {
               )
             })
           )}
+        </div>
+      )}
+      {/* Modal Edit Sesi */}
+      {editSession && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF]">
+              <div>
+                <h3 className="font-bold text-[#1A1640] text-sm">Edit Sesi</h3>
+                <p className="text-xs text-[#7B78A8] mt-0.5">{kelas?.label}</p>
+              </div>
+              <button onClick={() => setEditSession(null)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Tanggal</label>
+                  <input type="date" value={eDate} onChange={e => setEDate(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Jam (WIT)</label>
+                  <input type="time" value={eTime} onChange={e => setETime(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Status</label>
+                <select value={eStatus} onChange={e => setEStatus(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
+                  <option value="scheduled">Terjadwal</option>
+                  <option value="completed">Selesai</option>
+                  <option value="cancelled">Dibatalkan</option>
+                  <option value="rescheduled">Dijadwal Ulang</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">
+                  Link Zoom <span className="normal-case font-normal">(opsional)</span>
+                </label>
+                <input type="url" value={eZoom} onChange={e => setEZoom(e.target.value)}
+                  placeholder="https://zoom.us/j/..."
+                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+              </div>
+              {eErr && (
+                <p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-xl border border-red-200">{eErr}</p>
+              )}
+              {eOk && (
+                <p className="text-[11px] text-green-700 px-3 py-2 bg-green-50 rounded-xl border border-green-200 flex items-center gap-1.5">
+                  <Check size={12}/> Berhasil disimpan!
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setEditSession(null)}
+                  className="flex-1 py-2.5 border border-[#E5E3FF] text-[#7B78A8] font-semibold rounded-xl text-sm hover:bg-[#F7F6FF] transition">
+                  Batal
+                </button>
+                <button onClick={handleSaveSession} disabled={eSaving}
+                  className="flex-1 py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+                  {eSaving ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
