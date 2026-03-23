@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SesiHariIniClient from './SesiHariIniClient'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
-import { CalendarDays, BookOpen, Users, Coins } from 'lucide-react'
+import { CalendarDays, BookOpen, Users, Coins, ClipboardList, FileText } from 'lucide-react'
 
 function fmtTanggal() {
   return new Date().toLocaleDateString('id-ID', {
@@ -175,6 +175,27 @@ export default async function TutorDashboardPage() {
           </a>
         </div>
         <SesiHariIniClient sesiHariIni={sesiHariIni ?? []} />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {[
+          { href: '/tutor/absensi',  label: 'Absensi',       icon: <ClipboardList size={20} strokeWidth={2}/>, bg: '#EEEDFE', color: '#5C4FE5' },
+          { href: '/tutor/jadwal',   label: 'Jadwal',        icon: <CalendarDays  size={20} strokeWidth={2}/>, bg: '#E1F5EE', color: '#1D9E75' },
+          { href: '/tutor/laporan',  label: 'Laporan Siswa', icon: <FileText      size={20} strokeWidth={2}/>, bg: '#E6F1FB', color: '#185FA5' },
+          { href: '/tutor/kelas',    label: 'Kelas & Siswa', icon: <BookOpen      size={20} strokeWidth={2}/>, bg: '#FAEEDA', color: '#BA7517' },
+        ].map((a, i) => (
+          <a key={i} href={a.href}
+            className="bg-white rounded-2xl border border-[#E5E3FF] p-4 flex flex-col items-center gap-2 hover:border-[#5C4FE5] hover:bg-[#F7F6FF] transition-all group">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors"
+              style={{ background: a.bg, color: a.color }}>
+              {a.icon}
+            </div>
+            <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5] text-center leading-tight transition-colors">
+              {a.label}
+            </span>
+          </a>
+        ))}
       </div>
 
       {/* Sesi Besok */}
