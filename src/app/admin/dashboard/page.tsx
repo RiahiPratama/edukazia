@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import {
   CalendarDays, GraduationCap, Users, BookOpen,
-  Coins, DollarSign, UserPlus
+  Coins, DollarSign, UserPlus, CreditCard
 } from 'lucide-react'
 import SesiHariIniAdminClient from './SesiHariIniAdminClient'
 
