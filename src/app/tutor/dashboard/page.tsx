@@ -52,15 +52,11 @@ export default async function TutorDashboardPage() {
 
   // Gunakan noon WIT agar .getDay() tidak salah akibat UTC day boundary
   const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-  const noonWIT     = new Date(todayWITStr + 'T12:00:00+09:00')
-  const rawDay      = noonWIT.getDay()
+  const [y, m, d]   = todayWITStr.split('-').map(Number)
+  const rawDay      = new Date(Date.UTC(y, m - 1, d, 3, 0, 0)).getUTCDay()
   const dayOfWeek   = rawDay === 0 ? 6 : rawDay - 1
-  const monday = new Date(noonWIT)
-  monday.setDate(noonWIT.getDate() - dayOfWeek)
-  monday.setHours(0, 0, 0, 0)
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  sunday.setHours(23, 59, 59, 999)
+  const monday      = new Date(Date.UTC(y, m - 1, d - dayOfWeek, 0, 0, 0))
+  const sunday      = new Date(Date.UTC(y, m - 1, d - dayOfWeek + 6, 23, 59, 59))
 
   const cgIds = (kelasAktif ?? []).map(k => k.id)
   const { count: sesiMingguIni } = cgIds.length > 0

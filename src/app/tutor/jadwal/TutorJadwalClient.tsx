@@ -128,30 +128,6 @@ export default function TutorJadwalClient({
         <p className="text-sm text-[#7B78A8] mt-1">{fmtMonth(monday)}</p>
       </div>
 
-      {/* ── Sesi Hari Ini (selalu tampil) ── */}
-      {weekOffset === 0 && (
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden mb-4">
-          <div className="px-5 py-3 bg-[#5C4FE5] flex items-center justify-between">
-            <span className="text-sm font-bold text-white">
-              Sesi Hari Ini — {new Date(todayWITStr + 'T12:00:00+09:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jayapura' })}
-            </span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
-              {sesiHariIni.length} sesi
-            </span>
-          </div>
-          {sesiHariIni.length === 0 ? (
-            <div className="p-6 text-center">
-              <CalendarDays size={28} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
-              <p className="text-sm text-[#7B78A8]">Tidak ada sesi mengajar hari ini</p>
-            </div>
-          ) : (
-            <div className="px-4 py-3 space-y-2">
-              {sesiHariIni.map((s: any) => <SesiRow key={s.id} s={s} compact/>)}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── Mini Calendar ── */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-4">
         <div className="flex items-center justify-between mb-4">
@@ -183,6 +159,30 @@ export default function TutorJadwalClient({
           })}
         </div>
       </div>
+
+      {/* ── Sesi Hari Ini — tampil di bawah kalender ── */}
+      {weekOffset === 0 && (
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden mb-4">
+          <div className="px-5 py-3 bg-[#5C4FE5] flex items-center justify-between">
+            <span className="text-sm font-bold text-white">
+              Sesi Hari Ini — {new Date(todayWITStr + 'T00:00:00+09:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jayapura' })}
+            </span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+              {sesiHariIni.length} sesi
+            </span>
+          </div>
+          {sesiHariIni.length === 0 ? (
+            <div className="p-6 text-center">
+              <CalendarDays size={28} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
+              <p className="text-sm text-[#7B78A8]">Tidak ada sesi mengajar hari ini</p>
+            </div>
+          ) : (
+            <div className="px-4 py-3 space-y-2">
+              {sesiHariIni.map((s: any) => <SesiRow key={s.id} s={s} compact/>)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Session List ── */}
       <div className="space-y-4">

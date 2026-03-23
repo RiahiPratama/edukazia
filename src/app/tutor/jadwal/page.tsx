@@ -22,16 +22,17 @@ export default async function TutorJadwalPage({
 
   // Noon WIT agar .getDay() akurat
   const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-  const noonWIT     = new Date(todayWITStr + 'T12:00:00+09:00')
-  const rawDay      = noonWIT.getDay()
+  // Parse tanggal WIT secara eksplisit agar tidak terpengaruh UTC offset
+  const [y, m, d]   = todayWITStr.split('-').map(Number)
+  const noonWIT     = new Date(Date.UTC(y, m - 1, d, 3, 0, 0)) // noon WIT = 03:00 UTC
+  const rawDay      = noonWIT.getUTCDay() // pakai UTC karena kita set UTC secara eksplisit
   const dayOfWeek   = rawDay === 0 ? 6 : rawDay - 1
 
-  const monday = new Date(noonWIT)
-  monday.setDate(noonWIT.getDate() - dayOfWeek + weekOffset * 7)
-  monday.setHours(0, 0, 0, 0)
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  sunday.setHours(23, 59, 59, 999)
+  // monday & sunday dalam WIT (jam 00:00 WIT = 15:00 UTC hari sebelumnya)
+  const mondayDate  = new Date(Date.UTC(y, m - 1, d - dayOfWeek + weekOffset * 7, 15, 0, 0))
+  const sundayDate  = new Date(Date.UTC(y, m - 1, d - dayOfWeek + weekOffset * 7 + 6, 15, 0, 0))
+  const monday      = new Date(mondayDate.getTime() - 15 * 3600000) // 00:00 WIT
+  const sunday      = new Date(sundayDate.getTime() + 8 * 3600000 + 59 * 60000 + 59000) // 23:59 WIT
 
   const toUTC = (d: Date) => new Date(d.getTime() - 9 * 3600000).toISOString()
 
