@@ -49,7 +49,6 @@ export default function BuatKelasPage() {
       if (t.data)  setTutors(t.data as any)
       if (ct.data) setClassTypes(ct.data)
       if (s.data) {
-        // Cek siswa mana yang sudah pernah ada enrollment (bukan siswa baru)
         const { data: existingEnrollments } = await supabase
           .from('enrollments')
           .select('student_id')
@@ -62,46 +61,13 @@ export default function BuatKelasPage() {
     })
   }, [])
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setSiswaOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Saat pilih/hapus siswa, cek apakah semua siswa yang dipilih adalah siswa baru
-  // Jika ya → offset 0 (bonus perkenalan), jika tidak → offset 1
-  function toggleStudent(id: string) {
-    const classType = classTypes.find(ct => ct.id === form.class_type_id)
-    const max = classType?.max_participants ?? 8
-    let newSelected: string[]
-    if (selectedStudents.includes(id)) {
-      newSelected = selectedStudents.filter(s => s !== id)
-    } else {
-      if (selectedStudents.length >= max) {
-        setError(`Maksimal ${max} siswa untuk tipe kelas ini.`)
-        return
-      }
-      newSelected = [...selectedStudents, id]
-    }
-    setSelectedStudents(newSelected)
-    setError('')
-
-    // Auto-set offset berdasarkan apakah semua siswa terpilih adalah siswa baru
-    if (newSelected.length > 0) {
-      const allNew = newSelected.every(sid => students.find(s => s.id === sid)?.is_new)
-      setSessionStartOffset(allNew ? 0 : 1)
-    } else {
-      setSessionStartOffset(0)
-    }
-  }
-
   // Fetch levels saat course_id berubah
   useEffect(() => {
-    if (!form.course_id) { setLevels([]); setSelectedLevels([]); return }
+    if (!form.course_id) {
+      setLevels([])
+      setSelectedLevels([])
+      return
+    }
     supabase
       .from('levels')
       .select('id, name, description, target_age')
@@ -113,6 +79,16 @@ export default function BuatKelasPage() {
         setSelectedLevels([])
       })
   }, [form.course_id])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setSiswaOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   function toggleLevel(id: string) {
     setSelectedLevels(prev =>
@@ -128,6 +104,31 @@ export default function BuatKelasPage() {
     }
     return map[val] ?? val
   }
+
+  function toggleStudent(id: string) {
+    const classType = classTypes.find(ct => ct.id === form.class_type_id)
+    const max = classType?.max_participants ?? 8
+    let newSelected: string[]
+    if (selectedStudents.includes(id)) {
+      newSelected = selectedStudents.filter(s => s !== id)
+    } else {
+      if (selectedStudents.length >= max) {
+        setError(`Maksimal ${max} siswa untuk tipe kelas ini.`)
+        return
+      }
+      newSelected = [...selectedStudents, id]
+    }
+    setSelectedStudents(newSelected)
+    setError('')
+    if (newSelected.length > 0) {
+      const allNew = newSelected.every(sid => students.find(s => s.id === sid)?.is_new)
+      setSessionStartOffset(allNew ? 0 : 1)
+    } else {
+      setSessionStartOffset(0)
+    }
+  }
+
+  function getStudentName(id: string) {
     return (students.find(s => s.id === id) as any)?.profiles?.full_name ?? 'Siswa'
   }
 
@@ -141,7 +142,6 @@ export default function BuatKelasPage() {
 
   const maxParticipants = classTypes.find(ct => ct.id === form.class_type_id)?.max_participants ?? 8
 
-  // Apakah semua siswa terpilih adalah siswa baru
   const allSelectedAreNew = selectedStudents.length > 0 &&
     selectedStudents.every(id => students.find(s => s.id === id)?.is_new)
 
@@ -149,7 +149,6 @@ export default function BuatKelasPage() {
     const { name, value } = e.target
     setForm(prev => {
       const next = { ...prev, [name]: value }
-      // Auto-fill price dari base_price saat tipe kelas dipilih
       if (name === 'class_type_id' && value) {
         const ct = classTypes.find(c => c.id === value)
         if (ct?.base_price) next.price = String(ct.base_price)
@@ -224,6 +223,7 @@ export default function BuatKelasPage() {
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
 
+          {/* Label Kelas */}
           <div>
             <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Label Kelas <span className="text-red-500">*</span></label>
             <input type="text" name="label" value={form.label} onChange={handleChange}
@@ -231,6 +231,7 @@ export default function BuatKelasPage() {
             <p className="text-xs text-[#7B78A8] mt-1">Nama unik untuk mengidentifikasi kelas ini</p>
           </div>
 
+          {/* Mata Pelajaran + Tipe Kelas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Mata Pelajaran <span className="text-red-500">*</span></label>
@@ -248,7 +249,7 @@ export default function BuatKelasPage() {
             </div>
           </div>
 
-          {/* Level — muncul setelah mata pelajaran dipilih */}
+          {/* Level Kurikulum — muncul setelah mata pelajaran dipilih */}
           {form.course_id && (
             <div>
               <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
@@ -257,7 +258,7 @@ export default function BuatKelasPage() {
               </label>
               {levels.length === 0 ? (
                 <div className="px-4 py-3 rounded-xl border border-dashed border-[#E5E3FF] text-xs text-[#7B78A8]">
-                  Belum ada level untuk kursus ini. Tambahkan di menu Kursus & Paket.
+                  Belum ada level untuk kursus ini. Tambahkan di menu Kursus &amp; Paket.
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -317,6 +318,7 @@ export default function BuatKelasPage() {
             </p>
           </div>
 
+          {/* Tutor */}
           <div>
             <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tutor <span className="text-red-500">*</span></label>
             <select name="tutor_id" value={form.tutor_id} onChange={handleChange} className={inputClass}>
@@ -325,12 +327,14 @@ export default function BuatKelasPage() {
             </select>
           </div>
 
+          {/* Link Zoom */}
           <div>
             <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Link Zoom (opsional)</label>
             <input type="url" name="zoom_link" value={form.zoom_link} onChange={handleChange}
               placeholder="https://zoom.us/j/xxxxxxxxxxxx" className={inputClass}/>
           </div>
 
+          {/* Status */}
           <div>
             <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Status Kelas</label>
             <select name="status" value={form.status} onChange={handleChange} className={inputClass}>
@@ -387,7 +391,6 @@ export default function BuatKelasPage() {
                               <span className={isSelected ? 'font-semibold text-[#5C4FE5]' : 'text-[#1A1640]'}>
                                 {s.profiles?.full_name ?? 'Siswa'}
                               </span>
-                              {/* Badge siswa baru */}
                               {s.is_new && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#E6F4EC] text-[#1A5C36]">Baru</span>
                               )}
