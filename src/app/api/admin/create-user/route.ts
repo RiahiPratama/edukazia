@@ -40,31 +40,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Password minimal 6 karakter' }, { status: 400 })
     }
 
-    // 1. Cek apakah email sudah terdaftar di auth
     const cleanEmail = email.trim().toLowerCase()
-    // listUsers dengan filter — lebih reliable dari listUsers() tanpa filter
-    const { data: existingData } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-    const existingUser = existingData?.users?.find(
-      (u: any) => u.email?.toLowerCase() === cleanEmail
-    ) ?? null
 
+    // Coba buat auth user baru langsung
+    // Trigger handle_new_user() sudah pakai ON CONFLICT DO NOTHING
+    // sehingga tidak akan error jika profile sudah ada
     let authUserId: string
+    const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
+      email:         cleanEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: full_name?.trim() || 'Orang Tua' },
+    })
 
-    if (existingUser) {
-      // Email sudah terdaftar di auth — gunakan user yang ada, update password
-      authUserId = existingUser.id
-      await supabase.auth.admin.updateUserById(authUserId, { password })
-    } else {
-      // Buat auth user baru
-      const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
-        email:          email.trim().toLowerCase(),
-        password,
-        email_confirm:  true,
-        user_metadata:  { full_name: full_name?.trim() || 'Orang Tua' },
-      })
-      if (createErr || !newUser.user) {
-        return NextResponse.json({ error: createErr?.message ?? 'Gagal membuat auth user' }, { status: 500 })
+    if (createErr) {
+      // Jika email sudah terdaftar, cari user yang ada lalu update password
+      if (createErr.message?.includes('already') || createErr.message?.includes('duplicate')) {
+        const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+        const existingUser = listData?.users?.find((u: any) => u.email?.toLowerCase() === cleanEmail)
+        if (!existingUser) {
+          return NextResponse.json({ error: createErr.message }, { status: 500 })
+        }
+        authUserId = existingUser.id
+        await supabase.auth.admin.updateUserById(authUserId, { password })
+      } else {
+        return NextResponse.json({ error: createErr.message }, { status: 500 })
       }
+    } else {
+      if (!newUser.user) return NextResponse.json({ error: 'Gagal membuat akun' }, { status: 500 })
       authUserId = newUser.user.id
     }
 
