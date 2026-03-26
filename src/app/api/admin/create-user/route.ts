@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         email:          email.trim().toLowerCase(),
         password,
         email_confirm:  true,
+        user_metadata:  { full_name: full_name?.trim() || 'Orang Tua' },
       })
       if (createErr || !newUser.user) {
         return NextResponse.json({ error: createErr?.message ?? 'Gagal membuat auth user' }, { status: 500 })
@@ -73,13 +74,14 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!existingProfile) {
-      // Buat profile baru
-      const { error: profileErr } = await supabase.from('profiles').insert({
+      // Upsert profile (trigger mungkin sudah buat dengan nama default,
+      // pakai upsert agar full_name yang benar ter-update)
+      const { error: profileErr } = await supabase.from('profiles').upsert({
         id:        authUserId,
         full_name: full_name?.trim() || 'Orang Tua',
-        role:      'student', // semua user portal siswa pakai role student
+        role:      'student',
         email:     email.trim().toLowerCase(),
-      })
+      }, { onConflict: 'id' })
       if (profileErr) {
         return NextResponse.json({ error: profileErr.message }, { status: 500 })
       }
