@@ -50,21 +50,17 @@ export default async function TutorJadwalPage({
     .lte('scheduled_at', todayEnd)
     .order('scheduled_at')
 
-  // ─── SESI MINGGU INI (kalender) ────────────────────────────────────────────
-  // FIX: filter keluar hari ini agar tidak dobel dengan card "Sesi Hari Ini"
-  const { data: allWeekSessions } = await supabase
+  // ─── SESI MINGGUAN (kalender, TANPA hari ini dan tanpa masa lalu) ─────────
+  const tomorrowStart = new Date(Date.UTC(y, m - 1, d + 1, 15, 0, 0) - 15 * 3600000)
+  const weekStart = weekOffset === 0 ? tomorrowStart : monday
+
+  const { data: sessions } = await supabase
     .from('sessions')
     .select('id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name), class_types(name))')
     .eq('class_groups.tutor_id', tutorId)
-    .gte('scheduled_at', toUTC(monday))
+    .gte('scheduled_at', toUTC(weekStart))
     .lte('scheduled_at', toUTC(sunday))
     .order('scheduled_at')
-
-  // Keluarkan sesi hari ini dari kalender mingguan
-  const sessions = (allWeekSessions ?? []).filter(s => {
-    const witDate = new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-    return witDate !== todayWITStr
-  })
 
   // ─── DOT INDICATOR bulan ini ─────────────────────────────────────────────
   const firstOfMonth = new Date(todayWITStr.slice(0, 7) + '-01T00:00:00+09:00')

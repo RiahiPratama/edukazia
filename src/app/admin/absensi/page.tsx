@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, Clock, AlertCircle, MessageCircle, X } from 'lucide-react'
+import { CheckCircle, Clock, AlertCircle, MessageCircle, X, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 
 const STATUS_COLOR: Record<string, string> = {
   hadir:       'bg-green-50 text-green-700 border-green-200',
@@ -29,41 +29,48 @@ function getInitials(name: string) {
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('id-ID', {
-    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura'
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
+  })
+}
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString('id-ID', {
+    weekday: 'short', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jayapura',
   })
 }
 function fmtTanggal() {
   return new Date().toLocaleDateString('id-ID', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura'
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura',
   })
 }
 
 export default function AdminAbsensiPage() {
   const supabase = createClient()
 
-  const [sessions,   setSessions]   = useState<any[]>([])
-  const [attMap,     setAttMap]     = useState<Record<string, Record<string, any>>>({})
-  const [enrollMap,  setEnrollMap]  = useState<Record<string, string[]>>({})
-  const [studentMap, setStudentMap] = useState<Record<string, { name: string; phone: string }>>({})
-  const [loading,    setLoading]    = useState(true)
+  const [sessions,    setSessions]    = useState<any[]>([])
+  const [attMap,      setAttMap]      = useState<Record<string, Record<string, any>>>({})
+  const [enrollMap,   setEnrollMap]   = useState<Record<string, string[]>>({})
+  const [studentMap,  setStudentMap]  = useState<Record<string, { name: string; phone: string }>>({})
+  const [laporanMap,  setLaporanMap]  = useState<Record<string, any>>({}) // session_id → laporan
+  const [expandedLap, setExpandedLap] = useState<Record<string, boolean>>({}) // session_id → expanded
+  const [loading,     setLoading]     = useState(true)
 
   // Reschedule modal
-  const [rescheduleSession, setRescheduleSession]   = useState<any | null>(null)
-  const [rescheduleAlasan,  setRescheduleAlasan]    = useState('')
-  const [savingReschedule,  setSavingReschedule]    = useState(false)
-  const [rescheduleMsg,     setRescheduleMsg]       = useState('')
+  const [rescheduleSession, setRescheduleSession] = useState<any | null>(null)
+  const [rescheduleAlasan,  setRescheduleAlasan]  = useState('')
+  const [savingReschedule,  setSavingReschedule]  = useState(false)
+  const [rescheduleMsg,     setRescheduleMsg]     = useState('')
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
-    const now = new Date()
-    const todayWIT = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-    const prevDateObj = new Date(todayWIT + 'T00:00:00+09:00')
-    prevDateObj.setDate(prevDateObj.getDate() - 1)
-    const prevDate = prevDateObj.toLocaleDateString('en-CA')
-    const startUtc = `${prevDate}T15:00:00+00:00`
-    const endUtc   = `${todayWIT}T14:59:59+00:00`
+
+    // FIX: gunakan offset +09:00 eksplisit — sebelumnya setDate() pakai
+    // timezone server (UTC) sehingga startUtc jadi kemarin WIT
+    const todayWIT   = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+    const startUtc   = `${todayWIT}T00:00:00+09:00`
+    const endUtc     = `${todayWIT}T23:59:59+09:00`
 
     const { data: sess } = await supabase
       .from('sessions')
@@ -79,13 +86,24 @@ export default function AdminAbsensiPage() {
     const sessionIds = (sess ?? []).map((s: any) => s.id)
     const classIds   = [...new Set((sess ?? []).map((s: any) => s.class_groups?.id).filter(Boolean))]
 
-    const { data: enrollments } = classIds.length > 0
-      ? await supabase.from('enrollments').select('id, student_id, class_group_id').in('class_group_id', classIds)
-      : { data: [] }
-
-    const { data: attendances } = sessionIds.length > 0
-      ? await supabase.from('attendances').select('session_id, student_id, status, notes').in('session_id', sessionIds)
-      : { data: [] }
+    const [
+      { data: enrollments },
+      { data: attendances },
+      { data: laporan },
+    ] = await Promise.all([
+      classIds.length > 0
+        ? supabase.from('enrollments').select('id, student_id, class_group_id').in('class_group_id', classIds as string[])
+        : { data: [] },
+      sessionIds.length > 0
+        ? supabase.from('attendances').select('session_id, student_id, status, notes').in('session_id', sessionIds)
+        : { data: [] },
+      // Laporan tutor untuk sesi hari ini
+      sessionIds.length > 0
+        ? supabase.from('session_reports')
+            .select('id, session_id, confirmed_at, material_notes, recording_url, tutors(profiles(full_name))')
+            .in('session_id', sessionIds)
+        : { data: [] },
+    ])
 
     const studentIds = [...new Set((enrollments ?? []).map((e: any) => e.student_id).filter(Boolean))]
     const { data: students } = studentIds.length > 0
@@ -118,6 +136,11 @@ export default function AdminAbsensiPage() {
     })
     setEnrollMap(eMap)
 
+    // Map laporan per session_id
+    const lMap: Record<string, any> = {}
+    ;(laporan ?? []).forEach((l: any) => { lMap[l.session_id] = l })
+    setLaporanMap(lMap)
+
     setLoading(false)
   }
 
@@ -144,9 +167,10 @@ export default function AdminAbsensiPage() {
   }
 
   // Summary
-  let totalHadir = 0, totalTidakHadir = 0, totalBelum = 0, totalReschedule = 0
+  let totalHadir = 0, totalTidakHadir = 0, totalBelum = 0, totalReschedule = 0, totalLaporan = 0
   sessions.forEach(s => {
     if (s.status === 'rescheduled') { totalReschedule++; return }
+    if (laporanMap[s.id]) totalLaporan++
     const siswaIds = enrollMap[s.class_groups?.id] ?? []
     const sesAtt   = attMap[s.id] ?? {}
     siswaIds.forEach((sid: string) => {
@@ -182,11 +206,9 @@ export default function AdminAbsensiPage() {
             </div>
             <div className="px-5 py-4 space-y-3">
               <div className="flex items-start gap-2 px-3 py-2.5 bg-blue-50 rounded-xl border border-blue-100">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" className="flex-shrink-0 mt-0.5">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
+                <AlertCircle size={13} className="text-blue-600 flex-shrink-0 mt-0.5"/>
                 <p className="text-[11px] text-blue-700 leading-relaxed">
-                  Sesi akan ditandai dijadwal ulang dan <strong>tidak terhitung</strong> dari paket siswa. Notifikasi dikirim ke orang tua.
+                  Sesi akan ditandai dijadwal ulang dan <strong>tidak terhitung</strong> dari paket siswa.
                 </p>
               </div>
               <div>
@@ -222,7 +244,7 @@ export default function AdminAbsensiPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-white rounded-2xl border border-green-100 p-4">
           <div className="text-2xl font-black text-green-600">{totalHadir}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Hadir</div>
@@ -239,6 +261,10 @@ export default function AdminAbsensiPage() {
           <div className="text-2xl font-black text-[#7B78A8]">{totalBelum}</div>
           <div className="text-xs text-[#7B78A8] font-semibold mt-1">Belum Diabsen</div>
         </div>
+        <div className="bg-white rounded-2xl border border-purple-100 p-4">
+          <div className="text-2xl font-black text-[#5C4FE5]">{totalLaporan}</div>
+          <div className="text-xs text-[#7B78A8] font-semibold mt-1">Laporan Masuk</div>
+        </div>
       </div>
 
       {/* Daftar Sesi */}
@@ -250,18 +276,21 @@ export default function AdminAbsensiPage() {
       ) : (
         <div className="space-y-4">
           {sessions.map((s: any) => {
-            const kelasId    = s.class_groups?.id
-            const kelasLabel = s.class_groups?.label ?? '—'
-            const tutorName  = s.class_groups?.tutors?.profiles?.full_name ?? '—'
-            const courseName = s.class_groups?.courses?.name ?? '—'
-            const siswaIds   = enrollMap[kelasId] ?? []
-            const sesAtt     = attMap[s.id] ?? {}
-            const sudahDiabsen = Object.keys(sesAtt).length > 0
-            const waktu      = fmtTime(s.scheduled_at)
+            const kelasId       = s.class_groups?.id
+            const kelasLabel    = s.class_groups?.label ?? '—'
+            const tutorName     = s.class_groups?.tutors?.profiles?.full_name ?? '—'
+            const courseName    = s.class_groups?.courses?.name ?? '—'
+            const siswaIds      = enrollMap[kelasId] ?? []
+            const sesAtt        = attMap[s.id] ?? {}
+            const sudahDiabsen  = Object.keys(sesAtt).length > 0
+            const waktu         = fmtTime(s.scheduled_at)
             const isRescheduled = s.status === 'rescheduled'
+            const laporan       = laporanMap[s.id]
+            const lapExpanded   = expandedLap[s.id] ?? false
 
             return (
               <div key={s.id} className={`bg-white rounded-2xl border overflow-hidden ${isRescheduled ? 'border-amber-200' : 'border-[#E5E3FF]'}`}>
+
                 {/* Header sesi */}
                 <div className={`px-5 py-4 border-b ${isRescheduled ? 'bg-amber-50 border-amber-100' : 'border-[#F0EFFF]'}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -270,7 +299,7 @@ export default function AdminAbsensiPage() {
                         <span className="text-sm font-black text-[#5C4FE5]">{waktu} WIT</span>
                         <span className="text-sm font-bold text-[#1A1640]">{kelasLabel}</span>
                         {isRescheduled ? (
-                          <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                             🔄 Dijadwal Ulang
                           </span>
                         ) : sudahDiabsen ? (
@@ -280,6 +309,11 @@ export default function AdminAbsensiPage() {
                         ) : (
                           <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F0EFFF] text-[#7B78A8]">
                             <Clock size={10}/> Belum diabsen
+                          </span>
+                        )}
+                        {laporan && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#5C4FE5]">
+                            <FileText size={10}/> Laporan masuk
                           </span>
                         )}
                       </div>
@@ -321,7 +355,6 @@ export default function AdminAbsensiPage() {
                         const status = att?.status ?? null
                         const notes  = att?.notes ?? ''
                         const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-
                         return (
                           <div key={sid} className="flex items-center gap-3 px-5 py-3 hover:bg-[#F7F6FF] transition-colors">
                             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
@@ -360,6 +393,71 @@ export default function AdminAbsensiPage() {
                 {isRescheduled && (
                   <div className="px-5 py-3 text-xs text-amber-700 bg-amber-50/50">
                     Sesi ini telah dijadwal ulang. Jadwal pengganti akan ditentukan oleh admin.
+                  </div>
+                )}
+
+                {/* ── LAPORAN TUTOR ──────────────────────────────────────────── */}
+                {laporan && (
+                  <div className="border-t border-[#E5E3FF]">
+                    {/* Toggle header laporan */}
+                    <button
+                      onClick={() => setExpandedLap(prev => ({ ...prev, [s.id]: !lapExpanded }))}
+                      className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#F7F6FF] transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-[#EEEDFE] flex items-center justify-center flex-shrink-0">
+                          <FileText size={12} className="text-[#5C4FE5]"/>
+                        </div>
+                        <span className="text-xs font-bold text-[#5C4FE5]">Laporan Tutor</span>
+                        <span className="text-[10px] text-[#7B78A8]">
+                          · {fmtDateTime(laporan.confirmed_at)}
+                        </span>
+                      </div>
+                      {lapExpanded
+                        ? <ChevronUp size={14} className="text-[#7B78A8]"/>
+                        : <ChevronDown size={14} className="text-[#7B78A8]"/>
+                      }
+                    </button>
+
+                    {lapExpanded && (
+                      <div className="px-5 pb-4 space-y-3">
+                        {laporan.material_notes ? (
+                          <div className="bg-[#F7F6FF] rounded-xl p-3 border border-[#E5E3FF]">
+                            <div className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">
+                              Catatan Materi
+                            </div>
+                            <p className="text-sm text-[#1A1640] leading-relaxed whitespace-pre-wrap">
+                              {laporan.material_notes}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#7B78A8] italic">Tidak ada catatan materi.</p>
+                        )}
+                        {laporan.recording_url && (
+                          <a
+                            href={laporan.recording_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold hover:bg-blue-100 transition"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                            </svg>
+                            Lihat Rekaman
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Belum ada laporan */}
+                {!laporan && !isRescheduled && sudahDiabsen && (
+                  <div className="border-t border-[#E5E3FF] px-5 py-2.5">
+                    <span className="text-[10px] text-[#C4BFFF] flex items-center gap-1.5">
+                      <FileText size={10}/>
+                      Laporan tutor belum masuk
+                    </span>
                   </div>
                 )}
               </div>
