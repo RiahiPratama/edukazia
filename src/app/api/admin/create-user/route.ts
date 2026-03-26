@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password, role, full_name, student_id } = await req.json()
 
-    if (!email || !password || !student_id) {
-      return NextResponse.json({ error: 'email, password, dan student_id wajib diisi' }, { status: 400 })
+    if (!email || !password) {
+      return NextResponse.json({ error: 'email dan password wajib diisi' }, { status: 400 })
     }
     if (password.length < 6) {
       return NextResponse.json({ error: 'Password minimal 6 karakter' }, { status: 400 })
@@ -98,14 +98,15 @@ export async function POST(req: NextRequest) {
         .eq('id', authUserId)
     }
 
-    // 3. Link ke student: set parent_profile_id
-    const { error: linkErr } = await supabase
-      .from('students')
-      .update({ parent_profile_id: authUserId })
-      .eq('id', student_id)
-
-    if (linkErr) {
-      return NextResponse.json({ error: linkErr.message }, { status: 500 })
+    // 3. Link ke student jika student_id diberikan
+    if (student_id) {
+      const { error: linkErr } = await supabase
+        .from('students')
+        .update({ parent_profile_id: authUserId })
+        .eq('id', student_id)
+      if (linkErr) {
+        return NextResponse.json({ error: linkErr.message }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ ok: true, profile_id: authUserId })
