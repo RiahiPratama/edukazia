@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { Eye, EyeOff } from 'lucide-react'
 
 type Tab = 'email' | 'phone'
 type Mode = 'login' | 'forgot'
@@ -21,8 +22,10 @@ function LoginForm() {
   const [phonePassword, setPhonePassword] = useState('')
   const [phoneStep, setPhoneStep] = useState<'input' | 'password'>('input')
   const [foundEmail, setFoundEmail] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [msg, setMsg] = useState<{ text: string; err: boolean } | null>(null)
+  const [loading,     setLoading]     = useState(false)
+  const [msg,         setMsg]         = useState<{ text: string; err: boolean } | null>(null)
+  const [showPass,    setShowPass]    = useState(false)
+  const [showPhonePass, setShowPhonePass] = useState(false)
 
   async function redirectByRole() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -196,9 +199,15 @@ function LoginForm() {
                       Lupa password?
                     </button>
                   </div>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+                  <div className="relative">
+                    <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3.5 py-2.5 pr-11 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition" />
+                    <button type="button" onClick={() => setShowPass(p => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5] transition-colors p-1">
+                      {showPass ? <EyeOff size={16}/> : <Eye size={16}/>}
+                    </button>
+                  </div>
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 mt-2">
@@ -238,14 +247,20 @@ function LoginForm() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Password</label>
-                  <input
-                    type="password"
-                    value={phonePassword}
-                    onChange={e => setPhonePassword(e.target.value)}
-                    placeholder="••••••••"
-                    autoFocus
-                    className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPhonePass ? 'text' : 'password'}
+                      value={phonePassword}
+                      onChange={e => setPhonePassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoFocus
+                      className="w-full px-3.5 py-2.5 pr-11 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+                    />
+                    <button type="button" onClick={() => setShowPhonePass(p => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5] transition-colors p-1">
+                      {showPhonePass ? <EyeOff size={16}/> : <Eye size={16}/>}
+                    </button>
+                  </div>
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
