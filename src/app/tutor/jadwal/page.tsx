@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import TutorJadwalClient from './TutorJadwalClient'
 
 export const dynamic = 'force-dynamic'
@@ -20,36 +19,28 @@ export default async function TutorJadwalPage({
   const params     = await searchParams
   const weekOffset = parseInt(params.week ?? '0')
 
-  // Noon WIT agar .getDay() akurat
+  // Tanggal hari ini dalam WIT (Asia/Jayapura, UTC+9)
   const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
-  // Parse tanggal WIT secara eksplisit agar tidak terpengaruh UTC offset
-  const [y, m, d]   = todayWITStr.split('-').map(Number)
-  const noonWIT     = new Date(Date.UTC(y, m - 1, d, 3, 0, 0)) // noon WIT = 03:00 UTC
-  const rawDay      = noonWIT.getUTCDay() // pakai UTC karena kita set UTC secara eksplisit
-  const dayOfWeek   = rawDay === 0 ? 6 : rawDay - 1
 
-  // monday & sunday dalam WIT (jam 00:00 WIT = 15:00 UTC hari sebelumnya)
-  const mondayDate  = new Date(Date.UTC(y, m - 1, d - dayOfWeek + weekOffset * 7, 15, 0, 0))
-  const sundayDate  = new Date(Date.UTC(y, m - 1, d - dayOfWeek + weekOffset * 7 + 6, 15, 0, 0))
-  const monday      = new Date(mondayDate.getTime() - 15 * 3600000) // 00:00 WIT
-  const sunday      = new Date(sundayDate.getTime() + 8 * 3600000 + 59 * 60000 + 59000) // 23:59 WIT
+  // Noon WIT agar getDay() akurat
+  const [y, m, d] = todayWITStr.split('-').map(Number)
+  const noonWIT   = new Date(Date.UTC(y, m - 1, d, 3, 0, 0)) // 03:00 UTC = 12:00 WIT
+  const rawDay    = noonWIT.getUTCDay()
+  const dayOfWeek = rawDay === 0 ? 6 : rawDay - 1 // Senin=0 … Minggu=6
 
-  const toUTC = (d: Date) => new Date(d.getTime() - 9 * 3600000).toISOString()
+  // Batas minggu: Senin 00:00 WIT s.d. Minggu 23:59 WIT
+  const mondayDate = new Date(Date.UTC(y, m - 1, d - dayOfWeek + weekOffset * 7, 15, 0, 0))
+  const sundayDate = new Date(Date.UTC(y, m - 1, d - dayOfWeek + weekOffset * 7 + 6, 15, 0, 0))
+  const monday     = new Date(mondayDate.getTime() - 15 * 3600000)
+  const sunday     = new Date(sundayDate.getTime() + 8 * 3600000 + 59 * 60000 + 59000)
 
-  // Sesi minggu ini
-  const { data: sessions } = await supabase
-    .from('sessions')
-    .select('id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name), class_types(name))')
-    .eq('class_groups.tutor_id', tutorId)
-    .gte('scheduled_at', toUTC(monday))
-    .lte('scheduled_at', toUTC(sunday))
-    .order('scheduled_at')
+  const toUTC = (dt: Date) => new Date(dt.getTime() - 9 * 3600000).toISOString()
 
-  // Sesi hari ini (untuk card khusus)
-  const prevDate = new Date(todayWITStr + 'T00:00:00+09:00')
-  prevDate.setDate(prevDate.getDate() - 1)
-  const todayStart = prevDate.toLocaleDateString('en-CA') + 'T15:00:00+00:00'
-  const todayEnd   = todayWITStr + 'T14:59:59+00:00'
+  // ─── SESI HARI INI ────────────────────────────────────────────────────────
+  // FIX: gunakan offset +09:00 eksplisit — sebelumnya setDate() memakai
+  // local timezone server (UTC), sehingga batas jadi kemarin WIT.
+  const todayStart = `${todayWITStr}T00:00:00+09:00`
+  const todayEnd   = `${todayWITStr}T23:59:59+09:00`
 
   const { data: sesiHariIni } = await supabase
     .from('sessions')
@@ -59,7 +50,23 @@ export default async function TutorJadwalPage({
     .lte('scheduled_at', todayEnd)
     .order('scheduled_at')
 
-  // Dot indicator bulan ini
+  // ─── SESI MINGGU INI (kalender) ────────────────────────────────────────────
+  // FIX: filter keluar hari ini agar tidak dobel dengan card "Sesi Hari Ini"
+  const { data: allWeekSessions } = await supabase
+    .from('sessions')
+    .select('id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name), class_types(name))')
+    .eq('class_groups.tutor_id', tutorId)
+    .gte('scheduled_at', toUTC(monday))
+    .lte('scheduled_at', toUTC(sunday))
+    .order('scheduled_at')
+
+  // Keluarkan sesi hari ini dari kalender mingguan
+  const sessions = (allWeekSessions ?? []).filter(s => {
+    const witDate = new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+    return witDate !== todayWITStr
+  })
+
+  // ─── DOT INDICATOR bulan ini ─────────────────────────────────────────────
   const firstOfMonth = new Date(todayWITStr.slice(0, 7) + '-01T00:00:00+09:00')
   const lastOfMonth  = new Date(firstOfMonth)
   lastOfMonth.setMonth(lastOfMonth.getMonth() + 1)
@@ -75,7 +82,7 @@ export default async function TutorJadwalPage({
 
   return (
     <TutorJadwalClient
-      sessions={sessions ?? []}
+      sessions={sessions}
       sesiHariIni={sesiHariIni ?? []}
       sessionsBulanIni={sessionsBulanIni ?? []}
       todayWITStr={todayWITStr}

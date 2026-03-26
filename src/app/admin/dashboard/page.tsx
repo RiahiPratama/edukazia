@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import {
   CalendarDays, GraduationCap, Users, BookOpen,
-  Coins, DollarSign, UserPlus, CreditCard
+  Coins, DollarSign, UserPlus, FileText, ClipboardList,
 } from 'lucide-react'
 import SesiHariIniAdminClient from './SesiHariIniAdminClient'
 import AnnouncementSection from './AnnouncementSection'
@@ -16,13 +16,12 @@ export default async function AdminDashboard() {
   const endUTC   = `${todayWIT}T23:59:59+09:00`
 
   // Fetch announcements aktif hari ini
-  const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const { data: announcements } = await supabase
     .from('announcements')
     .select('*')
     .eq('is_active', true)
-    .lte('start_date', todayDate)
-    .gte('end_date', todayDate)
+    .lte('start_date', todayWIT)
+    .gte('end_date', todayWIT)
     .order('priority', { ascending: true })
 
   const [
@@ -30,7 +29,7 @@ export default async function AdminDashboard() {
     { count: totalTutor },
     { count: totalKelas },
     { data: sesiHariIni },
-    { data: pembayaranTerbaru },
+    { data: laporanTerbaru },
   ] = await Promise.all([
     supabase.from('students').select('*', { count: 'exact', head: true }),
     supabase.from('tutors').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -41,9 +40,17 @@ export default async function AdminDashboard() {
       .gte('scheduled_at', startUTC)
       .lte('scheduled_at', endUTC)
       .order('scheduled_at'),
-    supabase.from('payments')
-      .select(`id, amount, method, paid_at, students(profiles(full_name))`)
-      .order('paid_at', { ascending: false })
+    // Laporan tutor terbaru (gantikan pembayaran terbaru)
+    supabase.from('session_reports')
+      .select(`
+        id, confirmed_at, material_notes,
+        sessions(
+          scheduled_at,
+          class_groups(label, courses(name))
+        ),
+        tutors(profiles(full_name))
+      `)
+      .order('confirmed_at', { ascending: false })
       .limit(5),
   ])
 
@@ -57,8 +64,12 @@ export default async function AdminDashboard() {
   function formatRupiah(n: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
-  function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+  function formatDateTime(iso: string) {
+    return new Date(iso).toLocaleDateString('id-ID', {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Jayapura',
+    })
   }
 
   return (
@@ -106,7 +117,7 @@ export default async function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Sesi hari ini — client component untuk countdown */}
+        {/* Sesi hari ini */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1640]">Sesi Hari Ini</h2>
@@ -117,42 +128,64 @@ export default async function AdminDashboard() {
           <SesiHariIniAdminClient sesiHariIni={sesiHariIni ?? []} />
         </div>
 
-        {/* Pembayaran terbaru */}
+        {/* Laporan Tutor Terbaru — menggantikan Pembayaran Terbaru */}
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-[#1A1640]">Pembayaran Terbaru</h2>
-            <Link href="/admin/pembayaran" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
+            <h2 className="font-bold text-[#1A1640]">Laporan Tutor</h2>
+            <Link href="/admin/absensi" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
               Lihat semua →
             </Link>
           </div>
-          {!pembayaranTerbaru || pembayaranTerbaru.length === 0 ? (
+          {!laporanTerbaru || laporanTerbaru.length === 0 ? (
             <div className="text-center py-8 text-[#7B78A8] text-sm">
-              <CreditCard size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
-              Belum ada pembayaran
+              <ClipboardList size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
+              Belum ada laporan
             </div>
           ) : (
             <div className="space-y-3">
-              {pembayaranTerbaru.map((p: any) => (
-                <div key={p.id} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[#F0EFFF] flex items-center justify-center text-xs font-bold text-[#5C4FE5] flex-shrink-0">
-                    {(p.students?.profiles?.full_name ?? 'S').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-[#1A1640] truncate">
-                      {p.students?.profiles?.full_name ?? '—'}
+              {laporanTerbaru.map((lap: any) => {
+                const tutor = Array.isArray(lap.tutors) ? lap.tutors[0] : lap.tutors
+                const sesi  = Array.isArray(lap.sessions) ? lap.sessions[0] : lap.sessions
+                const cg    = Array.isArray(sesi?.class_groups) ? sesi?.class_groups[0] : sesi?.class_groups
+                const tutorName = tutor?.profiles?.full_name ?? '—'
+                const kelasLabel = cg?.label ?? '—'
+                const courseName = cg?.courses?.name ?? ''
+                return (
+                  <div key={lap.id} className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[#F0EFFF] flex items-center justify-center text-xs font-bold text-[#5C4FE5] flex-shrink-0 mt-0.5">
+                      {tutorName.charAt(0).toUpperCase()}
                     </div>
-                    <div className="text-xs text-[#7B78A8]">{formatDate(p.paid_at)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-[#1A1640] truncate">
+                        {tutorName}
+                      </div>
+                      <div className="text-xs text-[#7B78A8] truncate">
+                        {kelasLabel}{courseName ? ` · ${courseName}` : ''}
+                      </div>
+                      <div className="text-[10px] text-[#A09EC0] mt-0.5">
+                        {formatDateTime(lap.confirmed_at)}
+                      </div>
+                      {lap.material_notes && (
+                        <div className="text-[10px] text-[#7B78A8] mt-1 line-clamp-2 leading-relaxed bg-[#F7F6FF] rounded-lg px-2 py-1">
+                          {lap.material_notes}
+                        </div>
+                      )}
+                    </div>
+                    <Link
+                      href={`/admin/absensi`}
+                      className="flex-shrink-0 text-[#C4BFFF] hover:text-[#5C4FE5] transition-colors mt-0.5"
+                    >
+                      <FileText size={13}/>
+                    </Link>
                   </div>
-                  <div className="text-xs font-bold text-green-600 flex-shrink-0">
-                    +{formatRupiah(p.amount)}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
-          <Link href="/admin/pembayaran?new=1"
+          <Link href="/admin/absensi"
             className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold">
-            + Catat Pembayaran
+            <ClipboardList size={14}/>
+            Lihat Semua Laporan
           </Link>
         </div>
       </div>
