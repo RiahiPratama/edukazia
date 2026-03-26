@@ -115,7 +115,7 @@ export default function SiswaPage() {
       // Fetch parent data untuk search via ortu
       const { data: studentRows } = await supabase
         .from('students')
-        .select('id, parent_profile_id, relation_phone')
+        .select('id, parent_profile_id, relation_phone, relation_email')
         .in('id', students.map((s: any) => s.id))
 
       const parentProfileIds = [...new Set(
@@ -130,7 +130,7 @@ export default function SiswaPage() {
       ;(studentRows ?? []).forEach((s: any) => {
         const pp = parentProfMap[s.parent_profile_id]
         pMap[s.id] = {
-          email: pp?.email ?? '',
+          email: (pp?.email ?? '') + ' ' + (s.relation_email ?? ''),
           phone: (pp?.phone ?? '') + ' ' + (s.relation_phone ?? ''),
         }
       })
