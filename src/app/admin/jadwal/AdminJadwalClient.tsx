@@ -101,6 +101,24 @@ export default function AdminJadwalClient({
     router.refresh()
   }
 
+  // Batalkan status libur → kembalikan ke scheduled
+  const [batalkanId, setBatalkanId] = useState<string | null>(null)
+  async function handleBatalkanLibur(s: any) {
+    setBatalkanId(s.id)
+    await fetch('/api/sessions/update', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id:           s.id,
+        status:       'scheduled',
+        scheduled_at: s.scheduled_at,
+        zoom_link:    s.zoom_link ?? null,
+      }),
+    })
+    setBatalkanId(null)
+    router.refresh()
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -162,9 +180,9 @@ export default function AdminJadwalClient({
                 const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
                 const tutorName = s.class_groups?.tutors?.profiles?.full_name ?? '—'
                 return (
-                  <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F6FF] transition">
+                  <div key={s.id} className={`flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F6FF] transition ${s.status === 'holiday' ? 'bg-teal-50/50' : ''}`}>
                     <div className="w-14 flex-shrink-0 text-center">
-                      <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+                      <div className={`text-sm font-black ${s.status === 'holiday' ? 'text-teal-600' : 'text-[#5C4FE5]'}`}>{fmtTime(s.scheduled_at)}</div>
                       <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
                     </div>
                     <div className="w-0.5 h-10 bg-[#E5E3FF] flex-shrink-0 rounded-full"/>
@@ -174,6 +192,24 @@ export default function AdminJadwalClient({
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${st.pill}`}>{st.label}</span>
+                      {/* Tombol khusus untuk status holiday */}
+                      {s.status === 'holiday' && (
+                        <button
+                          onClick={() => handleBatalkanLibur(s)}
+                          disabled={batalkanId === s.id}
+                          title="Batalkan libur → kembalikan ke Terjadwal"
+                          className="text-xs px-2.5 py-1 rounded-lg font-semibold bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {batalkanId === s.id ? (
+                            <RefreshCw size={11} className="animate-spin"/>
+                          ) : (
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
+                          )}
+                          Batalkan Libur
+                        </button>
+                      )}
                       {s.zoom_link && (
                         <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
                           className="text-[#5C4FE5] hover:opacity-70 p-1.5 rounded-lg hover:bg-[#F0EFFF] transition">
