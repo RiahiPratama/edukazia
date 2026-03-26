@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, Users, Clock, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { BookOpen, Users, Clock, ChevronDown, ChevronUp, ExternalLink, CalendarDays } from 'lucide-react'
 
 const AVATAR_COLORS = [
   { bg: '#EEEDFE', text: '#3C3489' },
