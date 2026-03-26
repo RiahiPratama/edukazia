@@ -79,23 +79,8 @@ export default function SiswaBaruPage() {
 
     try {
       // -------------------------------------------------------
-      // 1. Buat profile siswa (tanpa auth dulu)
-      // -------------------------------------------------------
-      const { data: profileSiswa, error: errProfileSiswa } = await supabase
-        .from('profiles')
-        .insert({
-          full_name: form.full_name.trim(),
-          phone:     form.phone.trim()  || null,
-          email:     form.email.trim()  || null,
-          role:      'student',
-        })
-        .select('id').single()
-
-      if (errProfileSiswa) throw new Error(`Gagal buat profil siswa: ${errProfileSiswa.message}`)
-      profileSiswaId = profileSiswa.id
-
-      // -------------------------------------------------------
-      // 2. Buat akun auth siswa (jika diaktifkan)
+      // 1a. Jika buatAkunSiswa: buat auth user dulu, pakai UUID-nya
+      //     sebagai profile_id agar auth.uid() cocok dengan students.profile_id
       // -------------------------------------------------------
       if (buatAkunSiswa) {
         const res = await fetch('/api/admin/create-user', {
@@ -104,12 +89,35 @@ export default function SiswaBaruPage() {
           body: JSON.stringify({
             email:      akunSiswa.email.trim(),
             password:   akunSiswa.password,
-            profile_id: profileSiswa.id,
+            full_name:  form.full_name.trim(),
             role:       'student',
           }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(`Gagal buat akun siswa: ${json.error}`)
+        profileSiswaId = json.profile_id
+
+        // Update profile dengan data lengkap (trigger sudah buat profile dasar)
+        await supabase.from('profiles').update({
+          full_name: form.full_name.trim(),
+          phone:     form.phone.trim()  || null,
+          email:     akunSiswa.email.trim(),
+        }).eq('id', profileSiswaId)
+
+      } else {
+        // 1b. Tidak buat akun siswa — buat profile manual saja
+        const { data: profileSiswa, error: errProfileSiswa } = await supabase
+          .from('profiles')
+          .insert({
+            full_name: form.full_name.trim(),
+            phone:     form.phone.trim()  || null,
+            email:     form.email.trim()  || null,
+            role:      'student',
+          })
+          .select('id').single()
+
+        if (errProfileSiswa) throw new Error(`Gagal buat profil siswa: ${errProfileSiswa.message}`)
+        profileSiswaId = profileSiswa.id
       }
 
       // -------------------------------------------------------
@@ -151,7 +159,7 @@ export default function SiswaBaruPage() {
       // 4. Insert ke tabel students
       // -------------------------------------------------------
       const { error: errStudent } = await supabase.from('students').insert({
-        profile_id:        profileSiswa.id,
+        profile_id:        profileSiswaId!,
         parent_profile_id: parentProfileId,
         birth_date:        form.birth_date        || null,
         province:          form.province          || null,
@@ -170,8 +178,8 @@ export default function SiswaBaruPage() {
       router.push('/admin/siswa')
 
     } catch (err: any) {
-      // Rollback: hapus profile siswa jika sudah dibuat
-      if (profileSiswaId) {
+      // Rollback: hapus profile siswa jika sudah dibuat (hanya jika bukan akun auth)
+      if (profileSiswaId && !buatAkunSiswa) {
         await supabase.from('profiles').delete().eq('id', profileSiswaId)
       }
       setError(err.message ?? 'Terjadi kesalahan.')
