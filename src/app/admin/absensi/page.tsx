@@ -100,7 +100,7 @@ export default function AdminAbsensiPage() {
       // Laporan tutor untuk sesi hari ini
       sessionIds.length > 0
         ? supabase.from('session_reports')
-            .select('id, session_id, confirmed_at, material_notes, recording_url, tutors(profiles(full_name))')
+            .select('id, session_id, confirmed_at, material_notes, recording_url')
             .in('session_id', sessionIds)
         : { data: [] },
     ])

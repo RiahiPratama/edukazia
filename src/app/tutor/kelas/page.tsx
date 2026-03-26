@@ -185,8 +185,8 @@ export default function TutorKelasPage() {
                   <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="text-xs text-[#7B78A8]">{course?.name ?? '—'} · {typeName}</span>
                     {nextSesi && (
-                      <span className="text-[10px] font-semibold text-[#5C4FE5]">
-                        📅 {fmtDate(nextSesi.scheduled_at)} · {fmtTime(nextSesi.scheduled_at)} WIT
+                      <span className="text-[10px] font-semibold text-[#5C4FE5] flex items-center gap-1">
+                        <CalendarDays size={10}/> {fmtDate(nextSesi.scheduled_at)} · {fmtTime(nextSesi.scheduled_at)} WIT
                       </span>
                     )}
                   </div>

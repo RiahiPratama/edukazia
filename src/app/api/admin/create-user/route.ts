@@ -40,17 +40,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Password minimal 6 karakter' }, { status: 400 })
     }
 
-    // 1. Cek apakah email sudah terdaftar di auth
-    const { data: existingUsers } = await supabase.auth.admin.listUsers()
-    const existingUser = existingUsers?.users.find(u => u.email === email.trim().toLowerCase())
+    // 1. Cek apakah email sudah terdaftar di auth menggunakan getUserByEmail
+    // (listUsers() hanya return maks 50 user — tidak reliable untuk cek email)
+    const cleanEmail = email.trim().toLowerCase()
+    const { data: existingData } = await supabase.auth.admin.getUserByEmail(cleanEmail)
+    const existingUser = existingData?.user ?? null
 
     let authUserId: string
 
     if (existingUser) {
-      // Email sudah terdaftar di auth — gunakan user yang ada
+      // Email sudah terdaftar di auth — gunakan user yang ada, update password
       authUserId = existingUser.id
-
-      // Update password jika diminta
       await supabase.auth.admin.updateUserById(authUserId, { password })
     } else {
       // Buat auth user baru
@@ -67,11 +67,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Cek apakah profile sudah ada untuk auth user ini
+    // Pakai maybeSingle() — .single() throw error jika tidak ada row
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', authUserId)
-      .single()
+      .maybeSingle()
 
     if (!existingProfile) {
       // Upsert profile (trigger mungkin sudah buat dengan nama default,
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
         id:        authUserId,
         full_name: full_name?.trim() || 'Orang Tua',
         role:      'student',
-        email:     email.trim().toLowerCase(),
+        email:     cleanEmail,
       }, { onConflict: 'id' })
       if (profileErr) {
         return NextResponse.json({ error: profileErr.message }, { status: 500 })
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Update email di profile jika belum ada
       await supabase.from('profiles')
-        .update({ email: email.trim().toLowerCase() })
+        .update({ email: cleanEmail })
         .eq('id', authUserId)
     }
 

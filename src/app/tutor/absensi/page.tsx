@@ -400,13 +400,10 @@ export default function TutorAbsensiPage() {
         .from('session_reports').select('session_id').in('session_id', sesiIds)
       setLaporanSesiIds(new Set((reports ?? []).map((r: any) => r.session_id)) as Set<string>)
 
-      // Reminder: sesi completed > 5 jam tanpa laporan
+      // Reminder: sesi completed tanpa laporan (langsung tampil, tidak perlu tunggu 5 jam)
       const completedSesi = (sesi ?? []).filter((s: any) => s.status === 'completed')
       const reminderList = completedSesi.filter((s: any) => {
-        const hasLaporan = (reports ?? []).some((r: any) => r.session_id === s.id)
-        if (hasLaporan) return false
-        const diffJam = (Date.now() - new Date(s.scheduled_at).getTime()) / (1000 * 60 * 60)
-        return diffJam >= 5
+        return !(reports ?? []).some((r: any) => r.session_id === s.id)
       })
       setReminderSesi(reminderList)
     }
@@ -850,8 +847,9 @@ export default function TutorAbsensiPage() {
                       </p>
                     )}
 
-                    {/* Tombol Reschedule Sesi */}
-                    {selectedSesi?.status !== 'rescheduled' && (
+                    {/* Tombol Reschedule Sesi — sembunyikan jika sudah ada siswa yang hadir */}
+                    {selectedSesi?.status !== 'rescheduled' &&
+                     !Object.values(absensiMap).some(v => v === 'hadir') && (
                       <button
                         onClick={() => { setShowReschedule(true); setRescheduleMsg('') }}
                         className="w-full py-2.5 border border-amber-300 text-amber-700 font-bold rounded-xl text-sm transition hover:bg-amber-50 flex items-center justify-center gap-2">

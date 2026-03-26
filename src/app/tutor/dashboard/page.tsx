@@ -85,12 +85,10 @@ export default async function TutorDashboardPage() {
   }
 
   // Sesi hari ini WIT — range UTC yang tepat
-  const todayWIT    = todayWITStr
-  const prevDateObj = new Date(todayWIT + 'T00:00:00+09:00')
-  prevDateObj.setDate(prevDateObj.getDate() - 1)
-  const prevDate = prevDateObj.toLocaleDateString('en-CA')
-  const startUtc = `${prevDate}T15:00:00+00:00`
-  const endUtc   = `${todayWIT}T14:59:59+00:00`
+  // FIX: pakai offset +09:00 eksplisit — setDate() memakai timezone server (UTC)
+  // sehingga range jadi kemarin WIT bukan hari ini WIT
+  const startUtc = `${todayWITStr}T00:00:00+09:00`
+  const endUtc   = `${todayWITStr}T23:59:59+09:00`
 
   const { data: sesiHariIni } = cgIds.length > 0
     ? await supabase.from('sessions')
