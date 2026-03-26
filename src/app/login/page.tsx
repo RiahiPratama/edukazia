@@ -64,36 +64,81 @@ function LoginForm() {
     setMsg({ text: 'Link reset password sudah dikirim! Cek inbox email kamu.', err: false })
   }
 
-  // Cari email dari nomor HP di tabel profiles
+  // Cari email dari nomor HP — cek di profiles.phone DAN students.relation_phone
   async function handleFindEmail(e: React.FormEvent) {
     e.preventDefault()
     const raw = phone.replace(/\D/g, '')
     if (raw.length < 9) { setMsg({ text: 'Nomor HP tidak valid.', err: true }); return }
     setLoading(true); setMsg(null)
 
-    // Coba dengan dan tanpa +62
-    const variants = [
-      raw,
-      '0' + raw,
-      '+62' + raw,
-      '62' + raw,
-    ]
-    const { data: profiles } = await supabase
+    // Ambil 9 digit terakhir untuk matching (menghindari perbedaan format 08xx vs 628xx)
+    const last9 = raw.slice(-9)
+
+    // 1. Cari di profiles.phone langsung
+    const { data: fromProfiles } = await supabase
       .from('profiles')
       .select('email')
-      .or(variants.map(v => `phone.ilike.%${v.slice(-9)}%`).join(','))
+      .ilike('phone', `%${last9}%`)
+      .not('email', 'is', null)
       .limit(1)
 
-    setLoading(false)
-
-    if (!profiles || profiles.length === 0 || !profiles[0].email) {
-      setMsg({ text: 'Nomor HP tidak terdaftar di sistem EduKazia.', err: true })
+    if (fromProfiles && fromProfiles.length > 0 && fromProfiles[0].email) {
+      setLoading(false)
+      setFoundEmail(fromProfiles[0].email)
+      setPhoneStep('password')
+      setMsg(null)
       return
     }
 
-    setFoundEmail(profiles[0].email)
-    setPhoneStep('password')
-    setMsg(null)
+    // 2. Cari di students.relation_phone (nomor HP orang tua yang diinput admin)
+    const { data: fromStudents } = await supabase
+      .from('students')
+      .select('parent_profile_id, relation_phone')
+      .ilike('relation_phone', `%${last9}%`)
+      .not('parent_profile_id', 'is', null)
+      .limit(1)
+
+    if (fromStudents && fromStudents.length > 0 && fromStudents[0].parent_profile_id) {
+      const { data: parentProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', fromStudents[0].parent_profile_id)
+        .single()
+
+      setLoading(false)
+      if (parentProfile?.email) {
+        setFoundEmail(parentProfile.email)
+        setPhoneStep('password')
+        setMsg(null)
+        return
+      }
+    }
+
+    // 3. Cari di students.relation_phone tanpa parent (untuk siswa diri sendiri)
+    const { data: fromSelf } = await supabase
+      .from('students')
+      .select('profile_id, relation_phone')
+      .ilike('relation_phone', `%${last9}%`)
+      .limit(1)
+
+    if (fromSelf && fromSelf.length > 0 && fromSelf[0].profile_id) {
+      const { data: selfProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', fromSelf[0].profile_id)
+        .single()
+
+      setLoading(false)
+      if (selfProfile?.email) {
+        setFoundEmail(selfProfile.email)
+        setPhoneStep('password')
+        setMsg(null)
+        return
+      }
+    }
+
+    setLoading(false)
+    setMsg({ text: 'Nomor HP tidak terdaftar di sistem EduKazia.', err: true })
   }
 
   // Login dengan email yang ditemukan + password yang diinput
