@@ -1,0 +1,15 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.edukazia.com"
+        }
+      ],
+      "destination": "/login",
+      "permanent": false
+    }
+  ]
+}
