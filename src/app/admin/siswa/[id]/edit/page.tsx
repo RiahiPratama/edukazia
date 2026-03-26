@@ -24,6 +24,7 @@ export default function SiswaEditPage() {
   // Parent account state
   const [parentProfileId,   setParentProfileId]   = useState<string | null>(null)
   const [parentEmail,       setParentEmail]       = useState('')
+  const [parentHasAuth,     setParentHasAuth]     = useState(false)
   const [parentEmailInput,  setParentEmailInput]  = useState('')
   const [parentPassword,    setParentPassword]    = useState('')
   const [showPassword,      setShowPassword]      = useState(false)
@@ -93,7 +94,24 @@ export default function SiswaEditPage() {
         .select('email')
         .eq('id', student.parent_profile_id)
         .single()
-      setParentEmail(parentProfile?.email ?? '')
+      const emailOrtu = parentProfile?.email ?? ''
+      setParentEmail(emailOrtu)
+
+      // Verifikasi apakah auth user benar-benar ada via API
+      try {
+        const checkRes = await fetch(`/api/admin/create-user?profile_id=${student.parent_profile_id}`)
+        const checkData = await checkRes.json()
+        if (checkData.has_auth) {
+          setParentHasAuth(true)
+        } else {
+          // Profile ada di DB tapi auth user belum dibuat — tampilkan form buat akun
+          setParentHasAuth(false)
+          setParentEmailInput(emailOrtu || student.relation_email || '')
+        }
+      } catch {
+        // Jika gagal cek, fallback ke show form reset (lebih aman)
+        setParentHasAuth(true)
+      }
     } else if (student.relation_role === 'Diri Sendiri') {
       // Dewasa yang les sendiri — akun login adalah profile siswa itu sendiri
       setParentProfileId(student.profile_id)
@@ -103,8 +121,10 @@ export default function SiswaEditPage() {
         .eq('id', student.profile_id)
         .single()
       setParentEmail(selfProfile?.email ?? '')
+      setParentHasAuth(true)
     } else {
       // Ortu belum punya akun — pre-fill email dari relation_email jika ada
+      setParentHasAuth(false)
       if (student.relation_email) {
         setParentEmailInput(student.relation_email)
       }
@@ -348,8 +368,8 @@ export default function SiswaEditPage() {
             <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Akun Orang Tua / Portal Siswa</p>
           </div>
 
-          {parentProfileId ? (
-            // Akun sudah ada — tampilkan info + reset password
+          {parentProfileId && parentHasAuth ? (
+            // Akun sudah ada DAN auth user terkonfirmasi
             <>
               <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
                 <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
