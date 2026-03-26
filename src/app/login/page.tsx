@@ -18,8 +18,9 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState(['', '', '', '', '', ''])
-  const [step, setStep] = useState<'input' | 'otp'>('input')
+  const [phonePassword, setPhonePassword] = useState('')
+  const [phoneStep, setPhoneStep] = useState<'input' | 'password'>('input')
+  const [foundEmail, setFoundEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<{ text: string; err: boolean } | null>(null)
 
@@ -63,34 +64,55 @@ function LoginForm() {
     setMsg({ text: 'Link reset password sudah dikirim! Cek inbox email kamu.', err: false })
   }
 
-  async function handleSendOtp(e: React.FormEvent) {
+  // Cari email dari nomor HP di tabel profiles
+  async function handleFindEmail(e: React.FormEvent) {
     e.preventDefault()
     const raw = phone.replace(/\D/g, '')
     if (raw.length < 9) { setMsg({ text: 'Nomor HP tidak valid.', err: true }); return }
     setLoading(true); setMsg(null)
-    const { error } = await supabase.auth.signInWithOtp({ phone: '+62' + raw })
+
+    // Coba dengan dan tanpa +62
+    const variants = [
+      raw,
+      '0' + raw,
+      '+62' + raw,
+      '62' + raw,
+    ]
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('email')
+      .or(variants.map(v => `phone.ilike.%${v.slice(-9)}%`).join(','))
+      .limit(1)
+
     setLoading(false)
-    if (error) { setMsg({ text: 'Gagal kirim OTP: ' + error.message, err: true }); return }
-    setStep('otp')
+
+    if (!profiles || profiles.length === 0 || !profiles[0].email) {
+      setMsg({ text: 'Nomor HP tidak terdaftar di sistem EduKazia.', err: true })
+      return
+    }
+
+    setFoundEmail(profiles[0].email)
+    setPhoneStep('password')
+    setMsg(null)
   }
 
-  async function handleVerifyOtp(e: React.FormEvent) {
+  // Login dengan email yang ditemukan + password yang diinput
+  async function handlePhoneLogin(e: React.FormEvent) {
     e.preventDefault()
-    const code = otp.join('')
-    if (code.length < 6) { setMsg({ text: 'Masukkan 6 digit kode OTP.', err: true }); return }
+    if (!phonePassword) { setMsg({ text: 'Masukkan password akun Anda.', err: true }); return }
     setLoading(true); setMsg(null)
-    const { error } = await supabase.auth.verifyOtp({
-      phone: '+62' + phone.replace(/\D/g, ''), token: code, type: 'sms'
-    })
-    if (error) { setMsg({ text: 'Kode salah atau kadaluwarsa.', err: true }); setLoading(false); return }
-    setMsg({ text: 'Berhasil! Membuka portal...', err: false })
-    await redirectByRole()
-  }
 
-  function handleOtpChange(val: string, i: number) {
-    const d = val.replace(/\D/g, '').slice(-1)
-    const next = [...otp]; next[i] = d; setOtp(next)
-    if (d && i < 5) document.getElementById(`otp-${i + 1}`)?.focus()
+    const { error } = await supabase.auth.signInWithPassword({
+      email: foundEmail,
+      password: phonePassword,
+    })
+
+    if (error) {
+      setMsg({ text: 'Password salah. Coba lagi atau gunakan tab Email.', err: true })
+      setLoading(false); return
+    }
+    setMsg({ text: 'Login berhasil! Membuka portal...', err: false })
+    await redirectByRole()
   }
 
   function switchMode(m: Mode) {
@@ -156,7 +178,7 @@ function LoginForm() {
           <>
             <div className="flex bg-[#F0EFFF] rounded-full p-1 mb-5">
               {(['email', 'phone'] as Tab[]).map(t => (
-                <button key={t} onClick={() => { setTab(t); setMsg(null); setStep('input') }}
+                <button key={t} onClick={() => { setTab(t); setMsg(null); setPhoneStep('input'); setPhone(''); setPhonePassword(''); setFoundEmail('') }}
                   className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${tab === t ? 'bg-[#5C4FE5] text-white shadow' : 'text-[#4A4580]'}`}>
                   {t === 'email' ? 'Email' : 'Nomor HP'}
                 </button>
@@ -192,8 +214,9 @@ function LoginForm() {
               </form>
             )}
 
-            {tab === 'phone' && step === 'input' && (
-              <form onSubmit={handleSendOtp} className="space-y-4">
+            {/* Step 1: Input nomor HP */}
+            {tab === 'phone' && phoneStep === 'input' && (
+              <form onSubmit={handleFindEmail} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Nomor HP terdaftar</label>
                   <div className="flex gap-2">
@@ -206,33 +229,39 @@ function LoginForm() {
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                  {loading ? 'Mengirim...' : 'Kirim Kode OTP'}
+                  {loading ? 'Mencari akun...' : 'Lanjutkan'}
                 </button>
               </form>
             )}
 
-            {tab === 'phone' && step === 'otp' && (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div className="text-center mb-2">
-                  <p className="text-sm text-[#4A4580]">Kode 6 digit dikirim ke</p>
-                  <p className="font-bold text-[#1A1640]">+62 {phone}</p>
+            {/* Step 2: Input password setelah nomor HP ditemukan */}
+            {tab === 'phone' && phoneStep === 'password' && (
+              <form onSubmit={handlePhoneLogin} className="space-y-4">
+                <div className="px-4 py-3 bg-[#F0EFFF] rounded-xl border border-[#E5E3FF] text-center">
+                  <p className="text-xs text-[#7B78A8]">Akun ditemukan</p>
+                  <p className="text-sm font-bold text-[#5C4FE5] mt-0.5">
+                    {foundEmail.replace(/(.{2}).*(@.*)/, '$1••••$2')}
+                  </p>
                 </div>
-                <div className="flex gap-2 justify-center">
-                  {otp.map((d, i) => (
-                    <input key={i} id={`otp-${i}`} type="tel" maxLength={1} value={d}
-                      onChange={e => handleOtpChange(e.target.value, i)}
-                      onKeyDown={e => e.key === 'Backspace' && !d && i > 0 && document.getElementById(`otp-${i - 1}`)?.focus()}
-                      className="w-11 h-12 text-center text-xl font-bold border-2 border-[#E5E3FF] rounded-xl bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition" />
-                  ))}
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Password</label>
+                  <input
+                    type="password"
+                    value={phonePassword}
+                    onChange={e => setPhonePassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+                  />
                 </div>
-                <p className="text-center text-xs text-[#7B78A8]">
-                  Berlaku 10 menit ·{' '}
-                  <button type="button" onClick={() => { setStep('input'); setOtp(['', '', '', '', '', '']) }}
-                    className="text-[#5C4FE5] font-semibold">Ganti nomor</button>
-                </p>
                 <button type="submit" disabled={loading}
                   className="w-full py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                  {loading ? 'Memverifikasi...' : 'Verifikasi & Masuk'}
+                  {loading ? 'Memverifikasi...' : 'Masuk ke Portal'}
+                </button>
+                <button type="button"
+                  onClick={() => { setPhoneStep('input'); setPhonePassword(''); setFoundEmail(''); setMsg(null) }}
+                  className="w-full text-xs text-[#7B78A8] hover:text-[#5C4FE5] transition">
+                  ← Ganti nomor HP
                 </button>
               </form>
             )}
