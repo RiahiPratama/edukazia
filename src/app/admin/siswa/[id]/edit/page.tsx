@@ -94,8 +94,8 @@ export default function SiswaEditPage() {
         .eq('id', student.parent_profile_id)
         .single()
       setParentEmail(parentProfile?.email ?? '')
-    } else if (student.relation_role === 'Diri Sendiri' || !student.parent_profile_id) {
-      // Dewasa yang les sendiri — akun login adalah profileId siswa itu sendiri
+    } else if (student.relation_role === 'Diri Sendiri') {
+      // Dewasa yang les sendiri — akun login adalah profile siswa itu sendiri
       setParentProfileId(student.profile_id)
       const { data: selfProfile } = await supabase
         .from('profiles')
@@ -103,6 +103,11 @@ export default function SiswaEditPage() {
         .eq('id', student.profile_id)
         .single()
       setParentEmail(selfProfile?.email ?? '')
+    } else {
+      // Ortu belum punya akun — pre-fill email dari relation_email jika ada
+      if (student.relation_email) {
+        setParentEmailInput(student.relation_email)
+      }
     }
 
     setLoading(false)
