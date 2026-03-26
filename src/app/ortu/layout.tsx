@@ -230,17 +230,19 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
         {/* ═══ SIDEBAR ═══ */}
         <aside
           className={`
-            fixed top-0 left-0 h-full z-30 flex flex-col
+            fixed top-0 left-0 z-30 flex flex-col
             transition-transform duration-300 ease-in-out
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0 lg:static lg:h-screen lg:sticky lg:top-0
+            lg:translate-x-0 lg:sticky lg:top-0
           `}
           style={{
             width: '224px',
             minWidth: '224px',
+            height: '100dvh',
             background: sbBg,
             borderRight: `1px solid ${sbBorder}`,
-          }}>
+          }}
+>
 
           {/* Branding */}
           <div className="flex-shrink-0 px-4 pt-5 pb-3" style={{ borderBottom: `1px solid ${divider}` }}>
@@ -408,6 +410,32 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
 
           {/* Footer */}
           <div className="flex-shrink-0 px-3 pb-4 pt-2" style={{ borderTop: `1px solid ${divider}` }}>
+
+            {/* Profil ortu — hanya di mode ortu */}
+            {!isAnakMode && (
+              <div
+                className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl mb-2"
+                style={{
+                  background: isDark ? 'rgba(255,255,255,0.04)' : '#FAF8F4',
+                  border: `0.5px solid ${isDark ? '#2A2A38' : '#E8E4DC'}`,
+                }}>
+                {/* Avatar */}
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background: isDark ? '#2A2A38' : '#E6B800', color: isDark ? '#C4B89A' : '#412402' }}>
+                  {initials(profile.full_name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold truncate" style={{ color: isDark ? '#F0EDE8' : '#1C1917' }}>
+                    {profile.full_name}
+                  </p>
+                  <p className="text-[10px] truncate" style={{ color: isDark ? '#C4B89A' : '#854F0B' }}>
+                    {profile.email ?? 'Orang Tua'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Dark/light toggle — hanya di mode ortu */}
             {!isAnakMode && (
               <button
