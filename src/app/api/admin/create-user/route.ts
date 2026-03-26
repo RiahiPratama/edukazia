@@ -40,11 +40,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Password minimal 6 karakter' }, { status: 400 })
     }
 
-    // 1. Cek apakah email sudah terdaftar di auth menggunakan getUserByEmail
-    // (listUsers() hanya return maks 50 user — tidak reliable untuk cek email)
+    // 1. Cek apakah email sudah terdaftar di auth
     const cleanEmail = email.trim().toLowerCase()
-    const { data: existingData } = await supabase.auth.admin.getUserByEmail(cleanEmail)
-    const existingUser = existingData?.user ?? null
+    // listUsers dengan filter — lebih reliable dari listUsers() tanpa filter
+    const { data: existingData } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    const existingUser = existingData?.users?.find(
+      (u: any) => u.email?.toLowerCase() === cleanEmail
+    ) ?? null
 
     let authUserId: string
 
