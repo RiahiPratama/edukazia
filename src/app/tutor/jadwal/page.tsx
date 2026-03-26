@@ -78,7 +78,7 @@ export default async function TutorJadwalPage({
 
   return (
     <TutorJadwalClient
-      sessions={sessions}
+      sessions={sessions ?? []}
       sesiHariIni={sesiHariIni ?? []}
       sessionsBulanIni={sessionsBulanIni ?? []}
       todayWITStr={todayWITStr}

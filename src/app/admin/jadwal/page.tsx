@@ -87,7 +87,7 @@ export default async function AdminJadwalPage({
 
   return (
     <AdminJadwalClient
-      sessions={sessions}
+      sessions={sessions ?? []}
       sesiHariIni={sesiHariIni ?? []}
       sessionsBulanIni={sessionsBulanIni ?? []}
       todayWITStr={todayWITStr}
