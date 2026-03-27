@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import OrtuAnakJadwalHariIni from './OrtuAnakJadwalHariIni'
 
 export const dynamic = 'force-dynamic'
 
@@ -269,115 +270,15 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         </div>
       </div>
 
-      {/* ── JADWAL HARI INI ── */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5C4FE5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/>
-            </svg>
-            <p className="text-[12px] font-bold text-stone-700">Jadwal Hari Ini</p>
-          </div>
-          <Link href={`/ortu/anak/${studentId}/jadwal`}
-            className="text-[11px] text-[#5C4FE5] hover:underline">
-            Lihat semua →
-          </Link>
-        </div>
-
-        {todaySessions.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {todaySessions.map((s: any) => {
-              const cg    = (classGroups ?? []).find((c: any) => c.id === s.class_group_id)
-              const tutor = (tutors ?? []).find((t: any) => {
-                const tRow = (tutorRows ?? []).find((tr: any) => tr.id === cg?.tutor_id)
-                return t.id === tRow?.profile_id
-              })
-              const zoom  = s.zoom_link ?? cg?.zoom_link ?? null
-              const sWIT  = new Date(new Date(s.scheduled_at).toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
-              const isOngoing = nowWIT >= sWIT && nowWIT <= new Date(sWIT.getTime() + 90 * 60 * 1000)
-
-              return (
-                <div key={s.id}
-                  className="bg-white border rounded-xl overflow-hidden"
-                  style={{
-                    borderLeft: `3px solid ${isOngoing ? '#16a34a' : '#5C4FE5'}`,
-                    borderColor: isOngoing ? '#bbf7d0' : '#E5E3FF',
-                  }}>
-                  <div className="flex items-center gap-3 px-3 py-2.5">
-                    {/* Jam */}
-                    <div className="text-center flex-shrink-0" style={{ minWidth: '48px' }}>
-                      <p className="text-[13px] font-bold text-stone-700">{fmtTime(s.scheduled_at)}</p>
-                      <p className="text-[9px] text-stone-400">WIT</p>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-semibold text-stone-700 truncate">{cg?.label ?? '—'}</p>
-                      <p className="text-[10px] text-stone-400 truncate">{tutor?.full_name ?? '—'}</p>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      {isOngoing ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
-                          Sedang berlangsung
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#3C3489]">
-                          Akan datang
-                        </span>
-                      )}
-                      {zoom && (
-                        <a href={zoom} target="_blank" rel="noopener noreferrer"
-                          className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-[#5C4FE5] text-white hover:bg-[#3D34C4] transition-colors">
-                          ▶ Buka Zoom
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          /* Tidak ada jadwal hari ini → tampilkan sesi berikutnya */
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-            <div className="flex items-center gap-4 px-4 py-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: '#EEEDFE' }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <rect x="1" y="2" width="16" height="15" rx="2" stroke="#5C4FE5" strokeWidth="1.4"/>
-                  <path d="M5 1v2M13 1v2M1 6h16" stroke="#5C4FE5" strokeWidth="1.4" strokeLinecap="round"/>
-                  <path d="M9 9v3l2 1" stroke="#5C4FE5" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-semibold text-stone-600">Tidak ada jadwal hari ini</p>
-                {nextSession ? (
-                  <>
-                    <p className="text-[10px] text-stone-400 mt-0.5">Sesi berikutnya:</p>
-                    <p className="text-[11px] font-semibold text-[#5C4FE5] mt-0.5">
-                      {fmtDateFull(nextSession.scheduled_at)}, {fmtTime(nextSession.scheduled_at)} WIT
-                    </p>
-                    {(() => {
-                      const cg = (classGroups ?? []).find((c: any) => c.id === nextSession.class_group_id)
-                      return cg ? (
-                        <p className="text-[10px] text-stone-400">{cg.label}</p>
-                      ) : null
-                    })()}
-                  </>
-                ) : (
-                  <p className="text-[10px] text-stone-400 mt-0.5">Belum ada jadwal tersedia</p>
-                )}
-              </div>
-              <Link href={`/ortu/anak/${studentId}/jadwal`}
-                className="flex-shrink-0 px-3 py-2 rounded-xl text-[11px] font-semibold transition-colors"
-                style={{ background: '#EEEDFE', color: '#3C3489' }}>
-                Lihat jadwal
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* ── JADWAL HARI INI - WITH COUNTDOWN ── */}
+      <OrtuAnakJadwalHariIni
+        todaySessions={todaySessions}
+        nextSession={nextSession}
+        studentId={studentId}
+        classGroups={classGroups ?? []}
+        tutors={tutors ?? []}
+        tutorRows={tutorRows ?? []}
+      />
 
       {/* Kelas aktif */}
       <p className="text-[12px] font-bold text-stone-700 mb-2">Kelas aktif</p>
