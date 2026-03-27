@@ -105,9 +105,9 @@ export default function SessionCountdown({ scheduledAt, showLabel = true, compac
     )
   }
 
-  // Hanya tampil kalau <30 menit sebelum mulai
-  const thirtyMinutesInMs = 30 * 60 * 1000
-  if (timeLeft.totalMs > thirtyMinutesInMs) return null
+  // Hanya tampil kalau <3 jam sebelum mulai
+  const threeHoursInMs = 180 * 60 * 1000
+  if (timeLeft.totalMs > threeHoursInMs) return null
 
   const h = String(timeLeft.hours).padStart(2, '0')
   const m = String(timeLeft.minutes).padStart(2, '0')
