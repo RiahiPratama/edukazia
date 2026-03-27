@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { CalendarDays, ExternalLink } from 'lucide-react'
+import TodaySessionCard from '@/components/session/TodaySessionCard'
 
 const STATUS_MAP: Record<string, { label: string; pill: string }> = {
   scheduled:   { label: 'Terjadwal',      pill: 'bg-[#EEEDFE] text-[#3C3489]' },
@@ -31,8 +32,6 @@ export default function TutorJadwalClient({
   const monday  = new Date(mondayISO)
   const sunday  = new Date(sundayISO)
 
-
-
   const fmtKey    = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const fmtTime   = (iso: string) => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura' })
   const fmtHeader = (d: Date)     => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura' })
@@ -50,10 +49,6 @@ export default function TutorJadwalClient({
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday); d.setDate(monday.getDate() + i); return d
   })
-
-
-
-
 
   function SesiRow({ s, compact = false }: { s: any; compact?: boolean }) {
     const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
@@ -120,7 +115,7 @@ export default function TutorJadwalClient({
         </div>
       </div>
 
-      {/* ── Sesi Hari Ini — tampil di bawah kalender ── */}
+      {/* ── Sesi Hari Ini — WITH COUNTDOWN ── */}
       {weekOffset === 0 && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden mb-4">
           <div className="px-5 py-3 bg-[#5C4FE5] flex items-center justify-between">
@@ -138,7 +133,14 @@ export default function TutorJadwalClient({
             </div>
           ) : (
             <div className="px-4 py-3 space-y-2">
-              {sesiHariIni.map((s: any) => <SesiRow key={s.id} s={s} compact/>)}
+              {sesiHariIni.map((s: any) => (
+                <TodaySessionCard 
+                  key={s.id} 
+                  session={s} 
+                  compact 
+                  showCountdown 
+                />
+              ))}
             </div>
           )}
         </div>
@@ -173,8 +175,6 @@ export default function TutorJadwalClient({
           </div>
         )}
       </div>
-
-
     </div>
   )
 }

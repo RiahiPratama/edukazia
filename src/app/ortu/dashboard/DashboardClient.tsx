@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { CalendarDays, FileText, ChevronRight, ExternalLink } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
+import TodaySessionCard from '@/components/session/TodaySessionCard'
 
 interface Props {
   profile: { full_name: string; email: string }
@@ -57,6 +58,18 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
   const firstName = profile.full_name.split(' ')[0]
   const jam = new Date().toLocaleString('id-ID', { hour: '2-digit', timeZone: 'Asia/Jayapura', hour12: false })
   const greeting = parseInt(jam) < 12 ? 'Selamat pagi' : parseInt(jam) < 17 ? 'Selamat siang' : 'Selamat malam'
+
+  // Aggregate all today's sessions from all children
+  const allTodaySessions = childrenData.flatMap((child, idx) => 
+    (child.summary?.todaySessions ?? []).map((session: any) => ({
+      ...session,
+      childName: child.full_name,
+      childId: child.id,
+      childColor: CHILD_COLORS[idx % CHILD_COLORS.length],
+    }))
+  ).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+
+  const hasTodaySessions = allTodaySessions.length > 0
 
   return (
     <div className="px-4 lg:px-6 py-5 max-w-3xl">
@@ -113,6 +126,39 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
           ))}
         </div>
       </div>
+
+      {/* ── SESI HARI INI (CONDITIONAL - ONLY IF SESSIONS EXIST) ── */}
+      {hasTodaySessions && (
+        <>
+          <p className="text-[12px] font-bold text-stone-700 mb-2.5">Sesi Hari Ini</p>
+          <div className="bg-white border border-stone-100 rounded-2xl overflow-hidden mb-5">
+            <div className="divide-y divide-stone-50">
+              {allTodaySessions.map((session, idx) => (
+                <div key={`${session.id}-${idx}`} className="p-3">
+                  {/* Child name badge */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <div 
+                      className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                      style={{ background: session.childColor.bg, color: session.childColor.text }}
+                    >
+                      {initials(session.childName)}
+                    </div>
+                    <span className="text-[11px] font-semibold text-stone-600">{session.childName}</span>
+                  </div>
+                  
+                  {/* Session card with countdown */}
+                  <TodaySessionCard
+                    session={session}
+                    studentId={session.childId}
+                    compact
+                    showCountdown
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Per anak ── */}
       <p className="text-[12px] font-bold text-stone-700 mb-2.5">Ringkasan per anak</p>
