@@ -12,7 +12,6 @@ type Kelas = {
   status: string
   max_participants: number
   created_at: string
-  updated_at: string
   courses: { id: string; name: string; color: string | null } | null
   class_types: { name: string } | null
   tutors: { id: string; profiles: { full_name: string } | null } | null
@@ -92,13 +91,13 @@ export default function KelasPage() {
       const { data, error } = await supabase
         .from('class_groups')
         .select(`
-          id, label, status, max_participants, created_at, updated_at,
+          id, label, status, max_participants, created_at,
           courses(id, name, color), 
           class_types(name),
           tutors(id, profiles(full_name)),
           enrollments(id, status, student_id)
         `)
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
       
       if (error) {
         console.error('❌ Error fetching kelas:', error)
@@ -225,7 +224,7 @@ export default function KelasPage() {
     }
 
     if (sortBy === 'terbaru') {
-      filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     } else if (sortBy === 'nama') {
       filtered.sort((a, b) => a.label.localeCompare(b.label))
     } else if (sortBy === 'progress') {
