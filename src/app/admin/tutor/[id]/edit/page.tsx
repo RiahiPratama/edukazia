@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
 
 type Course = { id: string; name: string; color: string | null }
 type Achievement = { name: string; category: string; issuer: string; year: string }
@@ -34,6 +34,13 @@ export default function TutorEditPage() {
   const [saving,          setSaving]          = useState(false)
   const [error,           setError]           = useState('')
   const [success,         setSuccess]         = useState(false)
+
+  // Password reset state
+  const [tutorPassword,   setTutorPassword]   = useState('')
+  const [showPassword,    setShowPassword]    = useState(false)
+  const [savingPassword,  setSavingPassword]  = useState(false)
+  const [passwordError,   setPasswordError]   = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
 
   const [form, setForm] = useState({
     full_name:                 '',
@@ -130,6 +137,35 @@ export default function TutorEditPage() {
   }
 
   function removeAchievement(idx: number) { setAchievements(prev => prev.filter((_, i) => i !== idx)) }
+
+  async function handleResetPassword() {
+    if (!tutorPassword || tutorPassword.length < 6) {
+      setPasswordError('Password baru minimal 6 karakter.')
+      return
+    }
+    setSavingPassword(true)
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile_id: profileId, password: tutorPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setPasswordError(json.error ?? 'Gagal reset password.')
+        setSavingPassword(false)
+        return
+      }
+      setTutorPassword('')
+      setPasswordSuccess('Password tutor berhasil direset!')
+    } catch (err: any) {
+      setPasswordError(err.message ?? 'Terjadi kesalahan.')
+    }
+    setSavingPassword(false)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -262,6 +298,42 @@ export default function TutorEditPage() {
             <input type="checkbox" id="is_active" name="is_active" checked={form.is_active} onChange={handleChange} className="w-4 h-4 accent-[#5C4FE5]"/>
             <label htmlFor="is_active" className="text-sm font-semibold text-[#4A4580]">Tutor aktif</label>
           </div>
+        </div>
+
+        {/* RESET PASSWORD TUTOR */}
+        <div className={sectionCls}>
+          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Reset Password Tutor</p>
+          
+          <div className="px-4 py-3 bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl">
+            <p className="text-xs text-[#7B78A8]">
+              Gunakan fitur ini untuk set password login tutor ke dashboard tutor.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelCls}>Password Baru</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={tutorPassword}
+                onChange={e => setTutorPassword(e.target.value)}
+                placeholder="Minimal 6 karakter"
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowPassword(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
+                {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
+              </button>
+            </div>
+          </div>
+
+          {passwordError   && <p className="text-xs text-red-600 font-semibold">{passwordError}</p>}
+          {passwordSuccess && <p className="text-xs text-green-600 font-semibold">✅ {passwordSuccess}</p>}
+
+          <button type="button" onClick={handleResetPassword} disabled={savingPassword}
+            className="w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm hover:bg-[#EAE8FD] transition disabled:opacity-60">
+            {savingPassword ? 'Menyimpan...' : 'Reset Password Tutor'}
+          </button>
         </div>
 
         {/* REKENING */}
