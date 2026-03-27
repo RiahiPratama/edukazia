@@ -414,7 +414,9 @@ export default function KelasDetailPage() {
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
           {sessions.length === 0 ? (
             <div className="px-5 py-12 text-center">
-              <div className="text-3xl mb-3">📅</div>
+              <div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3">
+                <Calendar size={20} className="text-[#C4BFFF]"/>
+              </div>
               <p className="text-sm text-[#7B78A8] font-semibold">Belum ada sesi dijadwalkan</p>
               <p className="text-xs text-[#7B78A8] mt-1">Gunakan tombol <strong>Jadwal</strong> di halaman Manajemen Kelas</p>
             </div>
@@ -473,7 +475,9 @@ export default function KelasDetailPage() {
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
           {payments.length === 0 ? (
             <div className="px-5 py-12 text-center">
-              <div className="text-3xl mb-3">💳</div>
+              <div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3">
+                <CreditCard size={20} className="text-[#C4BFFF]"/>
+              </div>
               <p className="text-sm text-[#7B78A8] font-semibold">Belum ada data pembayaran</p>
               <Link href="/admin/pembayaran"
                 className="mt-3 inline-block text-sm text-[#5C4FE5] font-semibold hover:underline">
