@@ -19,7 +19,7 @@ type Kelas = {
   enrollments: { 
     id: string
     status: string
-    students: { profiles: { full_name: string } | null } | null
+    student_name?: string
   }[]
 }
 
@@ -51,17 +51,15 @@ export default function KelasPage() {
   const [selectedTutor,  setSelectedTutor]  = useState('semua')
   const [sortBy,         setSortBy]         = useState('terbaru')
 
-  // Modal arsip
+  // Modal states...
   const [archiveId,    setArchiveId]    = useState<string | null>(null)
   const [archiveLabel, setArchiveLabel] = useState('')
   const [archiving,    setArchiving]    = useState(false)
 
-  // Modal restore
   const [restoreId,    setRestoreId]    = useState<string | null>(null)
   const [restoreLabel, setRestoreLabel] = useState('')
   const [restoring,    setRestoring]    = useState(false)
 
-  // Modal jadwal
   const [showJadwal,    setShowJadwal]    = useState(false)
   const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null)
   const [jadwalRows,    setJadwalRows]    = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
@@ -70,7 +68,6 @@ export default function KelasPage() {
   const [jadwalError,   setJadwalError]   = useState('')
   const [jadwalSuccess, setJadwalSuccess] = useState('')
 
-  // Modal hapus
   const [deleteId,       setDeleteId]       = useState<string | null>(null)
   const [deleteLabel,    setDeleteLabel]    = useState('')
   const [deleting,       setDeleting]       = useState(false)
@@ -89,19 +86,80 @@ export default function KelasPage() {
 
   async function fetchKelas() {
     setLoading(true)
-    const { data } = await supabase
-      .from('class_groups')
-      .select(`id, label, status, max_participants, created_at, updated_at,
-        courses(id, name, color), 
-        class_types(name),
-        tutors(id, profiles(full_name)),
-        enrollments(id, status, students(profiles(full_name)))`)
-      .order('updated_at', { ascending: false })
-    setKelasList((data as any[]) ?? [])
+    
+    try {
+      // SIMPLIFIED QUERY - tanpa nested students untuk avoid error
+      const { data, error } = await supabase
+        .from('class_groups')
+        .select(`
+          id, label, status, max_participants, created_at, updated_at,
+          courses(id, name, color), 
+          class_types(name),
+          tutors(id, profiles(full_name)),
+          enrollments(id, status, student_id)
+        `)
+        .order('updated_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Error fetching kelas:', error)
+        setKelasList([])
+        setLoading(false)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        console.log('⚠️ No kelas data found')
+        setKelasList([])
+        setLoading(false)
+        return
+      }
+
+      console.log('✅ Fetched kelas:', data.length)
+
+      // Enrich dengan student names secara terpisah
+      const enrichedData = await Promise.all(
+        data.map(async (kelas: any) => {
+          if (kelas.enrollments && kelas.enrollments.length > 0) {
+            // Get unique student IDs
+            const studentIds = [...new Set(
+              kelas.enrollments
+                .map((e: any) => e.student_id)
+                .filter(Boolean)
+            )]
+
+            if (studentIds.length > 0) {
+              // Fetch student profiles
+              const { data: students } = await supabase
+                .from('students')
+                .select('id, profiles(full_name)')
+                .in('id', studentIds)
+
+              // Map student names back to enrollments
+              const studentMap = new Map(
+                students?.map((s: any) => [s.id, s.profiles?.full_name]) ?? []
+              )
+
+              kelas.enrollments = kelas.enrollments.map((e: any) => ({
+                ...e,
+                student_name: studentMap.get(e.student_id)
+              }))
+            }
+          }
+          return kelas
+        })
+      )
+
+      console.log('✅ Enriched with student names')
+      setKelasList(enrichedData as Kelas[])
+    } catch (err) {
+      console.error('❌ Unexpected error:', err)
+      setKelasList([])
+    }
+    
     setLoading(false)
   }
 
-  // Compute courses list (dynamic - hanya yang ada kelas)
+  // Compute courses list
   const coursesList = useMemo<Course[]>(() => {
     const courseMap = new Map<string, Course>()
     kelasList.filter(k => k.status === 'active').forEach(k => {
@@ -122,7 +180,7 @@ export default function KelasPage() {
     return Array.from(courseMap.values()).sort((a, b) => b.count - a.count)
   }, [kelasList])
 
-  // Compute tutors list (dynamic)
+  // Compute tutors list
   const tutorsList = useMemo<Tutor[]>(() => {
     const tutorMap = new Map<string, Tutor>()
     kelasList.filter(k => k.status === 'active').forEach(k => {
@@ -146,22 +204,19 @@ export default function KelasPage() {
   const filteredKelas = useMemo(() => {
     let filtered = kelasList.filter(k => k.status === 'active')
 
-    // Filter by course
     if (selectedCourse !== 'semua') {
       filtered = filtered.filter(k => k.courses?.id === selectedCourse)
     }
 
-    // Filter by tutor
     if (selectedTutor !== 'semua') {
       filtered = filtered.filter(k => k.tutors?.id === selectedTutor)
     }
 
-    // Search (nama siswa, nama kelas, nama tutor)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(k => {
         const siswaMatch = k.enrollments?.some(e => 
-          e.students?.profiles?.full_name?.toLowerCase().includes(query)
+          e.student_name?.toLowerCase().includes(query)
         )
         const kelasMatch = k.label.toLowerCase().includes(query)
         const tutorMatch = k.tutors?.profiles?.full_name?.toLowerCase().includes(query)
@@ -169,20 +224,17 @@ export default function KelasPage() {
       })
     }
 
-    // Sort
     if (sortBy === 'terbaru') {
       filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     } else if (sortBy === 'nama') {
       filtered.sort((a, b) => a.label.localeCompare(b.label))
     } else if (sortBy === 'progress') {
-      // Progress terendah = enrollment paling sedikit
       filtered.sort((a, b) => {
         const aActive = a.enrollments?.filter(e => e.status === 'active').length ?? 0
         const bActive = b.enrollments?.filter(e => e.status === 'active').length ?? 0
         return aActive - bActive
       })
     } else if (sortBy === 'terbanyak') {
-      // Terbanyak siswa
       filtered.sort((a, b) => {
         const aActive = a.enrollments?.filter(e => e.status === 'active').length ?? 0
         const bActive = b.enrollments?.filter(e => e.status === 'active').length ?? 0
@@ -332,7 +384,7 @@ export default function KelasPage() {
   const totalSiswa = new Set(
     kelasList
       .filter(k => k.status === 'active')
-      .flatMap(k => k.enrollments?.filter(e => e.status === 'active').map(e => e.students?.profiles?.full_name) ?? [])
+      .flatMap(k => k.enrollments?.filter(e => e.status === 'active' && e.student_name).map(e => e.student_name) ?? [])
       .filter(Boolean)
   ).size
   const totalTutor = tutorsList.length
@@ -434,7 +486,6 @@ export default function KelasPage() {
       {/* Search & Filters */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-5">
         <div className="flex flex-col md:flex-row gap-3">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7B78A8]"/>
             <input
@@ -446,7 +497,6 @@ export default function KelasPage() {
             />
           </div>
 
-          {/* Filter Tutor */}
           <select
             value={selectedTutor}
             onChange={(e) => setSelectedTutor(e.target.value)}
@@ -459,7 +509,6 @@ export default function KelasPage() {
             ))}
           </select>
 
-          {/* Sort */}
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
@@ -521,7 +570,6 @@ export default function KelasPage() {
         </div>
       ) : (
         <>
-          {/* Kelas Aktif */}
           {filteredKelas.length === 0 ? (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center mb-6">
               <div className="text-5xl mb-4">🔍</div>
@@ -548,7 +596,6 @@ export default function KelasPage() {
             </div>
           )}
 
-          {/* Arsip Kelas */}
           {kelasArsip.length > 0 && (
             <div>
               <button
@@ -574,7 +621,7 @@ export default function KelasPage() {
         </>
       )}
 
-      {/* Modals - sama seperti sebelumnya */}
+      {/* All modals remain the same... */}
       <ConfirmModal
         open={!!archiveId}
         title="Arsipkan Kelas?"
@@ -597,7 +644,6 @@ export default function KelasPage() {
         onCancel={() => setRestoreId(null)}
       />
 
-      {/* Modal Hapus - sama */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
@@ -663,7 +709,6 @@ export default function KelasPage() {
         </div>
       )}
 
-      {/* Modal Jadwal - sama */}
       {showJadwal && selectedKelas && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
