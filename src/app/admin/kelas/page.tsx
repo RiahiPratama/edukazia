@@ -383,7 +383,7 @@ export default function KelasPage() {
   const totalSiswa = new Set(
     kelasList
       .filter(k => k.status === 'active')
-      .flatMap(k => k.enrollments?.filter(e => e.status === 'active' && e.student_name).map(e => e.student_name) ?? [])
+      .flatMap(k => k.enrollments?.filter(e => e.status === 'active').map(e => e.student_id) ?? [])
       .filter(Boolean)
   ).size
   const totalTutor = tutorsList.length
