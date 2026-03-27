@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { Plus, X, Minus, Calendar, Trash2, Archive, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, X, Minus, Calendar, Trash2, Archive, ChevronDown, ChevronUp, Search } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
 type Kelas = {
@@ -11,12 +11,20 @@ type Kelas = {
   label: string
   status: string
   max_participants: number
-  courses: { name: string; color: string | null } | null
+  created_at: string
+  updated_at: string
+  courses: { id: string; name: string; color: string | null } | null
   class_types: { name: string } | null
-  tutors: { profiles: { full_name: string } | null } | null
-  enrollments: { id: string; status: string }[]
+  tutors: { id: string; profiles: { full_name: string } | null } | null
+  enrollments: { 
+    id: string
+    status: string
+    students: { profiles: { full_name: string } | null } | null
+  }[]
 }
 
+type Course = { id: string; name: string; color: string | null; count: number }
+type Tutor = { id: string; full_name: string; count: number }
 type JadwalRow = { date: string; time: string; repeat: number }
 
 const MAX_ROWS   = 5
@@ -36,6 +44,12 @@ export default function KelasPage() {
   const [kelasList,   setKelasList]   = useState<Kelas[]>([])
   const [loading,     setLoading]     = useState(true)
   const [showArsip,   setShowArsip]   = useState(false)
+
+  // Search & Filter states
+  const [searchQuery,    setSearchQuery]    = useState('')
+  const [selectedCourse, setSelectedCourse] = useState('semua')
+  const [selectedTutor,  setSelectedTutor]  = useState('semua')
+  const [sortBy,         setSortBy]         = useState('terbaru')
 
   // Modal arsip
   const [archiveId,    setArchiveId]    = useState<string | null>(null)
@@ -77,14 +91,107 @@ export default function KelasPage() {
     setLoading(true)
     const { data } = await supabase
       .from('class_groups')
-      .select(`id, label, status, max_participants,
-        courses(name, color), class_types(name),
-        tutors(profiles(full_name)),
-        enrollments(id, status)`)
-      .order('created_at', { ascending: false })
+      .select(`id, label, status, max_participants, created_at, updated_at,
+        courses(id, name, color), 
+        class_types(name),
+        tutors(id, profiles(full_name)),
+        enrollments(id, status, students(profiles(full_name)))`)
+      .order('updated_at', { ascending: false })
     setKelasList((data as any[]) ?? [])
     setLoading(false)
   }
+
+  // Compute courses list (dynamic - hanya yang ada kelas)
+  const coursesList = useMemo<Course[]>(() => {
+    const courseMap = new Map<string, Course>()
+    kelasList.filter(k => k.status === 'active').forEach(k => {
+      if (k.courses) {
+        const existing = courseMap.get(k.courses.id)
+        if (existing) {
+          existing.count++
+        } else {
+          courseMap.set(k.courses.id, {
+            id: k.courses.id,
+            name: k.courses.name,
+            color: k.courses.color,
+            count: 1
+          })
+        }
+      }
+    })
+    return Array.from(courseMap.values()).sort((a, b) => b.count - a.count)
+  }, [kelasList])
+
+  // Compute tutors list (dynamic)
+  const tutorsList = useMemo<Tutor[]>(() => {
+    const tutorMap = new Map<string, Tutor>()
+    kelasList.filter(k => k.status === 'active').forEach(k => {
+      if (k.tutors?.profiles?.full_name) {
+        const existing = tutorMap.get(k.tutors.id)
+        if (existing) {
+          existing.count++
+        } else {
+          tutorMap.set(k.tutors.id, {
+            id: k.tutors.id,
+            full_name: k.tutors.profiles.full_name,
+            count: 1
+          })
+        }
+      }
+    })
+    return Array.from(tutorMap.values()).sort((a, b) => b.count - a.count)
+  }, [kelasList])
+
+  // Filtered & sorted kelas
+  const filteredKelas = useMemo(() => {
+    let filtered = kelasList.filter(k => k.status === 'active')
+
+    // Filter by course
+    if (selectedCourse !== 'semua') {
+      filtered = filtered.filter(k => k.courses?.id === selectedCourse)
+    }
+
+    // Filter by tutor
+    if (selectedTutor !== 'semua') {
+      filtered = filtered.filter(k => k.tutors?.id === selectedTutor)
+    }
+
+    // Search (nama siswa, nama kelas, nama tutor)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(k => {
+        const siswaMatch = k.enrollments?.some(e => 
+          e.students?.profiles?.full_name?.toLowerCase().includes(query)
+        )
+        const kelasMatch = k.label.toLowerCase().includes(query)
+        const tutorMatch = k.tutors?.profiles?.full_name?.toLowerCase().includes(query)
+        return siswaMatch || kelasMatch || tutorMatch
+      })
+    }
+
+    // Sort
+    if (sortBy === 'terbaru') {
+      filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    } else if (sortBy === 'nama') {
+      filtered.sort((a, b) => a.label.localeCompare(b.label))
+    } else if (sortBy === 'progress') {
+      // Progress terendah = enrollment paling sedikit
+      filtered.sort((a, b) => {
+        const aActive = a.enrollments?.filter(e => e.status === 'active').length ?? 0
+        const bActive = b.enrollments?.filter(e => e.status === 'active').length ?? 0
+        return aActive - bActive
+      })
+    } else if (sortBy === 'terbanyak') {
+      // Terbanyak siswa
+      filtered.sort((a, b) => {
+        const aActive = a.enrollments?.filter(e => e.status === 'active').length ?? 0
+        const bActive = b.enrollments?.filter(e => e.status === 'active').length ?? 0
+        return bActive - aActive
+      })
+    }
+
+    return filtered
+  }, [kelasList, selectedCourse, selectedTutor, searchQuery, sortBy])
 
   function openJadwal(k: Kelas) {
     setSelectedKelas(k)
@@ -103,7 +210,6 @@ export default function KelasPage() {
   async function handleArchive() {
     if (!archiveId) return
     setArchiving(true)
-    // FIX: pakai 'inactive' bukan 'completed'
     await supabase.from('class_groups').update({ status: 'inactive' }).eq('id', archiveId)
     setArchiving(false)
     setArchiveId(null)
@@ -131,7 +237,6 @@ export default function KelasPage() {
     setDeleteWarning(null)
     setCheckingDelete(true)
 
-    // Cek apakah ada enrollment atau payment terkait
     const { count: enrollCount } = await supabase
       .from('enrollments')
       .select('*', { count: 'exact', head: true })
@@ -161,7 +266,6 @@ export default function KelasPage() {
     if (!deleteId) return
     setDeleting(true); setDeleteError('')
 
-    // Hapus payments dulu (jika ada)
     const { data: enrIds } = await supabase
       .from('enrollments').select('id').eq('class_group_id', deleteId)
     if (enrIds && enrIds.length > 0) {
@@ -221,10 +325,19 @@ export default function KelasPage() {
   }
   const inputCls = "w-full px-3 py-2 border border-[#E5E3FF] rounded-lg text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"
 
-  const kelasAktif  = kelasList.filter(k => k.status === 'active')
-  const kelasArsip  = kelasList.filter(k => k.status === 'inactive')
+  const kelasArsip = kelasList.filter(k => k.status === 'inactive')
 
-  function KelasCard({ k, isArsip = false }: { k: any; isArsip?: boolean }) {
+  // Stats
+  const totalActiveKelas = kelasList.filter(k => k.status === 'active').length
+  const totalSiswa = new Set(
+    kelasList
+      .filter(k => k.status === 'active')
+      .flatMap(k => k.enrollments?.filter(e => e.status === 'active').map(e => e.students?.profiles?.full_name) ?? [])
+      .filter(Boolean)
+  ).size
+  const totalTutor = tutorsList.length
+
+  function KelasCard({ k, isArsip = false }: { k: Kelas; isArsip?: boolean }) {
     const activeEnroll = k.enrollments?.filter((e: any) => e.status === 'active').length ?? 0
     const isFull = activeEnroll >= k.max_participants
     return (
@@ -304,16 +417,92 @@ export default function KelasPage() {
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Manajemen Kelas</h1>
-          <p className="text-sm text-[#7B78A8] mt-1">{kelasAktif.length} kelas aktif</p>
+          <p className="text-sm text-[#7B78A8] mt-1">
+            {totalActiveKelas} kelas aktif • {totalSiswa} siswa • {totalTutor} tutor
+          </p>
         </div>
         <Link href="/admin/kelas/baru"
           className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
           + Buat Kelas
         </Link>
       </div>
+
+      {/* Search & Filters */}
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4 mb-5">
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7B78A8]"/>
+            <input
+              type="text"
+              placeholder="Cari nama siswa, kelas, atau tutor..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+            />
+          </div>
+
+          {/* Filter Tutor */}
+          <select
+            value={selectedTutor}
+            onChange={(e) => setSelectedTutor(e.target.value)}
+            className="px-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
+            <option value="semua">👨‍🏫 Semua Tutor</option>
+            {tutorsList.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.full_name} ({t.count})
+              </option>
+            ))}
+          </select>
+
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
+            <option value="terbaru">Urutkan: Terbaru</option>
+            <option value="nama">Urutkan: Nama A-Z</option>
+            <option value="progress">Urutkan: Progress Terendah</option>
+            <option value="terbanyak">Urutkan: Terbanyak Siswa</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Course Tabs */}
+      {coursesList.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          <button
+            onClick={() => setSelectedCourse('semua')}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              selectedCourse === 'semua'
+                ? 'bg-[#5C4FE5] text-white'
+                : 'bg-white border border-[#E5E3FF] text-[#4A4580] hover:bg-[#F0EEFF]'
+            }`}>
+            Semua ({totalActiveKelas})
+          </button>
+          {coursesList.map(course => (
+            <button
+              key={course.id}
+              onClick={() => setSelectedCourse(course.id)}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                selectedCourse === course.id
+                  ? 'text-white'
+                  : 'bg-white border-2 hover:opacity-80'
+              }`}
+              style={
+                selectedCourse === course.id
+                  ? { backgroundColor: course.color ?? '#5C4FE5' }
+                  : { borderColor: course.color ?? '#E5E3FF', color: course.color ?? '#4A4580' }
+              }>
+              {course.name} ({course.count})
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -333,19 +522,29 @@ export default function KelasPage() {
       ) : (
         <>
           {/* Kelas Aktif */}
-          {kelasAktif.length === 0 ? (
+          {filteredKelas.length === 0 ? (
             <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center mb-6">
-              <div className="text-5xl mb-4">🏫</div>
-              <p className="font-bold text-[#1A1640] mb-2">Belum ada kelas aktif</p>
-              <p className="text-sm text-[#7B78A8] mb-4">Buat kelas pertama untuk mulai mendaftarkan siswa</p>
-              <Link href="/admin/kelas/baru"
-                className="inline-flex items-center gap-2 bg-[#5C4FE5] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
-                + Buat Kelas Pertama
-              </Link>
+              <div className="text-5xl mb-4">🔍</div>
+              <p className="font-bold text-[#1A1640] mb-2">
+                {searchQuery || selectedCourse !== 'semua' || selectedTutor !== 'semua'
+                  ? 'Tidak ada kelas yang cocok'
+                  : 'Belum ada kelas aktif'}
+              </p>
+              <p className="text-sm text-[#7B78A8] mb-4">
+                {searchQuery || selectedCourse !== 'semua' || selectedTutor !== 'semua'
+                  ? 'Coba ubah filter atau kata kunci pencarian'
+                  : 'Buat kelas pertama untuk mulai mendaftarkan siswa'}
+              </p>
+              {!searchQuery && selectedCourse === 'semua' && selectedTutor === 'semua' && (
+                <Link href="/admin/kelas/baru"
+                  className="inline-flex items-center gap-2 bg-[#5C4FE5] text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+                  + Buat Kelas Pertama
+                </Link>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              {kelasAktif.map((k: any) => <KelasCard key={k.id} k={k} />)}
+              {filteredKelas.map((k: any) => <KelasCard key={k.id} k={k} />)}
             </div>
           )}
 
@@ -375,6 +574,7 @@ export default function KelasPage() {
         </>
       )}
 
+      {/* Modals - sama seperti sebelumnya */}
       <ConfirmModal
         open={!!archiveId}
         title="Arsipkan Kelas?"
@@ -397,7 +597,7 @@ export default function KelasPage() {
         onCancel={() => setRestoreId(null)}
       />
 
-      {/* Modal Hapus Kelas — dengan pengecekan enrollment/payment */}
+      {/* Modal Hapus - sama */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
@@ -463,7 +663,7 @@ export default function KelasPage() {
         </div>
       )}
 
-      {/* MODAL JADWALKAN */}
+      {/* Modal Jadwal - sama */}
       {showJadwal && selectedKelas && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
