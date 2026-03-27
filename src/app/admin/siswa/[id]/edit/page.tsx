@@ -2,480 +2,356 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter, useParams } from 'next/navigation'
-import Link from 'next/link'
-import { UserCheck, UserPlus, Eye, EyeOff } from 'lucide-react'
-import EnrollmentLevelManager from '@/components/admin/EnrollmentLevelManager'
 
-import { WILAYAH, PROVINCES, getCities } from '@/lib/wilayah'
-const RELATION_ROLES = ['Orang Tua', 'Wali', 'Diri Sendiri']
+interface Enrollment {
+  id: string
+  course_id: string
+  course_name: string
+  class_name: string
+  level_id: string | null
+  level_name: string | null
+}
 
-export default function SiswaEditPage() {
-  const params   = useParams()
-  const router   = useRouter()
-  const siswaId  = params.id as string
-  const supabase = createClient()
+interface Level {
+  id: string
+  name: string
+  target_age: string | null
+}
 
-  const [loading,   setLoading]   = useState(true)
-  const [saving,    setSaving]    = useState(false)
-  const [error,     setError]     = useState('')
-  const [success,   setSuccess]   = useState(false)
-  const [profileId, setProfileId] = useState('')
+interface Props {
+  studentId: string
+}
 
-  // Parent account state
-  const [parentProfileId,   setParentProfileId]   = useState<string | null>(null)
-  const [parentEmail,       setParentEmail]       = useState('')
-  const [parentHasAuth,     setParentHasAuth]     = useState(false)
-  const [parentEmailInput,  setParentEmailInput]  = useState('')
-  const [parentPassword,    setParentPassword]    = useState('')
-  const [showPassword,      setShowPassword]      = useState(false)
-  const [savingParent,      setSavingParent]      = useState(false)
-  const [parentError,       setParentError]       = useState('')
-  const [parentSuccess,     setParentSuccess]     = useState('')
+export default function EnrollmentLevelManager({ studentId }: Props) {
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
+  const [levelsByCourse, setLevelsByCourse] = useState<Record<string, Level[]>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<Record<string, boolean>>({})
 
-  const [form, setForm] = useState({
-    full_name:      '',
-    phone:          '',
-    email:          '',
-    birth_date:     '',
-    province:       '',
-    city:           '',
-    relation_name:  '',
-    relation_role:  'Orang Tua',
-    relation_phone: '',
-    relation_email: '',
-    school:         '',
-    grade:          '',
-    notes:          '',
-  })
+  useEffect(() => { fetchData() }, [studentId])
 
-  const cities = form.province ? getCities(form.province) : []
-
-  useEffect(() => { fetchSiswa() }, [siswaId])
-
-  async function fetchSiswa() {
-    setLoading(true)
-    const { data: student } = await supabase
-      .from('students')
-      .select('id, profile_id, parent_profile_id, birth_date, province, city, relation_name, relation_role, relation_phone, relation_email, school, grade, notes')
-      .eq('id', siswaId)
-      .single()
-
-    if (!student) { setError('Siswa tidak ditemukan.'); setLoading(false); return }
-
-    setProfileId(student.profile_id)
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, email, phone')
-      .eq('id', student.profile_id)
-      .single()
-
-    setForm({
-      full_name:      profile?.full_name ?? '',
-      phone:          profile?.phone ?? '',
-      email:          profile?.email ?? '',
-      birth_date:     student.birth_date ?? '',
-      province:       student.province ?? '',
-      city:           student.city ?? '',
-      relation_name:  student.relation_name ?? '',
-      relation_role:  student.relation_role ?? 'Orang Tua',
-      relation_phone: student.relation_phone ?? '',
-      relation_email: student.relation_email ?? '',
-      school:         student.school ?? '',
-      grade:          student.grade ?? '',
-      notes:          student.notes ?? '',
-    })
-
-    // Cek apakah akun ortu sudah ada
-    if (student.parent_profile_id) {
-      setParentProfileId(student.parent_profile_id)
-      const { data: parentProfile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', student.parent_profile_id)
-        .single()
-      const emailOrtu = parentProfile?.email ?? ''
-      setParentEmail(emailOrtu)
-
-      // Verifikasi apakah auth user benar-benar ada via API
-      try {
-        const checkRes = await fetch(`/api/admin/create-user?profile_id=${student.parent_profile_id}`)
-        const checkData = await checkRes.json()
-        if (checkData.has_auth) {
-          setParentHasAuth(true)
-        } else {
-          // Profile ada di DB tapi auth user belum dibuat — tampilkan form buat akun
-          setParentHasAuth(false)
-          setParentEmailInput(emailOrtu || student.relation_email || '')
-        }
-      } catch {
-        // Jika gagal cek, fallback ke show form reset (lebih aman)
-        setParentHasAuth(true)
-      }
-    } else if (student.relation_role === 'Diri Sendiri') {
-      // Dewasa yang les sendiri — akun login adalah profile siswa itu sendiri
-      setParentProfileId(student.profile_id)
-      const { data: selfProfile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', student.profile_id)
-        .single()
-      setParentEmail(selfProfile?.email ?? '')
-      setParentHasAuth(true)
-    } else {
-      // Ortu belum punya akun — pre-fill email dari relation_email jika ada
-      setParentHasAuth(false)
-      if (student.relation_email) {
-        setParentEmailInput(student.relation_email)
-      }
-    }
-
-    setLoading(false)
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    const { name, value } = e.target
-    if (name === 'province') {
-      setForm(prev => ({ ...prev, province: value, city: '' }))
-    } else {
-      setForm(prev => ({ ...prev, [name]: value }))
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!form.full_name.trim()) { setError('Nama siswa wajib diisi.'); return }
-    setSaving(true); setError('')
-
-    const { error: profileErr } = await supabase
-      .from('profiles')
-      .update({
-        full_name: form.full_name.trim(),
-        phone:     form.phone.trim() || null,
-        email:     form.email.trim() || null,
-      })
-      .eq('id', profileId)
-
-    if (profileErr) { setError(profileErr.message); setSaving(false); return }
-
-    const { error: studentErr } = await supabase
-      .from('students')
-      .update({
-        birth_date:     form.birth_date || null,
-        province:       form.province || null,
-        city:           form.city || null,
-        relation_name:  form.relation_name.trim() || null,
-        relation_role:  form.relation_role || null,
-        relation_phone: form.relation_phone.trim() || null,
-        relation_email: form.relation_email.trim() || null,
-        school:         form.school.trim() || null,
-        grade:          form.grade.trim() || null,
-        notes:          form.notes.trim() || null,
-      })
-      .eq('id', siswaId)
-
-    if (studentErr) { setError(studentErr.message); setSaving(false); return }
-
-    setSaving(false); setSuccess(true)
-    setTimeout(() => router.push('/admin/siswa'), 1200)
-  }
-
-  async function handleBuatAkunOrtu() {
-    if (!parentEmailInput.trim()) { setParentError('Email ortu wajib diisi.'); return }
-    if (!parentPassword || parentPassword.length < 6) { setParentError('Password minimal 6 karakter.'); return }
-
-    setSavingParent(true); setParentError(''); setParentSuccess('')
+  async function fetchData() {
+    const supabase = createClient()
 
     try {
-      const res = await fetch('/api/admin/create-user', {
+      // Fetch enrollments dengan course & level info (LEFT JOIN untuk levels agar NULL tetap muncul)
+      const { data: enrollmentData } = await supabase
+        .from('enrollments')
+        .select(`
+          id,
+          level_id,
+          class_group_id,
+          class_groups!inner(label, course_id, courses!inner(name)),
+          levels(id, name)
+        `)
+        .eq('student_id', studentId)
+        .eq('status', 'active')
+
+      if (enrollmentData) {
+        const formatted = enrollmentData.map((e: any) => ({
+          id: e.id,
+          course_id: e.class_groups.course_id,
+          course_name: e.class_groups.courses.name,
+          class_name: e.class_groups.label,
+          level_id: e.level_id,
+          level_name: e.levels?.name || null,
+        }))
+        setEnrollments(formatted)
+
+        // Fetch levels untuk setiap course
+        const courseIds = [...new Set(formatted.map((e: Enrollment) => e.course_id))]
+        const levelsMap: Record<string, Level[]> = {}
+
+        for (const courseId of courseIds) {
+          const { data: levels } = await supabase
+            .from('levels')
+            .select('id, name, target_age')
+            .eq('course_id', courseId)
+            .eq('is_active', true)
+            .order('sort_order')
+
+          if (levels) {
+            levelsMap[courseId] = levels
+          }
+        }
+
+        setLevelsByCourse(levelsMap)
+      }
+    } catch (error) {
+      console.error('Error fetching enrollments:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSave(enrollmentId: string, levelId: string) {
+    setSaving({ ...saving, [enrollmentId]: true })
+
+    try {
+      const response = await fetch('/api/admin/enrollments/update-level', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email:      parentEmailInput.trim(),
-          password:   parentPassword,
-          role:       'parent',
-          full_name:  form.relation_name || `Ortu ${form.full_name}`,
-          student_id: siswaId,
+          enrollment_id: enrollmentId,
+          level_id: levelId || null,
         }),
       })
-      const json = await res.json()
-      if (!res.ok) { setParentError(json.error ?? 'Gagal membuat akun.'); setSavingParent(false); return }
 
-      setParentProfileId(json.profile_id)
-      setParentEmail(parentEmailInput.trim())
-      setParentEmailInput('')
-      setParentPassword('')
-      setParentSuccess('Akun orang tua berhasil dibuat!')
-    } catch (err: any) {
-      setParentError(err.message ?? 'Terjadi kesalahan.')
+      const result = await response.json()
+
+      if (response.ok) {
+        // Update local state
+        setEnrollments(
+          enrollments.map((e) =>
+            e.id === enrollmentId
+              ? {
+                  ...e,
+                  level_id: levelId || null,
+                  level_name:
+                    levelsByCourse[e.course_id]?.find((l) => l.id === levelId)
+                      ?.name || null,
+                }
+              : e
+          )
+        )
+        alert('✅ Level berhasil diperbarui!')
+      } else {
+        alert('❌ Gagal memperbarui level: ' + result.error)
+      }
+    } catch (error) {
+      console.error('Error saving level:', error)
+      alert('❌ Terjadi kesalahan')
+    } finally {
+      setSaving({ ...saving, [enrollmentId]: false })
     }
-    setSavingParent(false)
   }
 
-  async function handleResetPassword() {
-    if (!parentPassword || parentPassword.length < 6) { setParentError('Password baru minimal 6 karakter.'); return }
-    setSavingParent(true); setParentError(''); setParentSuccess('')
-
-    try {
-      const res = await fetch('/api/admin/create-user', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        // Untuk 'Diri Sendiri': reset profileId siswa, bukan parentProfileId
-      body: JSON.stringify({ profile_id: form.relation_role === 'Diri Sendiri' ? profileId : parentProfileId, password: parentPassword }),
-      })
-      const json = await res.json()
-      if (!res.ok) { setParentError(json.error ?? 'Gagal reset password.'); setSavingParent(false); return }
-      setParentPassword('')
-      setParentSuccess('Password orang tua berhasil direset!')
-    } catch (err: any) {
-      setParentError(err.message ?? 'Terjadi kesalahan.')
-    }
-    setSavingParent(false)
+  if (loading) {
+    return (
+      <div className="bg-[#F7F6FF] border-2 border-[#E5E3FF] rounded-xl p-6">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
+          <span className="text-[13px] text-[#9B97B2]">Memuat data enrollment...</span>
+        </div>
+      </div>
+    )
   }
 
-  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
-  const labelCls = "block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5"
+  if (enrollments.length === 0) {
+    return (
+      <div className="bg-[#FFF8D6] border-2 border-[#E6B800] rounded-xl p-6">
+        <p className="text-[13px] text-[#8A6D00]">
+          ℹ️ Siswa belum terdaftar di kelas manapun
+        </p>
+      </div>
+    )
+  }
 
-  if (loading) return <div className="p-6 text-sm text-[#7B78A8]">Memuat data siswa...</div>
+  // Adaptive Layout: Simple vs Cards
+  const isSingleEnrollment = enrollments.length === 1
 
   return (
-    <div className="max-w-xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/siswa" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">← Kembali</Link>
-        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Edit Siswa</h1>
+    <div className="bg-[#F7F6FF] border-2 border-[#E5E3FF] rounded-xl p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[20px]">📚</span>
+        <h3 className="text-[15px] font-bold text-[#1A1530]">Enrollment & Level</h3>
       </div>
 
-      {success && (
-        <div className="mb-4 px-4 py-3 bg-[#E6F4EC] border border-green-200 rounded-xl text-sm text-green-700 font-semibold">
-          ✅ Data siswa berhasil diperbarui! Mengalihkan...
+      {isSingleEnrollment ? (
+        // SIMPLE LAYOUT (1 enrollment)
+        <SimpleEnrollmentLayout
+          enrollment={enrollments[0]}
+          levels={levelsByCourse[enrollments[0].course_id] || []}
+          onSave={handleSave}
+          isSaving={saving[enrollments[0].id] || false}
+        />
+      ) : (
+        // CARDS LAYOUT (2+ enrollments)
+        <div className="space-y-3">
+          {enrollments.map((enrollment, index) => (
+            <EnrollmentCard
+              key={enrollment.id}
+              enrollment={enrollment}
+              levels={levelsByCourse[enrollment.course_id] || []}
+              number={index + 1}
+              onSave={handleSave}
+              isSaving={saving[enrollment.id] || false}
+            />
+          ))}
+          <div className="mt-3 p-3 bg-[#FFF8D6] rounded-lg text-center">
+            <span className="text-[12px] text-[#8A6D00]">
+              ℹ️ Siswa enrolled di <strong>{enrollments.length} courses</strong> - tampil
+              semua sekaligus
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Simple Layout Component (1 enrollment)
+function SimpleEnrollmentLayout({
+  enrollment,
+  levels,
+  onSave,
+  isSaving,
+}: {
+  enrollment: Enrollment
+  levels: Level[]
+  onSave: (id: string, levelId: string) => void
+  isSaving: boolean
+}) {
+  const [selectedLevel, setSelectedLevel] = useState(enrollment.level_id || '')
+
+  return (
+    <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-4">
+      {/* Course Display */}
+      <div className="flex items-center gap-2 mb-4 p-3 bg-[#F7F6FF] rounded-lg">
+        <span className="text-[18px]">📘</span>
+        <span className="text-[14px] font-bold text-[#1A1530]">{enrollment.course_name}</span>
+        <span className="px-2 py-1 bg-[#FFF8D6] text-[#8A6D00] rounded-lg text-[10px] font-bold ml-auto">
+          {enrollment.class_name}
+        </span>
+      </div>
+
+      {/* Current Level Status */}
+      {enrollment.level_name ? (
+        <div className="mb-3 p-2 bg-[#E8F5E9] border border-green-200 rounded-lg">
+          <p className="text-[11px] text-[#2E7D32]">
+            ✓ Level saat ini: <strong>{enrollment.level_name}</strong>
+          </p>
+        </div>
+      ) : (
+        <div className="mb-3 p-2 bg-[#FFF8D6] border border-[#E6B800] rounded-lg">
+          <p className="text-[11px] text-[#8A6D00]">
+            ⚠️ Level belum dipilih - silakan pilih level di bawah
+          </p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Level Dropdown */}
+      <div className="mb-4">
+        <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
+          Pilih Level
+        </label>
+        <select
+          value={selectedLevel}
+          onChange={(e) => setSelectedLevel(e.target.value)}
+          className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] text-[#1A1530] focus:outline-none focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5]"
+        >
+          <option value="">-- Pilih Level --</option>
+          {levels.map((level) => (
+            <option key={level.id} value={level.id}>
+              {level.name}
+              {level.target_age && ` (${level.target_age})`}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* DATA SISWA */}
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
-          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Data Siswa</p>
-
-          <div>
-            <label className={labelCls}>Nama Lengkap <span className="text-red-500">*</span></label>
-            <input type="text" name="full_name" value={form.full_name} onChange={handleChange}
-              placeholder="Nama lengkap siswa" className={inputCls}/>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>No. HP Siswa</label>
-              <input type="text" name="phone" value={form.phone} onChange={handleChange}
-                placeholder="08xxxxxxxxxx" className={inputCls}/>
-            </div>
-            <div>
-              <label className={labelCls}>Email <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-              <input type="email" name="email" value={form.email} onChange={handleChange}
-                placeholder="email@contoh.com" className={inputCls}/>
-            </div>
-          </div>
-
-          <div>
-            <label className={labelCls}>Tanggal Lahir <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-            <input type="date" name="birth_date" value={form.birth_date} onChange={handleChange} className={inputCls}/>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Provinsi <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-              <select name="province" value={form.province} onChange={handleChange} className={inputCls}>
-                <option value="">-- Pilih Provinsi --</option>
-                {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Kabupaten/Kota <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-              <select name="city" value={form.city} onChange={handleChange}
-                disabled={!form.province} className={`${inputCls} ${!form.province ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                <option value="">-- Pilih Kab/Kota --</option>
-                {cities.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Sekolah <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-              <input type="text" name="school" value={form.school} onChange={handleChange}
-                placeholder="Nama sekolah" className={inputCls}/>
-            </div>
-            <div>
-              <label className={labelCls}>Kelas/Tingkat <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-              <input type="text" name="grade" value={form.grade} onChange={handleChange}
-                placeholder="Level Pre-Starter" className={inputCls}/>
-            </div>
-          </div>
-        </div>
-
-        {/* PIHAK BERELASI */}
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
-          <div>
-            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Pihak Berelasi</p>
-            <p className="text-xs text-[#7B78A8] mt-0.5">Orang tua, wali, atau siswa sendiri jika sudah dewasa</p>
-          </div>
-
-          <div>
-            <label className={labelCls}>Hubungan</label>
-            <select name="relation_role" value={form.relation_role} onChange={handleChange} className={inputCls}>
-              {RELATION_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-
-          {form.relation_role !== 'Diri Sendiri' ? (
-            <>
-              <div>
-                <label className={labelCls}>Nama {form.relation_role}</label>
-                <input type="text" name="relation_name" value={form.relation_name} onChange={handleChange}
-                  placeholder={`Nama ${form.relation_role.toLowerCase()} siswa`} className={inputCls}/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>No. HP {form.relation_role}</label>
-                  <input type="text" name="relation_phone" value={form.relation_phone} onChange={handleChange}
-                    placeholder="08xxxxxxxxxx" className={inputCls}/>
-                  <p className="text-xs text-[#7B78A8] mt-1">Untuk notifikasi WhatsApp</p>
-                </div>
-                <div>
-                  <label className={labelCls}>Email {form.relation_role} <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-                  <input type="email" name="relation_email" value={form.relation_email} onChange={handleChange}
-                    placeholder="email@contoh.com" className={inputCls}/>
-                  <p className="text-xs text-[#7B78A8] mt-1">Untuk akses Google Drive</p>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="px-4 py-3 bg-[#EEEDFE] rounded-xl">
-              <p className="text-xs font-semibold text-[#3C3489]">
-                💡 Notifikasi WA dan akses Google Drive akan menggunakan data kontak siswa di atas.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* AKUN ORANG TUA */}
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            {parentProfileId
-              ? <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
-              : <UserPlus size={16} className="text-[#7B78A8] flex-shrink-0"/>
-            }
-            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Akun Orang Tua / Portal Siswa</p>
-          </div>
-
-          {parentProfileId && parentHasAuth ? (
-            // Akun sudah ada DAN auth user terkonfirmasi
-            <>
-              <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
-                <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
-                <div>
-                  <p className="text-xs font-bold text-green-700">Akun aktif</p>
-                  <p className="text-xs text-green-600 mt-0.5">{parentEmail}</p>
-                </div>
-              </div>
-
-              <div>
-                <label className={labelCls}>Reset Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={parentPassword}
-                    onChange={e => setParentPassword(e.target.value)}
-                    placeholder="Password baru (min. 6 karakter)"
-                    className={inputCls}
-                  />
-                  <button type="button" onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
-                    {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
-                  </button>
-                </div>
-              </div>
-
-              {parentError   && <p className="text-xs text-red-600 font-semibold">{parentError}</p>}
-              {parentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {parentSuccess}</p>}
-
-              <button type="button" onClick={handleResetPassword} disabled={savingParent}
-                className="w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm hover:bg-[#EAE8FD] transition disabled:opacity-60">
-                {savingParent ? 'Menyimpan...' : 'Reset Password Orang Tua'}
-              </button>
-            </>
-          ) : (
-            // Akun belum ada — form buat akun baru
-            <>
-              <div className="px-4 py-3 bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl">
-                <p className="text-xs text-[#7B78A8]">
-                  Buat akun agar orang tua bisa login ke <span className="font-semibold text-[#5C4FE5]">portal siswa</span> dan memantau perkembangan belajar.
-                </p>
-              </div>
-
-              <div>
-                <label className={labelCls}>Email Login Orang Tua</label>
-                <input type="email" value={parentEmailInput}
-                  onChange={e => setParentEmailInput(e.target.value)}
-                  placeholder="email@contoh.com" className={inputCls}/>
-              </div>
-
-              <div>
-                <label className={labelCls}>Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={parentPassword}
-                    onChange={e => setParentPassword(e.target.value)}
-                    placeholder="Min. 6 karakter"
-                    className={inputCls}
-                  />
-                  <button type="button" onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
-                    {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
-                  </button>
-                </div>
-              </div>
-
-              {parentError   && <p className="text-xs text-red-600 font-semibold">{parentError}</p>}
-              {parentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {parentSuccess}</p>}
-
-              <button type="button" onClick={handleBuatAkunOrtu} disabled={savingParent}
-                className="w-full py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 flex items-center justify-center gap-2">
-                <UserPlus size={15}/>
-                {savingParent ? 'Membuat akun...' : 'Buat Akun Orang Tua'}
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* ENROLLMENT & LEVEL MANAGER - SECTION BARU */}
-        <EnrollmentLevelManager studentId={siswaId} />
-
-        {/* CATATAN */}
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
-          <label className={labelCls}>Catatan <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-          <textarea name="notes" value={form.notes} onChange={handleChange}
-            placeholder="Catatan tambahan tentang siswa ini..."
-            rows={3} className={`${inputCls} resize-none`}/>
-        </div>
-
-        {error && (
-          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{error}</div>
+      {/* Save Button */}
+      <button
+        onClick={() => onSave(enrollment.id, selectedLevel)}
+        disabled={isSaving}
+        className="w-full px-4 py-3 bg-[#5C4FE5] text-white rounded-lg text-[14px] font-bold hover:bg-[#4A3FCC] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+      >
+        {isSaving ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <span>Menyimpan...</span>
+          </>
+        ) : (
+          <>
+            <span>💾</span>
+            <span>Simpan Level</span>
+          </>
         )}
+      </button>
+    </div>
+  )
+}
 
-        <div className="flex gap-3">
-          <button type="submit" disabled={saving || success}
-            className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-            {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
-          </button>
-          <Link href="/admin/siswa"
-            className="px-6 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition text-center">
-            Batal
-          </Link>
+// Card Component (untuk multi enrollments)
+function EnrollmentCard({
+  enrollment,
+  levels,
+  number,
+  onSave,
+  isSaving,
+}: {
+  enrollment: Enrollment
+  levels: Level[]
+  number: number
+  onSave: (id: string, levelId: string) => void
+  isSaving: boolean
+}) {
+  const [selectedLevel, setSelectedLevel] = useState(enrollment.level_id || '')
+
+  return (
+    <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-4 hover:border-[#5C4FE5] transition-colors">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-7 h-7 bg-[#5C4FE5] text-white rounded-full flex items-center justify-center text-[13px] font-black">
+          {number}
         </div>
-      </form>
+        <span className="text-[14px] font-bold text-[#1A1530]">{enrollment.course_name}</span>
+        <span className="px-2 py-1 bg-[#FFF8D6] text-[#8A6D00] rounded-lg text-[10px] font-bold ml-auto">
+          {enrollment.class_name}
+        </span>
+      </div>
+
+      {/* Current Level Status */}
+      {enrollment.level_name ? (
+        <div className="mb-2 p-2 bg-[#E8F5E9] border border-green-200 rounded-lg">
+          <p className="text-[11px] text-[#2E7D32]">
+            ✓ Level: <strong>{enrollment.level_name}</strong>
+          </p>
+        </div>
+      ) : (
+        <div className="mb-2 p-2 bg-[#FFF8D6] border border-[#E6B800] rounded-lg">
+          <p className="text-[11px] text-[#8A6D00]">⚠️ Belum dipilih</p>
+        </div>
+      )}
+
+      {/* Level Dropdown */}
+      <div className="mb-3">
+        <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
+          Pilih Level
+        </label>
+        <select
+          value={selectedLevel}
+          onChange={(e) => setSelectedLevel(e.target.value)}
+          className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] text-[#1A1530] focus:outline-none focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5]"
+        >
+          <option value="">-- Pilih Level --</option>
+          {levels.map((level) => (
+            <option key={level.id} value={level.id}>
+              {level.name}
+              {level.target_age && ` (${level.target_age})`}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Save Button */}
+      <button
+        onClick={() => onSave(enrollment.id, selectedLevel)}
+        disabled={isSaving}
+        className="w-full px-4 py-2.5 bg-[#5C4FE5] text-white rounded-lg text-[14px] font-bold hover:bg-[#4A3FCC] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+      >
+        {isSaving ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <span>Menyimpan...</span>
+          </>
+        ) : (
+          <>
+            <span>💾</span>
+            <span>Simpan</span>
+          </>
+        )}
+      </button>
     </div>
   )
 }
