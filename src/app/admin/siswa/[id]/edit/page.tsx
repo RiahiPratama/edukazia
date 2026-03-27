@@ -1,105 +1,481 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect, notFound } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
+import { UserCheck, UserPlus, Eye, EyeOff } from 'lucide-react'
 import EnrollmentLevelManager from '@/components/admin/EnrollmentLevelManager'
 
-export default async function AdminEditSiswaPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const supabase = await createClient()
+import { WILAYAH, PROVINCES, getCities } from '@/lib/wilayah'
+const RELATION_ROLES = ['Orang Tua', 'Wali', 'Diri Sendiri']
 
-  // Check auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function SiswaEditPage() {
+  const params   = useParams()
+  const router   = useRouter()
+  const siswaId  = params.id as string
+  const supabase = createClient()
 
-  // Check admin role
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const [loading,   setLoading]   = useState(true)
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState('')
+  const [success,   setSuccess]   = useState(false)
+  const [profileId, setProfileId] = useState('')
 
-  if (profile?.role !== 'admin') redirect('/admin')
+  // Parent account state
+  const [parentProfileId,   setParentProfileId]   = useState<string | null>(null)
+  const [parentEmail,       setParentEmail]       = useState('')
+  const [parentHasAuth,     setParentHasAuth]     = useState(false)
+  const [parentEmailInput,  setParentEmailInput]  = useState('')
+  const [parentPassword,    setParentPassword]    = useState('')
+  const [showPassword,      setShowPassword]      = useState(false)
+  const [savingParent,      setSavingParent]      = useState(false)
+  const [parentError,       setParentError]       = useState('')
+  const [parentSuccess,     setParentSuccess]     = useState('')
 
-  // Fetch student data
-  const { data: student } = await supabase
-    .from('students')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [form, setForm] = useState({
+    full_name:      '',
+    phone:          '',
+    email:          '',
+    birth_date:     '',
+    province:       '',
+    city:           '',
+    relation_name:  '',
+    relation_role:  'Orang Tua',
+    relation_phone: '',
+    relation_email: '',
+    school:         '',
+    grade:          '',
+    notes:          '',
+  })
 
-  if (!student) notFound()
+  const cities = form.province ? getCities(form.province) : []
+
+  useEffect(() => { fetchSiswa() }, [siswaId])
+
+  async function fetchSiswa() {
+    setLoading(true)
+    const { data: student } = await supabase
+      .from('students')
+      .select('id, profile_id, parent_profile_id, birth_date, province, city, relation_name, relation_role, relation_phone, relation_email, school, grade, notes')
+      .eq('id', siswaId)
+      .single()
+
+    if (!student) { setError('Siswa tidak ditemukan.'); setLoading(false); return }
+
+    setProfileId(student.profile_id)
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, email, phone')
+      .eq('id', student.profile_id)
+      .single()
+
+    setForm({
+      full_name:      profile?.full_name ?? '',
+      phone:          profile?.phone ?? '',
+      email:          profile?.email ?? '',
+      birth_date:     student.birth_date ?? '',
+      province:       student.province ?? '',
+      city:           student.city ?? '',
+      relation_name:  student.relation_name ?? '',
+      relation_role:  student.relation_role ?? 'Orang Tua',
+      relation_phone: student.relation_phone ?? '',
+      relation_email: student.relation_email ?? '',
+      school:         student.school ?? '',
+      grade:          student.grade ?? '',
+      notes:          student.notes ?? '',
+    })
+
+    // Cek apakah akun ortu sudah ada
+    if (student.parent_profile_id) {
+      setParentProfileId(student.parent_profile_id)
+      const { data: parentProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', student.parent_profile_id)
+        .single()
+      const emailOrtu = parentProfile?.email ?? ''
+      setParentEmail(emailOrtu)
+
+      // Verifikasi apakah auth user benar-benar ada via API
+      try {
+        const checkRes = await fetch(`/api/admin/create-user?profile_id=${student.parent_profile_id}`)
+        const checkData = await checkRes.json()
+        if (checkData.has_auth) {
+          setParentHasAuth(true)
+        } else {
+          // Profile ada di DB tapi auth user belum dibuat — tampilkan form buat akun
+          setParentHasAuth(false)
+          setParentEmailInput(emailOrtu || student.relation_email || '')
+        }
+      } catch {
+        // Jika gagal cek, fallback ke show form reset (lebih aman)
+        setParentHasAuth(true)
+      }
+    } else if (student.relation_role === 'Diri Sendiri') {
+      // Dewasa yang les sendiri — akun login adalah profile siswa itu sendiri
+      setParentProfileId(student.profile_id)
+      const { data: selfProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', student.profile_id)
+        .single()
+      setParentEmail(selfProfile?.email ?? '')
+      setParentHasAuth(true)
+    } else {
+      // Ortu belum punya akun — pre-fill email dari relation_email jika ada
+      setParentHasAuth(false)
+      if (student.relation_email) {
+        setParentEmailInput(student.relation_email)
+      }
+    }
+
+    setLoading(false)
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
+    const { name, value } = e.target
+    if (name === 'province') {
+      setForm(prev => ({ ...prev, province: value, city: '' }))
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }))
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.full_name.trim()) { setError('Nama siswa wajib diisi.'); return }
+    setSaving(true); setError('')
+
+    const { error: profileErr } = await supabase
+      .from('profiles')
+      .update({
+        full_name: form.full_name.trim(),
+        phone:     form.phone.trim() || null,
+        email:     form.email.trim() || null,
+      })
+      .eq('id', profileId)
+
+    if (profileErr) { setError(profileErr.message); setSaving(false); return }
+
+    const { error: studentErr } = await supabase
+      .from('students')
+      .update({
+        birth_date:     form.birth_date || null,
+        province:       form.province || null,
+        city:           form.city || null,
+        relation_name:  form.relation_name.trim() || null,
+        relation_role:  form.relation_role || null,
+        relation_phone: form.relation_phone.trim() || null,
+        relation_email: form.relation_email.trim() || null,
+        school:         form.school.trim() || null,
+        grade:          form.grade.trim() || null,
+        notes:          form.notes.trim() || null,
+      })
+      .eq('id', siswaId)
+
+    if (studentErr) { setError(studentErr.message); setSaving(false); return }
+
+    setSaving(false); setSuccess(true)
+    setTimeout(() => router.push('/admin/siswa'), 1200)
+  }
+
+  async function handleBuatAkunOrtu() {
+    if (!parentEmailInput.trim()) { setParentError('Email ortu wajib diisi.'); return }
+    if (!parentPassword || parentPassword.length < 6) { setParentError('Password minimal 6 karakter.'); return }
+
+    setSavingParent(true); setParentError(''); setParentSuccess('')
+
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:      parentEmailInput.trim(),
+          password:   parentPassword,
+          role:       'parent',
+          full_name:  form.relation_name || `Ortu ${form.full_name}`,
+          student_id: siswaId,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setParentError(json.error ?? 'Gagal membuat akun.'); setSavingParent(false); return }
+
+      setParentProfileId(json.profile_id)
+      setParentEmail(parentEmailInput.trim())
+      setParentEmailInput('')
+      setParentPassword('')
+      setParentSuccess('Akun orang tua berhasil dibuat!')
+    } catch (err: any) {
+      setParentError(err.message ?? 'Terjadi kesalahan.')
+    }
+    setSavingParent(false)
+  }
+
+  async function handleResetPassword() {
+    if (!parentPassword || parentPassword.length < 6) { setParentError('Password baru minimal 6 karakter.'); return }
+    setSavingParent(true); setParentError(''); setParentSuccess('')
+
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        // Untuk 'Diri Sendiri': reset profileId siswa, bukan parentProfileId
+      body: JSON.stringify({ profile_id: form.relation_role === 'Diri Sendiri' ? profileId : parentProfileId, password: parentPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setParentError(json.error ?? 'Gagal reset password.'); setSavingParent(false); return }
+      setParentPassword('')
+      setParentSuccess('Password orang tua berhasil direset!')
+    } catch (err: any) {
+      setParentError(err.message ?? 'Terjadi kesalahan.')
+    }
+    setSavingParent(false)
+  }
+
+  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
+  const labelCls = "block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5"
+
+  if (loading) return <div className="p-6 text-sm text-[#7B78A8]">Memuat data siswa...</div>
 
   return (
-    <div className="min-h-screen bg-[#F7F6FF] pb-20">
-      {/* Header */}
-      <div className="bg-white border-b border-[#E5E3FF] sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <h1 className="text-[20px] font-black text-[#1A1530]">Edit Siswa</h1>
-          <p className="text-[12px] text-[#9B97B2] mt-0.5">
-            Kelola data siswa dan assignment level
-          </p>
-        </div>
+    <div className="max-w-xl">
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/admin/siswa" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">← Kembali</Link>
+        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Edit Siswa</h1>
       </div>
 
-      {/* Content */}
-      <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
-        {/* Data Siswa Section */}
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
-          <h2 className="text-[18px] font-bold text-[#1A1530] mb-4">Data Siswa</h2>
-          
-          {/* TODO: Tambahkan form existing Anda di sini */}
-          {/* Contoh: */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
-                Nama Relasi
-              </label>
-              <input
-                type="text"
-                value={student.relation_name || ''}
-                disabled
-                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] bg-[#F7F6FF] text-[#9B97B2]"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
-                Hubungan
-              </label>
-              <input
-                type="text"
-                value={student.relation_role || ''}
-                disabled
-                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] bg-[#F7F6FF] text-[#9B97B2]"
-              />
-            </div>
+      {success && (
+        <div className="mb-4 px-4 py-3 bg-[#E6F4EC] border border-green-200 rounded-xl text-sm text-green-700 font-semibold">
+          ✅ Data siswa berhasil diperbarui! Mengalihkan...
+        </div>
+      )}
 
-            <div>
-              <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
-                Slug
-              </label>
-              <input
-                type="text"
-                value={student.slug || ''}
-                disabled
-                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] bg-[#F7F6FF] text-[#9B97B2]"
-              />
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Tambahkan field lain sesuai kebutuhan */}
+        {/* DATA SISWA */}
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
+          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Data Siswa</p>
+
+          <div>
+            <label className={labelCls}>Nama Lengkap <span className="text-red-500">*</span></label>
+            <input type="text" name="full_name" value={form.full_name} onChange={handleChange}
+              placeholder="Nama lengkap siswa" className={inputCls}/>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>No. HP Siswa</label>
+              <input type="text" name="phone" value={form.phone} onChange={handleChange}
+                placeholder="08xxxxxxxxxx" className={inputCls}/>
+            </div>
+            <div>
+              <label className={labelCls}>Email <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <input type="email" name="email" value={form.email} onChange={handleChange}
+                placeholder="email@contoh.com" className={inputCls}/>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Tanggal Lahir <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+            <input type="date" name="birth_date" value={form.birth_date} onChange={handleChange} className={inputCls}/>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Provinsi <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <select name="province" value={form.province} onChange={handleChange} className={inputCls}>
+                <option value="">-- Pilih Provinsi --</option>
+                {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Kabupaten/Kota <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <select name="city" value={form.city} onChange={handleChange}
+                disabled={!form.province} className={`${inputCls} ${!form.province ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <option value="">-- Pilih Kab/Kota --</option>
+                {cities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Sekolah <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <input type="text" name="school" value={form.school} onChange={handleChange}
+                placeholder="Nama sekolah" className={inputCls}/>
+            </div>
+            <div>
+              <label className={labelCls}>Kelas/Tingkat <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <input type="text" name="grade" value={form.grade} onChange={handleChange}
+                placeholder="Level Pre-Starter" className={inputCls}/>
+            </div>
           </div>
         </div>
 
-        {/* ENROLLMENT & LEVEL MANAGER - SECTION BARU */}
-        <EnrollmentLevelManager studentId={id} />
+        {/* PIHAK BERELASI */}
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
+          <div>
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Pihak Berelasi</p>
+            <p className="text-xs text-[#7B78A8] mt-0.5">Orang tua, wali, atau siswa sendiri jika sudah dewasa</p>
+          </div>
 
-        {/* Section lain jika ada */}
-      </div>
+          <div>
+            <label className={labelCls}>Hubungan</label>
+            <select name="relation_role" value={form.relation_role} onChange={handleChange} className={inputCls}>
+              {RELATION_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+
+          {form.relation_role !== 'Diri Sendiri' ? (
+            <>
+              <div>
+                <label className={labelCls}>Nama {form.relation_role}</label>
+                <input type="text" name="relation_name" value={form.relation_name} onChange={handleChange}
+                  placeholder={`Nama ${form.relation_role.toLowerCase()} siswa`} className={inputCls}/>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>No. HP {form.relation_role}</label>
+                  <input type="text" name="relation_phone" value={form.relation_phone} onChange={handleChange}
+                    placeholder="08xxxxxxxxxx" className={inputCls}/>
+                  <p className="text-xs text-[#7B78A8] mt-1">Untuk notifikasi WhatsApp</p>
+                </div>
+                <div>
+                  <label className={labelCls}>Email {form.relation_role} <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+                  <input type="email" name="relation_email" value={form.relation_email} onChange={handleChange}
+                    placeholder="email@contoh.com" className={inputCls}/>
+                  <p className="text-xs text-[#7B78A8] mt-1">Untuk akses Google Drive</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="px-4 py-3 bg-[#EEEDFE] rounded-xl">
+              <p className="text-xs font-semibold text-[#3C3489]">
+                💡 Notifikasi WA dan akses Google Drive akan menggunakan data kontak siswa di atas.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* AKUN ORANG TUA */}
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            {parentProfileId
+              ? <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
+              : <UserPlus size={16} className="text-[#7B78A8] flex-shrink-0"/>
+            }
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Akun Orang Tua / Portal Siswa</p>
+          </div>
+
+          {parentProfileId && parentHasAuth ? (
+            // Akun sudah ada DAN auth user terkonfirmasi
+            <>
+              <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
+                <UserCheck size={16} className="text-green-600 flex-shrink-0"/>
+                <div>
+                  <p className="text-xs font-bold text-green-700">Akun aktif</p>
+                  <p className="text-xs text-green-600 mt-0.5">{parentEmail}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Reset Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={parentPassword}
+                    onChange={e => setParentPassword(e.target.value)}
+                    placeholder="Password baru (min. 6 karakter)"
+                    className={inputCls}
+                  />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
+                    {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
+                  </button>
+                </div>
+              </div>
+
+              {parentError   && <p className="text-xs text-red-600 font-semibold">{parentError}</p>}
+              {parentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {parentSuccess}</p>}
+
+              <button type="button" onClick={handleResetPassword} disabled={savingParent}
+                className="w-full py-2.5 border border-[#5C4FE5] text-[#5C4FE5] font-bold rounded-xl text-sm hover:bg-[#EAE8FD] transition disabled:opacity-60">
+                {savingParent ? 'Menyimpan...' : 'Reset Password Orang Tua'}
+              </button>
+            </>
+          ) : (
+            // Akun belum ada — form buat akun baru
+            <>
+              <div className="px-4 py-3 bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl">
+                <p className="text-xs text-[#7B78A8]">
+                  Buat akun agar orang tua bisa login ke <span className="font-semibold text-[#5C4FE5]">portal siswa</span> dan memantau perkembangan belajar.
+                </p>
+              </div>
+
+              <div>
+                <label className={labelCls}>Email Login Orang Tua</label>
+                <input type="email" value={parentEmailInput}
+                  onChange={e => setParentEmailInput(e.target.value)}
+                  placeholder="email@contoh.com" className={inputCls}/>
+              </div>
+
+              <div>
+                <label className={labelCls}>Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={parentPassword}
+                    onChange={e => setParentPassword(e.target.value)}
+                    placeholder="Min. 6 karakter"
+                    className={inputCls}
+                  />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
+                    {showPassword ? <EyeOff size={15}/> : <Eye size={15}/>}
+                  </button>
+                </div>
+              </div>
+
+              {parentError   && <p className="text-xs text-red-600 font-semibold">{parentError}</p>}
+              {parentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {parentSuccess}</p>}
+
+              <button type="button" onClick={handleBuatAkunOrtu} disabled={savingParent}
+                className="w-full py-2.5 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 flex items-center justify-center gap-2">
+                <UserPlus size={15}/>
+                {savingParent ? 'Membuat akun...' : 'Buat Akun Orang Tua'}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* ENROLLMENT & LEVEL MANAGER - SECTION BARU */}
+        <EnrollmentLevelManager studentId={siswaId} />
+
+        {/* CATATAN */}
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
+          <label className={labelCls}>Catatan <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+          <textarea name="notes" value={form.notes} onChange={handleChange}
+            placeholder="Catatan tambahan tentang siswa ini..."
+            rows={3} className={`${inputCls} resize-none`}/>
+        </div>
+
+        {error && (
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{error}</div>
+        )}
+
+        <div className="flex gap-3">
+          <button type="submit" disabled={saving || success}
+            className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
+            {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+          </button>
+          <Link href="/admin/siswa"
+            className="px-6 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition text-center">
+            Batal
+          </Link>
+        </div>
+      </form>
     </div>
   )
 }
