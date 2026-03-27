@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { Plus, X, Minus, Calendar, Trash2, Archive, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { Plus, X, Minus, Calendar, Trash2, Archive, ChevronDown, ChevronUp, Search, Users, GraduationCap, UserCircle, ArrowUpDown } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
 type Kelas = {
@@ -424,8 +424,9 @@ export default function KelasPage() {
           </div>
         </div>
 
-        <div className="text-sm text-[#4A4580] mb-3">
-          👨‍🏫 {k.tutors?.profiles?.full_name ?? '—'}
+        <div className="flex items-center gap-2 text-sm text-[#4A4580] mb-3">
+          <UserCircle size={16} className="text-[#7B78A8]"/>
+          <span>{k.tutors?.profiles?.full_name ?? '—'}</span>
         </div>
 
         <div className="flex items-center justify-between mb-2">
@@ -472,8 +473,19 @@ export default function KelasPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Manajemen Kelas</h1>
-          <p className="text-sm text-[#7B78A8] mt-1">
-            {totalActiveKelas} kelas aktif • {totalSiswa} siswa • {totalTutor} tutor
+          <p className="text-sm text-[#7B78A8] mt-1 flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <GraduationCap size={14} className="text-[#5C4FE5]"/>
+              {totalActiveKelas} kelas aktif
+            </span>
+            <span className="flex items-center gap-1">
+              <Users size={14} className="text-[#5C4FE5]"/>
+              {totalSiswa} siswa
+            </span>
+            <span className="flex items-center gap-1">
+              <UserCircle size={14} className="text-[#5C4FE5]"/>
+              {totalTutor} tutor
+            </span>
           </p>
         </div>
         <Link href="/admin/kelas/baru"
@@ -496,27 +508,37 @@ export default function KelasPage() {
             />
           </div>
 
-          <select
-            value={selectedTutor}
-            onChange={(e) => setSelectedTutor(e.target.value)}
-            className="px-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
-            <option value="semua">👨‍🏫 Semua Tutor</option>
-            {tutorsList.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.full_name} ({t.count})
-              </option>
-            ))}
-          </select>
+          {/* Filter Tutor */}
+          <div className="relative">
+            <UserCircle size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7B78A8] pointer-events-none"/>
+            <select
+              value={selectedTutor}
+              onChange={(e) => setSelectedTutor(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition appearance-none cursor-pointer">
+              <option value="semua">Semua Tutor</option>
+              {tutorsList.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.full_name} ({t.count})
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] pointer-events-none"/>
+          </div>
 
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="px-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
-            <option value="terbaru">Urutkan: Terbaru</option>
-            <option value="nama">Urutkan: Nama A-Z</option>
-            <option value="progress">Urutkan: Progress Terendah</option>
-            <option value="terbanyak">Urutkan: Terbanyak Siswa</option>
-          </select>
+          {/* Sort */}
+          <div className="relative">
+            <ArrowUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7B78A8] pointer-events-none"/>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition appearance-none cursor-pointer">
+              <option value="terbaru">Terbaru</option>
+              <option value="nama">Nama A-Z</option>
+              <option value="progress">Progress Terendah</option>
+              <option value="terbanyak">Terbanyak Siswa</option>
+            </select>
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] pointer-events-none"/>
+          </div>
         </div>
       </div>
 
