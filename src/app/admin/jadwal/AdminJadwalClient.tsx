@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ExternalLink, CalendarDays, RefreshCw, X } from 'lucide-react'
 import TodaySessionCard from '@/components/session/TodaySessionCard'
+import SessionCountdown from '@/components/session/SessionCountdown'
 
 const STATUS_MAP: Record<string, { label: string; pill: string }> = {
   scheduled:   { label: 'Terjadwal',      pill: 'bg-[#EEEDFE] text-[#3C3489]' },
@@ -177,42 +178,71 @@ export default function AdminJadwalClient({
             </div>
           ) : (
             <div className="divide-y divide-[#F0EFFF]">
-              {sesiHariIni.map((s: any) => (
-                <div key={s.id} className={`px-5 py-3.5 hover:bg-[#F7F6FF] transition ${s.status === 'holiday' ? 'bg-teal-50/50' : ''}`}>
-                  <TodaySessionCard 
-                    session={s}
-                    compact
-                    showCountdown
-                  />
-                  {/* Edit & Holiday Cancel Buttons */}
-                  <div className="flex items-center gap-2 mt-2 ml-[62px]">
-                    {s.status === 'holiday' && (
-                      <button
-                        onClick={() => handleBatalkanLibur(s)}
-                        disabled={batalkanId === s.id}
-                        title="Batalkan libur → kembalikan ke Terjadwal"
-                        className="text-xs px-2.5 py-1 rounded-lg font-semibold bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition disabled:opacity-50 flex items-center gap-1"
-                      >
-                        {batalkanId === s.id ? (
-                          <RefreshCw size={11} className="animate-spin"/>
-                        ) : (
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M18 6L6 18M6 6l12 12"/>
-                          </svg>
+              {sesiHariIni.map((s: any) => {
+                const st = STATUS_MAP[s.status] ?? { label: s.status, pill: 'bg-gray-100 text-gray-600' }
+                const cg = s.class_groups
+                const tutorName = cg?.tutors?.profiles?.full_name ?? cg?.profiles?.full_name ?? '—'
+                const course = cg?.courses
+                const courseColor = course?.color ?? '#5C4FE5'
+                const zoomLink = s.zoom_link ?? cg?.zoom_link
+
+                return (
+                  <div key={s.id} className={`px-5 py-3.5 hover:bg-[#F7F6FF] transition ${s.status === 'holiday' ? 'bg-teal-50/50' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      {/* Time */}
+                      <div className="w-14 flex-shrink-0 text-center">
+                        <div className="text-sm font-black text-[#5C4FE5]">{fmtTime(s.scheduled_at)}</div>
+                        <div className="text-[10px] text-[#7B78A8] font-semibold">WIT</div>
+                      </div>
+                      <div className="w-0.5 h-10 bg-[#E5E3FF] flex-shrink-0 rounded-full"/>
+                      
+                      {/* Class Info + Countdown Badge */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <div className="text-sm font-semibold text-[#1A1640] truncate">{cg?.label ?? '—'}</div>
+                          <SessionCountdown scheduledAt={s.scheduled_at} showLabel={false} compact />
+                        </div>
+                        <div className="text-xs text-[#7B78A8]">{course?.name ?? '—'} · {tutorName}</div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${st.pill}`}>{st.label}</span>
+                        {zoomLink && (
+                          <a href={zoomLink} target="_blank" rel="noopener noreferrer"
+                            className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition">
+                            Zoom
+                          </a>
                         )}
-                        Batalkan Libur
-                      </button>
-                    )}
-                    <button onClick={() => openEdit(s)}
-                      className="p-1.5 rounded-lg text-[#7B78A8] hover:bg-[#F0EFFF] hover:text-[#5C4FE5] transition">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </button>
+                        {s.status === 'holiday' && (
+                          <button
+                            onClick={() => handleBatalkanLibur(s)}
+                            disabled={batalkanId === s.id}
+                            title="Batalkan libur → kembalikan ke Terjadwal"
+                            className="text-xs px-2.5 py-1 rounded-lg font-semibold bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {batalkanId === s.id ? (
+                              <RefreshCw size={11} className="animate-spin"/>
+                            ) : (
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M18 6L6 18M6 6l12 12"/>
+                              </svg>
+                            )}
+                            Libur
+                          </button>
+                        )}
+                        <button onClick={() => openEdit(s)}
+                          className="p-1.5 rounded-lg text-[#7B78A8] hover:bg-[#F0EFFF] hover:text-[#5C4FE5] transition">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
