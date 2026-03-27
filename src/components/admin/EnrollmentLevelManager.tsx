@@ -2,356 +2,396 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { BookOpen, Check, AlertCircle, Save } from 'lucide-react'
 
-interface Enrollment {
+type Enrollment = {
   id: string
+  class_group_id: string
   course_id: string
   course_name: string
-  class_name: string
-  level_id: string | null
-  level_name: string | null
+  course_color: string | null
+  class_label: string
+  status: string
 }
 
-interface Level {
+type Level = {
   id: string
   name: string
+  description: string | null
   target_age: string | null
+  sort_order: number
 }
 
-interface Props {
-  studentId: string
+type EnrollmentWithLevels = Enrollment & {
+  availableLevels: Level[]
+  selectedLevels: string[] // array of level IDs
+  saving: boolean
+  success: boolean
+  error: string
 }
 
-export default function EnrollmentLevelManager({ studentId }: Props) {
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
-  const [levelsByCourse, setLevelsByCourse] = useState<Record<string, Level[]>>({})
+const TARGET_AGE_LABELS: Record<string, string> = {
+  all: 'Semua Usia',
+  kids: 'Anak-anak',
+  teen: 'Remaja',
+  adult: 'Dewasa',
+  kids_teen: 'Anak & Remaja',
+  teen_adult: 'Remaja & Dewasa',
+}
+
+export default function EnrollmentLevelManager({ studentId }: { studentId: string }) {
+  const supabase = createClient()
+  const [enrollments, setEnrollments] = useState<EnrollmentWithLevels[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<Record<string, boolean>>({})
 
-  useEffect(() => { fetchData() }, [studentId])
+  useEffect(() => {
+    fetchEnrollments()
+  }, [studentId])
 
-  async function fetchData() {
-    const supabase = createClient()
+  async function fetchEnrollments() {
+    setLoading(true)
 
-    try {
-      // Fetch enrollments dengan course & level info (LEFT JOIN untuk levels agar NULL tetap muncul)
-      const { data: enrollmentData } = await supabase
-        .from('enrollments')
-        .select(`
-          id,
-          level_id,
-          class_group_id,
-          class_groups!inner(label, course_id, courses!inner(name)),
-          levels(id, name)
-        `)
-        .eq('student_id', studentId)
-        .eq('status', 'active')
-
-      if (enrollmentData) {
-        const formatted = enrollmentData.map((e: any) => ({
-          id: e.id,
-          course_id: e.class_groups.course_id,
-          course_name: e.class_groups.courses.name,
-          class_name: e.class_groups.label,
-          level_id: e.level_id,
-          level_name: e.levels?.name || null,
-        }))
-        setEnrollments(formatted)
-
-        // Fetch levels untuk setiap course
-        const courseIds = [...new Set(formatted.map((e: Enrollment) => e.course_id))]
-        const levelsMap: Record<string, Level[]> = {}
-
-        for (const courseId of courseIds) {
-          const { data: levels } = await supabase
-            .from('levels')
-            .select('id, name, target_age')
-            .eq('course_id', courseId)
-            .eq('is_active', true)
-            .order('sort_order')
-
-          if (levels) {
-            levelsMap[courseId] = levels
-          }
-        }
-
-        setLevelsByCourse(levelsMap)
-      }
-    } catch (error) {
-      console.error('Error fetching enrollments:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleSave(enrollmentId: string, levelId: string) {
-    setSaving({ ...saving, [enrollmentId]: true })
-
-    try {
-      const response = await fetch('/api/admin/enrollments/update-level', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enrollment_id: enrollmentId,
-          level_id: levelId || null,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        // Update local state
-        setEnrollments(
-          enrollments.map((e) =>
-            e.id === enrollmentId
-              ? {
-                  ...e,
-                  level_id: levelId || null,
-                  level_name:
-                    levelsByCourse[e.course_id]?.find((l) => l.id === levelId)
-                      ?.name || null,
-                }
-              : e
+    // 1. Fetch enrollments dengan course & class info
+    const { data: enrData } = await supabase
+      .from('enrollments')
+      .select(`
+        id, 
+        class_group_id, 
+        status,
+        class_groups!inner(
+          label,
+          course_id,
+          courses!inner(
+            id,
+            name,
+            color
           )
         )
-        alert('✅ Level berhasil diperbarui!')
-      } else {
-        alert('❌ Gagal memperbarui level: ' + result.error)
+      `)
+      .eq('student_id', studentId)
+      .eq('status', 'active')
+
+    if (!enrData || enrData.length === 0) {
+      setEnrollments([])
+      setLoading(false)
+      return
+    }
+
+    // 2. Transform data
+    const enrollmentsData: Enrollment[] = enrData.map((e: any) => ({
+      id: e.id,
+      class_group_id: e.class_group_id,
+      course_id: e.class_groups.courses.id,
+      course_name: e.class_groups.courses.name,
+      course_color: e.class_groups.courses.color,
+      class_label: e.class_groups.label,
+      status: e.status,
+    }))
+
+    // 3. Untuk setiap enrollment, fetch available levels + selected levels
+    const enriched = await Promise.all(
+      enrollmentsData.map(async (enr) => {
+        // Fetch available levels untuk course ini
+        const { data: levels } = await supabase
+          .from('levels')
+          .select('id, name, description, target_age, sort_order')
+          .eq('course_id', enr.course_id)
+          .eq('is_active', true)
+          .order('sort_order')
+
+        // Fetch selected levels untuk enrollment ini
+        const { data: selectedLevelsData } = await supabase
+          .from('enrollment_levels')
+          .select('level_id')
+          .eq('enrollment_id', enr.id)
+
+        const selectedLevelIds = (selectedLevelsData ?? []).map((sl: any) => sl.level_id)
+
+        return {
+          ...enr,
+          availableLevels: (levels ?? []) as Level[],
+          selectedLevels: selectedLevelIds,
+          saving: false,
+          success: false,
+          error: '',
+        }
+      })
+    )
+
+    setEnrollments(enriched)
+    setLoading(false)
+  }
+
+  function toggleLevel(enrollmentId: string, levelId: string) {
+    setEnrollments((prev) =>
+      prev.map((enr) => {
+        if (enr.id !== enrollmentId) return enr
+
+        const isSelected = enr.selectedLevels.includes(levelId)
+        return {
+          ...enr,
+          selectedLevels: isSelected
+            ? enr.selectedLevels.filter((id) => id !== levelId)
+            : [...enr.selectedLevels, levelId],
+          success: false,
+          error: '',
+        }
+      })
+    )
+  }
+
+  async function saveLevels(enrollmentId: string) {
+    const enrollment = enrollments.find((e) => e.id === enrollmentId)
+    if (!enrollment) return
+
+    // Set saving state
+    setEnrollments((prev) =>
+      prev.map((e) =>
+        e.id === enrollmentId ? { ...e, saving: true, error: '', success: false } : e
+      )
+    )
+
+    try {
+      // 1. Delete semua enrollment_levels lama
+      const { error: deleteError } = await supabase
+        .from('enrollment_levels')
+        .delete()
+        .eq('enrollment_id', enrollmentId)
+
+      if (deleteError) throw deleteError
+
+      // 2. Insert yang terpilih
+      if (enrollment.selectedLevels.length > 0) {
+        const { error: insertError } = await supabase
+          .from('enrollment_levels')
+          .insert(
+            enrollment.selectedLevels.map((levelId) => ({
+              enrollment_id: enrollmentId,
+              level_id: levelId,
+            }))
+          )
+
+        if (insertError) throw insertError
       }
-    } catch (error) {
-      console.error('Error saving level:', error)
-      alert('❌ Terjadi kesalahan')
-    } finally {
-      setSaving({ ...saving, [enrollmentId]: false })
+
+      // Success!
+      setEnrollments((prev) =>
+        prev.map((e) =>
+          e.id === enrollmentId ? { ...e, saving: false, success: true } : e
+        )
+      )
+
+      // Auto hide success message after 2s
+      setTimeout(() => {
+        setEnrollments((prev) =>
+          prev.map((e) => (e.id === enrollmentId ? { ...e, success: false } : e))
+        )
+      }, 2000)
+    } catch (error: any) {
+      setEnrollments((prev) =>
+        prev.map((e) =>
+          e.id === enrollmentId
+            ? { ...e, saving: false, error: error.message || 'Gagal menyimpan' }
+            : e
+        )
+      )
     }
   }
 
   if (loading) {
     return (
-      <div className="bg-[#F7F6FF] border-2 border-[#E5E3FF] rounded-xl p-6">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
-          <span className="text-[13px] text-[#9B97B2]">Memuat data enrollment...</span>
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen size={16} className="text-[#5C4FE5]" />
+          <h3 className="font-bold text-[#1A1640] text-sm">Enrollment & Level</h3>
         </div>
+        <p className="text-sm text-[#7B78A8]">Memuat data enrollment...</p>
       </div>
     )
   }
 
   if (enrollments.length === 0) {
     return (
-      <div className="bg-[#FFF8D6] border-2 border-[#E6B800] rounded-xl p-6">
-        <p className="text-[13px] text-[#8A6D00]">
-          ℹ️ Siswa belum terdaftar di kelas manapun
-        </p>
+      <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen size={16} className="text-[#5C4FE5]" />
+          <h3 className="font-bold text-[#1A1640] text-sm">Enrollment & Level</h3>
+        </div>
+        <div className="px-4 py-8 bg-[#FEF3E2] border border-[#F5C800] rounded-xl text-center">
+          <div className="w-10 h-10 rounded-full bg-[#F5C800]/20 flex items-center justify-center mx-auto mb-2">
+            <AlertCircle size={18} className="text-[#92400E]" />
+          </div>
+          <p className="text-sm font-semibold text-[#92400E]">
+            📚 Siswa enrolled di 2 courses - tampil semua sekaligus
+          </p>
+          <p className="text-xs text-[#92400E] mt-1">
+            Daftarkan siswa ke kelas terlebih dahulu
+          </p>
+        </div>
       </div>
     )
   }
 
-  // Adaptive Layout: Simple vs Cards
-  const isSingleEnrollment = enrollments.length === 1
-
   return (
-    <div className="bg-[#F7F6FF] border-2 border-[#E5E3FF] rounded-xl p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[20px]">📚</span>
-        <h3 className="text-[15px] font-bold text-[#1A1530]">Enrollment & Level</h3>
+    <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
+      <div className="flex items-center gap-2 mb-5">
+        <BookOpen size={16} className="text-[#5C4FE5]" />
+        <h3 className="font-bold text-[#1A1640] text-sm">Enrollment & Level</h3>
       </div>
 
-      {isSingleEnrollment ? (
-        // SIMPLE LAYOUT (1 enrollment)
-        <SimpleEnrollmentLayout
-          enrollment={enrollments[0]}
-          levels={levelsByCourse[enrollments[0].course_id] || []}
-          onSave={handleSave}
-          isSaving={saving[enrollments[0].id] || false}
-        />
-      ) : (
-        // CARDS LAYOUT (2+ enrollments)
-        <div className="space-y-3">
-          {enrollments.map((enrollment, index) => (
-            <EnrollmentCard
-              key={enrollment.id}
-              enrollment={enrollment}
-              levels={levelsByCourse[enrollment.course_id] || []}
-              number={index + 1}
-              onSave={handleSave}
-              isSaving={saving[enrollment.id] || false}
-            />
-          ))}
-          <div className="mt-3 p-3 bg-[#FFF8D6] rounded-lg text-center">
-            <span className="text-[12px] text-[#8A6D00]">
-              ℹ️ Siswa enrolled di <strong>{enrollments.length} courses</strong> - tampil
-              semua sekaligus
-            </span>
+      <div className="space-y-4">
+        {enrollments.map((enr, idx) => (
+          <div
+            key={enr.id}
+            className="border-2 rounded-2xl overflow-hidden transition-all"
+            style={{ borderColor: enr.course_color ?? '#E5E3FF' }}
+          >
+            {/* Header */}
+            <div
+              className="px-4 py-3 flex items-center justify-between"
+              style={{
+                backgroundColor: enr.course_color
+                  ? `${enr.course_color}15`
+                  : '#F7F6FF',
+              }}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white"
+                    style={{ backgroundColor: enr.course_color ?? '#5C4FE5' }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span
+                    className="font-bold text-sm"
+                    style={{ color: enr.course_color ?? '#1A1640' }}
+                  >
+                    {enr.course_name}
+                  </span>
+                </div>
+                <p className="text-xs text-[#7B78A8] mt-0.5 ml-8">
+                  Kelas: {enr.class_label}
+                </p>
+              </div>
+            </div>
+
+            {/* Level Selection */}
+            <div className="px-4 py-4">
+              {enr.availableLevels.length === 0 ? (
+                <div className="px-4 py-3 bg-[#FEF3E2] border border-[#F5C800] rounded-xl text-center">
+                  <p className="text-xs font-semibold text-[#92400E]">
+                    ⚠️ Belum ada level tersedia untuk kursus ini
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-3">
+                    Pilih Level (bisa lebih dari 1)
+                  </p>
+                  <div className="space-y-2 mb-4">
+                    {enr.availableLevels.map((level) => {
+                      const isSelected = enr.selectedLevels.includes(level.id)
+                      return (
+                        <label
+                          key={level.id}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-[#E6F4EC] border-[#27A05A]'
+                              : 'bg-[#F7F6FF] border-[#E5E3FF] hover:border-[#C4BFFF]'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleLevel(enr.id, level.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-sm font-bold ${
+                                  isSelected ? 'text-[#1A5C36]' : 'text-[#1A1640]'
+                                }`}
+                              >
+                                {level.name}
+                              </span>
+                              {level.target_age && (
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                                    isSelected
+                                      ? 'bg-[#27A05A] text-white'
+                                      : 'bg-[#E5E3FF] text-[#5C4FE5]'
+                                  }`}
+                                >
+                                  {TARGET_AGE_LABELS[level.target_age] ||
+                                    level.target_age}
+                                </span>
+                              )}
+                            </div>
+                            {level.description && (
+                              <p
+                                className={`text-xs mt-0.5 ${
+                                  isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
+                                }`}
+                              >
+                                {level.description}
+                              </p>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <Check size={16} className="text-[#27A05A] flex-shrink-0" />
+                          )}
+                        </label>
+                      )
+                    })}
+                  </div>
+
+                  {/* Info + Save Button */}
+                  <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl">
+                    <span className="text-xs text-[#7B78A8]">
+                      {enr.selectedLevels.length === 0 ? (
+                        'Belum ada level dipilih'
+                      ) : (
+                        <>
+                          <span className="font-bold text-[#5C4FE5]">
+                            {enr.selectedLevels.length}
+                          </span>{' '}
+                          level dipilih
+                        </>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => saveLevels(enr.id)}
+                      disabled={enr.saving || enr.selectedLevels.length === 0}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Save size={12} />
+                      {enr.saving ? 'Menyimpan...' : 'Simpan'}
+                    </button>
+                  </div>
+
+                  {/* Success/Error Messages */}
+                  {enr.success && (
+                    <div className="mt-3 px-4 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl flex items-center gap-2">
+                      <Check size={14} className="text-[#27A05A]" />
+                      <p className="text-xs font-semibold text-[#1A5C36]">
+                        Level berhasil disimpan!
+                      </p>
+                    </div>
+                  )}
+                  {enr.error && (
+                    <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
+                      <AlertCircle size={14} className="text-red-600" />
+                      <p className="text-xs font-semibold text-red-600">{enr.error}</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Simple Layout Component (1 enrollment)
-function SimpleEnrollmentLayout({
-  enrollment,
-  levels,
-  onSave,
-  isSaving,
-}: {
-  enrollment: Enrollment
-  levels: Level[]
-  onSave: (id: string, levelId: string) => void
-  isSaving: boolean
-}) {
-  const [selectedLevel, setSelectedLevel] = useState(enrollment.level_id || '')
-
-  return (
-    <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-4">
-      {/* Course Display */}
-      <div className="flex items-center gap-2 mb-4 p-3 bg-[#F7F6FF] rounded-lg">
-        <span className="text-[18px]">📘</span>
-        <span className="text-[14px] font-bold text-[#1A1530]">{enrollment.course_name}</span>
-        <span className="px-2 py-1 bg-[#FFF8D6] text-[#8A6D00] rounded-lg text-[10px] font-bold ml-auto">
-          {enrollment.class_name}
-        </span>
+        ))}
       </div>
-
-      {/* Current Level Status */}
-      {enrollment.level_name ? (
-        <div className="mb-3 p-2 bg-[#E8F5E9] border border-green-200 rounded-lg">
-          <p className="text-[11px] text-[#2E7D32]">
-            ✓ Level saat ini: <strong>{enrollment.level_name}</strong>
-          </p>
-        </div>
-      ) : (
-        <div className="mb-3 p-2 bg-[#FFF8D6] border border-[#E6B800] rounded-lg">
-          <p className="text-[11px] text-[#8A6D00]">
-            ⚠️ Level belum dipilih - silakan pilih level di bawah
-          </p>
-        </div>
-      )}
-
-      {/* Level Dropdown */}
-      <div className="mb-4">
-        <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
-          Pilih Level
-        </label>
-        <select
-          value={selectedLevel}
-          onChange={(e) => setSelectedLevel(e.target.value)}
-          className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] text-[#1A1530] focus:outline-none focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5]"
-        >
-          <option value="">-- Pilih Level --</option>
-          {levels.map((level) => (
-            <option key={level.id} value={level.id}>
-              {level.name}
-              {level.target_age && ` (${level.target_age})`}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Save Button */}
-      <button
-        onClick={() => onSave(enrollment.id, selectedLevel)}
-        disabled={isSaving}
-        className="w-full px-4 py-3 bg-[#5C4FE5] text-white rounded-lg text-[14px] font-bold hover:bg-[#4A3FCC] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-      >
-        {isSaving ? (
-          <>
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            <span>Menyimpan...</span>
-          </>
-        ) : (
-          <>
-            <span>💾</span>
-            <span>Simpan Level</span>
-          </>
-        )}
-      </button>
-    </div>
-  )
-}
-
-// Card Component (untuk multi enrollments)
-function EnrollmentCard({
-  enrollment,
-  levels,
-  number,
-  onSave,
-  isSaving,
-}: {
-  enrollment: Enrollment
-  levels: Level[]
-  number: number
-  onSave: (id: string, levelId: string) => void
-  isSaving: boolean
-}) {
-  const [selectedLevel, setSelectedLevel] = useState(enrollment.level_id || '')
-
-  return (
-    <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-4 hover:border-[#5C4FE5] transition-colors">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-7 h-7 bg-[#5C4FE5] text-white rounded-full flex items-center justify-center text-[13px] font-black">
-          {number}
-        </div>
-        <span className="text-[14px] font-bold text-[#1A1530]">{enrollment.course_name}</span>
-        <span className="px-2 py-1 bg-[#FFF8D6] text-[#8A6D00] rounded-lg text-[10px] font-bold ml-auto">
-          {enrollment.class_name}
-        </span>
-      </div>
-
-      {/* Current Level Status */}
-      {enrollment.level_name ? (
-        <div className="mb-2 p-2 bg-[#E8F5E9] border border-green-200 rounded-lg">
-          <p className="text-[11px] text-[#2E7D32]">
-            ✓ Level: <strong>{enrollment.level_name}</strong>
-          </p>
-        </div>
-      ) : (
-        <div className="mb-2 p-2 bg-[#FFF8D6] border border-[#E6B800] rounded-lg">
-          <p className="text-[11px] text-[#8A6D00]">⚠️ Belum dipilih</p>
-        </div>
-      )}
-
-      {/* Level Dropdown */}
-      <div className="mb-3">
-        <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
-          Pilih Level
-        </label>
-        <select
-          value={selectedLevel}
-          onChange={(e) => setSelectedLevel(e.target.value)}
-          className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg text-[14px] text-[#1A1530] focus:outline-none focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5]"
-        >
-          <option value="">-- Pilih Level --</option>
-          {levels.map((level) => (
-            <option key={level.id} value={level.id}>
-              {level.name}
-              {level.target_age && ` (${level.target_age})`}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Save Button */}
-      <button
-        onClick={() => onSave(enrollment.id, selectedLevel)}
-        disabled={isSaving}
-        className="w-full px-4 py-2.5 bg-[#5C4FE5] text-white rounded-lg text-[14px] font-bold hover:bg-[#4A3FCC] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-      >
-        {isSaving ? (
-          <>
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            <span>Menyimpan...</span>
-          </>
-        ) : (
-          <>
-            <span>💾</span>
-            <span>Simpan</span>
-          </>
-        )}
-      </button>
     </div>
   )
 }
