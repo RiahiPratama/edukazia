@@ -28,20 +28,17 @@ export default function EnrollmentLevelManager({ studentId }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<Record<string, boolean>>({})
 
-  useEffect(() => {
-    fetchData()
-  }, [studentId])
+  useEffect(() => { fetchData() }, [studentId])
 
   async function fetchData() {
     const supabase = createClient()
 
     try {
-      // Fetch enrollments dengan course & level info
+      // Fetch enrollments dengan course & level info (LEFT JOIN untuk levels agar NULL tetap muncul)
       const { data: enrollmentData } = await supabase
         .from('enrollments')
         .select(`
           id,
-          course_id,
           level_id,
           class_group_id,
           class_groups!inner(label, course_id, courses!inner(name)),
@@ -218,6 +215,21 @@ function SimpleEnrollmentLayout({
         </span>
       </div>
 
+      {/* Current Level Status */}
+      {enrollment.level_name ? (
+        <div className="mb-3 p-2 bg-[#E8F5E9] border border-green-200 rounded-lg">
+          <p className="text-[11px] text-[#2E7D32]">
+            ✓ Level saat ini: <strong>{enrollment.level_name}</strong>
+          </p>
+        </div>
+      ) : (
+        <div className="mb-3 p-2 bg-[#FFF8D6] border border-[#E6B800] rounded-lg">
+          <p className="text-[11px] text-[#8A6D00]">
+            ⚠️ Level belum dipilih - silakan pilih level di bawah
+          </p>
+        </div>
+      )}
+
       {/* Level Dropdown */}
       <div className="mb-4">
         <label className="block text-[13px] font-semibold text-[#4A4580] mb-2">
@@ -288,6 +300,19 @@ function EnrollmentCard({
           {enrollment.class_name}
         </span>
       </div>
+
+      {/* Current Level Status */}
+      {enrollment.level_name ? (
+        <div className="mb-2 p-2 bg-[#E8F5E9] border border-green-200 rounded-lg">
+          <p className="text-[11px] text-[#2E7D32]">
+            ✓ Level: <strong>{enrollment.level_name}</strong>
+          </p>
+        </div>
+      ) : (
+        <div className="mb-2 p-2 bg-[#FFF8D6] border border-[#E6B800] rounded-lg">
+          <p className="text-[11px] text-[#8A6D00]">⚠️ Belum dipilih</p>
+        </div>
+      )}
 
       {/* Level Dropdown */}
       <div className="mb-3">
