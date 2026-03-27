@@ -332,7 +332,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
                     {/* Dropdown Button */}
                     <div
-                      ref={(el) => (dropdownRefs.current[enr.id] = el)}
+                      ref={(el) => { dropdownRefs.current[enr.id] = el }}
                       className="relative mb-3"
                     >
                       <button
