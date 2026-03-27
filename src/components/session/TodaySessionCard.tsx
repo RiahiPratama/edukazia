@@ -12,6 +12,7 @@ type Props = {
     zoom_link?: string | null
     class_groups?: {
       label?: string
+      zoom_link?: string | null
       courses?: { name?: string; color?: string | null }
       tutors?: { profiles?: { full_name?: string } }
       profiles?: { full_name?: string } // Alternate tutor structure
