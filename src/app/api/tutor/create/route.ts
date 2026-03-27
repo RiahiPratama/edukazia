@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 1. Invite user via email → tutor dapat link set password ──
+    // PENTING: Kirim full_name di raw_user_meta_data agar trigger handle_new_user() bisa ambil
     const { data: inviteData, error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email.trim(),
       { data: { full_name: full_name.trim(), role: 'tutor' } }
@@ -52,16 +53,17 @@ export async function POST(request: NextRequest) {
 
     const authId = inviteData.user.id
 
-    // ── 2. Buat profile (id = auth.id, role = 'tutor') ──
+    // ── 2. UPDATE profile yang sudah auto-created oleh trigger handle_new_user() ──
+    // Trigger sudah create profile dengan role='student', kita update jadi role='tutor'
     const { error: profileErr } = await supabaseAdmin
       .from('profiles')
-      .insert({
-        id:        authId,
+      .update({
         full_name: full_name.trim(),
         phone:     phone?.trim() || null,
         email:     email.trim(),
         role:      'tutor',
       })
+      .eq('id', authId)
 
     if (profileErr) {
       // Rollback: hapus auth user yang sudah dibuat
