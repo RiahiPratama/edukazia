@@ -18,6 +18,7 @@ type Kelas = {
   enrollments: { 
     id: string
     status: string
+    student_id: string
     student_name?: string
   }[]
 }
