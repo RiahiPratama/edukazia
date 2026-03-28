@@ -24,8 +24,8 @@ type Level = {
 
 type EnrollmentWithLevels = Enrollment & {
   availableLevels: Level[]
-  savedLevels: string[] // Level IDs yang sudah tersimpan di DB
-  selectedLevels: string[] // Level IDs yang dipilih saat ini
+  savedLevels: string[]
+  selectedLevels: string[]
   isDropdownOpen: boolean
   saving: boolean
   success: boolean
@@ -51,7 +51,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
     fetchEnrollments()
   }, [studentId])
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const openEnrollment = enrollments.find((e) => e.isDropdownOpen)
@@ -74,7 +73,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
   async function fetchEnrollments() {
     setLoading(true)
 
-    // 1. Fetch enrollments dengan course & class info
     const { data: enrData } = await supabase
       .from('enrollments')
       .select(`
@@ -94,13 +92,14 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       .eq('student_id', studentId)
       .eq('status', 'active')
 
+    console.log('📊 ENROLLMENTS DATA:', enrData) // DEBUG
+
     if (!enrData || enrData.length === 0) {
       setEnrollments([])
       setLoading(false)
       return
     }
 
-    // 2. Transform data
     const enrollmentsData: Enrollment[] = enrData.map((e: any) => ({
       id: e.id,
       class_group_id: e.class_group_id,
@@ -111,16 +110,24 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       status: e.status,
     }))
 
-    // 3. Untuk setiap enrollment, fetch available levels + saved levels
     const enriched = await Promise.all(
       enrollmentsData.map(async (enr) => {
+        console.log(`🔍 Fetching levels for course: ${enr.course_name} (${enr.course_id})`) // DEBUG
+        
         // Fetch available levels untuk course ini
-        const { data: levels } = await supabase
+        const { data: levels, error: levelsError } = await supabase
           .from('levels')
-          .select('id, name, description, target_age, sort_order')
+          .select('id, name, description, target_age, sort_order, is_active')
           .eq('course_id', enr.course_id)
           .eq('is_active', true)
           .order('sort_order')
+
+        console.log(`📚 LEVELS FETCHED for ${enr.course_name}:`, levels) // DEBUG
+        console.log(`   Total levels: ${levels?.length || 0}`) // DEBUG
+        
+        if (levelsError) {
+          console.error('❌ Error fetching levels:', levelsError) // DEBUG
+        }
 
         // Fetch saved levels untuk enrollment ini
         const { data: savedLevelsData } = await supabase
@@ -134,7 +141,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
           ...enr,
           availableLevels: (levels ?? []) as Level[],
           savedLevels: savedLevelIds,
-          selectedLevels: savedLevelIds, // Initialize with saved levels
+          selectedLevels: savedLevelIds,
           isDropdownOpen: false,
           saving: false,
           success: false,
@@ -143,6 +150,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       })
     )
 
+    console.log('✅ ENRICHED ENROLLMENTS:', enriched) // DEBUG
     setEnrollments(enriched)
     setLoading(false)
   }
@@ -152,7 +160,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       prev.map((e) =>
         e.id === enrollmentId
           ? { ...e, isDropdownOpen: !e.isDropdownOpen }
-          : { ...e, isDropdownOpen: false } // Close others
+          : { ...e, isDropdownOpen: false }
       )
     )
   }
@@ -179,7 +187,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
     const enrollment = enrollments.find((e) => e.id === enrollmentId)
     if (!enrollment) return
 
-    // Set saving state
     setEnrollments((prev) =>
       prev.map((e) =>
         e.id === enrollmentId ? { ...e, saving: true, error: '', success: false } : e
@@ -187,7 +194,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
     )
 
     try {
-      // 1. Delete semua enrollment_levels lama
       const { error: deleteError } = await supabase
         .from('enrollment_levels')
         .delete()
@@ -195,7 +201,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
       if (deleteError) throw deleteError
 
-      // 2. Insert yang terpilih
       if (enrollment.selectedLevels.length > 0) {
         const { error: insertError } = await supabase
           .from('enrollment_levels')
@@ -209,26 +214,29 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
         if (insertError) throw insertError
       }
 
-      // Success! Update savedLevels to match selectedLevels
       setEnrollments((prev) =>
         prev.map((e) =>
           e.id === enrollmentId
-            ? { ...e, saving: false, success: true, savedLevels: e.selectedLevels }
+            ? {
+                ...e,
+                savedLevels: [...enrollment.selectedLevels],
+                saving: false,
+                success: true,
+              }
             : e
         )
       )
 
-      // Auto hide success message after 2s
       setTimeout(() => {
         setEnrollments((prev) =>
           prev.map((e) => (e.id === enrollmentId ? { ...e, success: false } : e))
         )
-      }, 2000)
+      }, 3000)
     } catch (error: any) {
       setEnrollments((prev) =>
         prev.map((e) =>
           e.id === enrollmentId
-            ? { ...e, saving: false, error: error.message || 'Gagal menyimpan' }
+            ? { ...e, saving: false, error: error.message }
             : e
         )
       )
@@ -238,11 +246,13 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
   if (loading) {
     return (
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-5">
           <BookOpen size={16} className="text-[#5C4FE5]" />
           <h3 className="font-bold text-[#1A1640] text-sm">Enrollment & Level</h3>
         </div>
-        <p className="text-sm text-[#7B78A8]">Memuat data enrollment...</p>
+        <div className="px-4 py-3 bg-[#F7F6FF] rounded-xl text-center">
+          <p className="text-sm text-[#7B78A8]">Memuat data enrollment...</p>
+        </div>
       </div>
     )
   }
@@ -250,14 +260,11 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
   if (enrollments.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-5">
           <BookOpen size={16} className="text-[#5C4FE5]" />
           <h3 className="font-bold text-[#1A1640] text-sm">Enrollment & Level</h3>
         </div>
-        <div className="px-4 py-8 bg-[#FEF3E2] border border-[#F5C800] rounded-xl text-center">
-          <div className="w-10 h-10 rounded-full bg-[#F5C800]/20 flex items-center justify-center mx-auto mb-2">
-            <AlertCircle size={18} className="text-[#92400E]" />
-          </div>
+        <div className="px-4 py-3 bg-[#FEF3E2] border border-[#F5C800] rounded-xl">
           <p className="text-sm font-semibold text-[#92400E]">Siswa belum terdaftar di kelas manapun</p>
           <p className="text-xs text-[#92400E] mt-1">
             Daftarkan siswa ke kelas terlebih dahulu
@@ -286,7 +293,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
               className="border-2 rounded-2xl overflow-hidden transition-all"
               style={{ borderColor: enr.course_color ?? '#E5E3FF' }}
             >
-              {/* Header */}
               <div
                 className="px-4 py-3 flex items-center justify-between"
                 style={{
@@ -316,7 +322,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                 </div>
               </div>
 
-              {/* Dropdown + Actions */}
               <div className="px-4 py-4">
                 {enr.availableLevels.length === 0 ? (
                   <div className="px-4 py-3 bg-[#FEF3E2] border border-[#F5C800] rounded-xl text-center">
@@ -326,11 +331,17 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                   </div>
                 ) : (
                   <>
+                    {/* DEBUG INFO - REMOVE IN PRODUCTION */}
+                    <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+                      <p className="font-bold text-blue-900">🔍 DEBUG INFO:</p>
+                      <p className="text-blue-700">Total levels available: {enr.availableLevels.length}</p>
+                      <p className="text-blue-700">Level names: {enr.availableLevels.map(l => l.name).join(', ')}</p>
+                    </div>
+
                     <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">
                       Pilih Level (bisa lebih dari 1)
                     </p>
 
-                    {/* Dropdown Button */}
                     <div
                       ref={(el) => { dropdownRefs.current[enr.id] = el }}
                       className="relative mb-3"
@@ -352,9 +363,8 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                         )}
                       </button>
 
-                      {/* Dropdown Menu */}
                       {enr.isDropdownOpen && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border-2 border-[#E5E3FF] rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                        <div className="absolute z-10 w-full mt-1 bg-white border-2 border-[#E5E3FF] rounded-xl shadow-lg max-h-96 overflow-y-auto">
                           {enr.availableLevels.map((level) => {
                             const isSelected = enr.selectedLevels.includes(level.id)
                             const isSaved = enr.savedLevels.includes(level.id)
@@ -421,7 +431,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                       )}
                     </div>
 
-                    {/* Persistent Status Badge */}
                     {enr.savedLevels.length > 0 && (
                       <div className="px-4 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl mb-3 flex items-center gap-2">
                         <Check size={14} className="text-[#27A05A]" />
@@ -431,7 +440,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                       </div>
                     )}
 
-                    {/* Save Button */}
                     <button
                       onClick={() => saveLevels(enr.id)}
                       disabled={enr.saving || !hasChanges}
@@ -445,7 +453,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                         : 'Tidak Ada Perubahan'}
                     </button>
 
-                    {/* Success/Error Messages */}
                     {enr.success && (
                       <div className="mt-3 px-4 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl flex items-center gap-2">
                         <Check size={14} className="text-[#27A05A]" />
