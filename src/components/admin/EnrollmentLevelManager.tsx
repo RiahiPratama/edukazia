@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, Check, AlertCircle, Save, ChevronDown, ChevronUp } from 'lucide-react'
+import { BookOpen, Check, AlertCircle, Save } from 'lucide-react'
 
 type Enrollment = {
   id: string
@@ -26,7 +26,6 @@ type EnrollmentWithLevels = Enrollment & {
   availableLevels: Level[]
   savedLevels: string[]
   selectedLevels: string[]
-  isDropdownOpen: boolean
   saving: boolean
   success: boolean
   error: string
@@ -45,30 +44,10 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
   const supabase = createClient()
   const [enrollments, setEnrollments] = useState<EnrollmentWithLevels[]>([])
   const [loading, setLoading] = useState(true)
-  const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   useEffect(() => {
     fetchEnrollments()
   }, [studentId])
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const openEnrollment = enrollments.find((e) => e.isDropdownOpen)
-      if (!openEnrollment) return
-
-      const ref = dropdownRefs.current[openEnrollment.id]
-      if (ref && !ref.contains(event.target as Node)) {
-        setEnrollments((prev) =>
-          prev.map((e) =>
-            e.id === openEnrollment.id ? { ...e, isDropdownOpen: false } : e
-          )
-        )
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [enrollments])
 
   async function fetchEnrollments() {
     setLoading(true)
@@ -129,7 +108,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
           availableLevels: (levels ?? []) as Level[],
           savedLevels: savedLevelIds,
           selectedLevels: savedLevelIds,
-          isDropdownOpen: false,
           saving: false,
           success: false,
           error: '',
@@ -139,16 +117,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
     setEnrollments(enriched)
     setLoading(false)
-  }
-
-  function toggleDropdown(enrollmentId: string) {
-    setEnrollments((prev) =>
-      prev.map((e) =>
-        e.id === enrollmentId
-          ? { ...e, isDropdownOpen: !e.isDropdownOpen }
-          : { ...e, isDropdownOpen: false }
-      )
-    )
   }
 
   function toggleLevel(enrollmentId: string, levelId: string) {
@@ -279,6 +247,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
               className="border-2 rounded-2xl overflow-hidden transition-all"
               style={{ borderColor: enr.course_color ?? '#E5E3FF' }}
             >
+              {/* HEADER */}
               <div
                 className="px-4 py-3 flex items-center justify-between"
                 style={{
@@ -308,6 +277,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                 </div>
               </div>
 
+              {/* CONTENT */}
               <div className="px-4 py-4">
                 {enr.availableLevels.length === 0 ? (
                   <div className="px-4 py-3 bg-[#FEF3E2] border border-[#F5C800] rounded-xl text-center">
@@ -317,107 +287,83 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                   </div>
                 ) : (
                   <>
-                    <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">
+                    <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-3">
                       Pilih Level (bisa lebih dari 1)
                     </p>
 
-                    <div
-                      ref={(el) => { dropdownRefs.current[enr.id] = el }}
-                      className="relative mb-3"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleDropdown(enr.id)}
-                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border-2 border-[#E5E3FF] rounded-xl text-sm font-semibold text-[#1A1640] hover:border-[#C4BFFF] transition"
-                      >
-                        <span className="text-xs">
-                          {enr.selectedLevels.length === 0
-                            ? 'Pilih level...'
-                            : `${enr.selectedLevels.length} level dipilih`}
-                        </span>
-                        {enr.isDropdownOpen ? (
-                          <ChevronUp size={14} className="text-[#7B78A8]" />
-                        ) : (
-                          <ChevronDown size={14} className="text-[#7B78A8]" />
-                        )}
-                      </button>
+                    {/* STATIC LIST - NO DROPDOWN! */}
+                    <div className="border-2 border-[#E5E3FF] rounded-xl overflow-hidden mb-3">
+                      {enr.availableLevels.map((level, levelIdx) => {
+                        const isSelected = enr.selectedLevels.includes(level.id)
+                        const isSaved = enr.savedLevels.includes(level.id)
 
-                      {enr.isDropdownOpen && (
-                        <div 
-                          className="absolute z-50 w-full mt-1 bg-white border-2 border-[#E5E3FF] rounded-xl shadow-lg overflow-y-auto"
-                          style={{ maxHeight: '320px' }}
-                        >
-                          {enr.availableLevels.map((level) => {
-                            const isSelected = enr.selectedLevels.includes(level.id)
-                            const isSaved = enr.savedLevels.includes(level.id)
-
-                            return (
-                              <label
-                                key={level.id}
-                                className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors border-b border-[#E5E3FF] last:border-b-0 ${
-                                  isSelected
-                                    ? 'bg-[#E6F4EC] hover:bg-[#D1EBE0]'
-                                    : 'hover:bg-[#F7F6FF]'
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => toggleLevel(enr.id, level.id)}
-                                  className="w-3.5 h-3.5 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer flex-shrink-0"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span
-                                      className={`text-xs font-bold ${
-                                        isSelected ? 'text-[#1A5C36]' : 'text-[#1A1640]'
-                                      }`}
-                                    >
-                                      {level.name}
-                                    </span>
-                                    {level.target_age && (
-                                      <span
-                                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
-                                          isSelected
-                                            ? 'bg-[#27A05A] text-white'
-                                            : 'bg-[#E5E3FF] text-[#5C4FE5]'
-                                        }`}
-                                      >
-                                        {TARGET_AGE_LABELS[level.target_age] ||
-                                          level.target_age}
-                                      </span>
-                                    )}
-                                    {isSaved && (
-                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700">
-                                        ✓
-                                      </span>
-                                    )}
-                                  </div>
-                                  {level.description && (
-                                    <p
-                                      className={`text-[10px] mt-0.5 ${
-                                        isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
-                                      }`}
-                                    >
-                                      {level.description}
-                                    </p>
-                                  )}
-                                </div>
-                                {isSelected && (
-                                  <Check size={12} className="text-[#27A05A] flex-shrink-0" />
+                        return (
+                          <label
+                            key={level.id}
+                            className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors ${
+                              levelIdx !== enr.availableLevels.length - 1 ? 'border-b border-[#E5E3FF]' : ''
+                            } ${
+                              isSelected
+                                ? 'bg-[#E6F4EC] hover:bg-[#D1EBE0]'
+                                : 'hover:bg-[#F7F6FF]'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleLevel(enr.id, level.id)}
+                              className="w-4 h-4 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={`text-xs font-bold ${
+                                    isSelected ? 'text-[#1A5C36]' : 'text-[#1A1640]'
+                                  }`}
+                                >
+                                  {level.name}
+                                </span>
+                                {level.target_age && (
+                                  <span
+                                    className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
+                                      isSelected
+                                        ? 'bg-[#27A05A] text-white'
+                                        : 'bg-[#E5E3FF] text-[#5C4FE5]'
+                                    }`}
+                                  >
+                                    {TARGET_AGE_LABELS[level.target_age] ||
+                                      level.target_age}
+                                  </span>
                                 )}
-                              </label>
-                            )
-                          })}
-                        </div>
-                      )}
+                                {isSaved && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700">
+                                    ✓ Aktif
+                                  </span>
+                                )}
+                              </div>
+                              {level.description && (
+                                <p
+                                  className={`text-[10px] mt-0.5 ${
+                                    isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
+                                  }`}
+                                >
+                                  {level.description}
+                                </p>
+                              )}
+                            </div>
+                            {isSelected && (
+                              <Check size={14} className="text-[#27A05A] flex-shrink-0" />
+                            )}
+                          </label>
+                        )
+                      })}
                     </div>
 
                     {enr.savedLevels.length > 0 && (
-                      <div className="px-3 py-1.5 bg-[#E6F4EC] border border-[#27A05A] rounded-xl mb-3 flex items-center gap-2">
-                        <Check size={12} className="text-[#27A05A]" />
-                        <p className="text-[10px] font-semibold text-[#1A5C36]">
-                          {enr.savedLevels.length} level aktif
+                      <div className="px-3 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl mb-3 flex items-center gap-2">
+                        <Check size={14} className="text-[#27A05A]" />
+                        <p className="text-xs font-semibold text-[#1A5C36]">
+                          {enr.savedLevels.length} level tersimpan di database
                         </p>
                       </div>
                     )}
@@ -425,9 +371,9 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                     <button
                       onClick={() => saveLevels(enr.id)}
                       disabled={enr.saving || !hasChanges}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#5C4FE5] text-white text-sm font-bold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Save size={12} />
+                      <Save size={14} />
                       {enr.saving
                         ? 'Menyimpan...'
                         : hasChanges
@@ -436,17 +382,17 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                     </button>
 
                     {enr.success && (
-                      <div className="mt-3 px-3 py-1.5 bg-[#E6F4EC] border border-[#27A05A] rounded-xl flex items-center gap-2">
-                        <Check size={12} className="text-[#27A05A]" />
-                        <p className="text-[10px] font-semibold text-[#1A5C36]">
+                      <div className="mt-3 px-4 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl flex items-center gap-2">
+                        <Check size={14} className="text-[#27A05A]" />
+                        <p className="text-xs font-semibold text-[#1A5C36]">
                           Level berhasil disimpan!
                         </p>
                       </div>
                     )}
                     {enr.error && (
-                      <div className="mt-3 px-3 py-1.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
-                        <AlertCircle size={12} className="text-red-600" />
-                        <p className="text-[10px] font-semibold text-red-600">{enr.error}</p>
+                      <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
+                        <AlertCircle size={14} className="text-red-600" />
+                        <p className="text-xs font-semibold text-red-600">{enr.error}</p>
                       </div>
                     )}
                   </>
