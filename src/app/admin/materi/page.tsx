@@ -35,36 +35,31 @@ const tabs = [
 export default function MateriTutorPage() {
   const [activeTab, setActiveTab] = useState<TabType>('live_zoom');
   const [showForm, setShowForm] = useState(false);
-  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
 
   const handleSaveSuccess = () => {
     setShowForm(false);
-    setEditingMaterial(null);
     // Force remount of MaterialList to refresh data
     setTimeout(() => setShowForm(true), 10);
     setTimeout(() => setShowForm(false), 20);
   };
 
   const handleEdit = (material: Material) => {
-    setEditingMaterial(material);
-    setShowForm(true);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingMaterial(null);
-    setShowForm(false);
+    // TODO: Implement edit functionality
+    // Will need to update forms to accept editData prop
+    alert('Edit functionality coming soon!');
+    console.log('Edit material:', material);
   };
 
   const renderForm = () => {
     switch (activeTab) {
       case 'live_zoom':
-        return <LiveZoomForm onSaveSuccess={handleSaveSuccess} editData={editingMaterial} onCancel={handleCancelEdit} />;
+        return <LiveZoomForm onSaveSuccess={handleSaveSuccess} />;
       case 'bacaan':
-        return <BacaanForm onSaveSuccess={handleSaveSuccess} editData={editingMaterial} onCancel={handleCancelEdit} />;
+        return <BacaanForm onSaveSuccess={handleSaveSuccess} />;
       case 'kosakata':
-        return <KosakataForm onSaveSuccess={handleSaveSuccess} editData={editingMaterial} onCancel={handleCancelEdit} />;
+        return <KosakataForm onSaveSuccess={handleSaveSuccess} />;
       case 'cefr':
-        return <CEFRForm onSaveSuccess={handleSaveSuccess} editData={editingMaterial} onCancel={handleCancelEdit} />;
+        return <CEFRForm onSaveSuccess={handleSaveSuccess} />;
     }
   };
 
@@ -88,7 +83,6 @@ export default function MateriTutorPage() {
                 onClick={() => {
                   setActiveTab(tab.id);
                   setShowForm(false);
-                  setEditingMaterial(null);
                 }}
                 className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
                   isActive
@@ -108,7 +102,7 @@ export default function MateriTutorPage() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900">
               {showForm 
-                ? editingMaterial ? `Edit Materi ${tabs.find(t => t.id === activeTab)?.label}` : `Tambah Materi ${tabs.find(t => t.id === activeTab)?.label}`
+                ? `Tambah Materi ${tabs.find(t => t.id === activeTab)?.label}`
                 : `Daftar Materi ${tabs.find(t => t.id === activeTab)?.label}`
               }
             </h2>
@@ -123,10 +117,7 @@ export default function MateriTutorPage() {
                     Daftar Materi
                   </button>
                   <button
-                    onClick={() => {
-                      setEditingMaterial(null);
-                      setShowForm(true);
-                    }}
+                    onClick={() => setShowForm(true)}
                     className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
                   >
                     <Plus size={18} />
@@ -135,7 +126,7 @@ export default function MateriTutorPage() {
                 </>
               ) : (
                 <button
-                  onClick={handleCancelEdit}
+                  onClick={() => setShowForm(false)}
                   className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
                 >
                   <List size={18} />
