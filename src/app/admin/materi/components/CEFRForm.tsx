@@ -8,14 +8,16 @@ import RichTextEditor from './RichTextEditor';
 type CEFRFormProps = {
   onCancel: () => void;
   onSave: (data: any) => void;
+  isSubmitting?: boolean;
 };
 
-export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
+export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     textContent: '',
     skillFocus: 'pronunciation',
     cefrSkill: 'speaking',
+    courseId: '',
     levelId: '',
     unitId: '',
     lessonId: '',
@@ -61,6 +63,7 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
       title: formData.title,
       type: 'audio',
       category: 'cefr',
+      course_id: formData.courseId,
       level_id: formData.levelId,
       unit_id: formData.unitId,
       lesson_id: formData.lessonId,
@@ -96,13 +99,15 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
           placeholder="Contoh: Pronunciation Practice - Th Sounds"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
           required
+          disabled={isSubmitting}
         />
       </div>
 
       {/* Hierarchy Selector */}
       <HierarchySelector
+        onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
         onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
         onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
         onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
@@ -129,6 +134,7 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
               accept="audio/*"
               onChange={handleFileChange}
               className="hidden"
+              disabled={isSubmitting}
             />
           </label>
         ) : (
@@ -147,7 +153,8 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
             <button
               type="button"
               onClick={handleRemoveFile}
-              className="p-1 text-red-600 hover:bg-red-50 rounded"
+              disabled={isSubmitting}
+              className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
             >
               <X size={18} />
             </button>
@@ -184,7 +191,8 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
           <select
             value={formData.skillFocus}
             onChange={(e) => setFormData({ ...formData, skillFocus: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900"
+            disabled={isSubmitting}
           >
             <option value="pronunciation">Pronunciation</option>
             <option value="listening">Listening</option>
@@ -198,7 +206,8 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
           <select
             value={formData.cefrSkill}
             onChange={(e) => setFormData({ ...formData, cefrSkill: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900"
+            disabled={isSubmitting}
           >
             <option value="speaking">Speaking</option>
             <option value="listening">Listening</option>
@@ -216,6 +225,7 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
             checked={formData.isPublished}
             onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
             className="mt-1 w-4 h-4 text-[#5C4FE5] border-gray-300 rounded focus:ring-[#5C4FE5]"
+            disabled={isSubmitting}
           />
           <div>
             <span className="text-sm font-medium text-gray-900">Publish materi</span>
@@ -231,15 +241,17 @@ export default function CEFRForm({ onCancel, onSave }: CEFRFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Batal
         </button>
         <button
           type="submit"
-          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Simpan Materi
+          {isSubmitting ? 'Menyimpan...' : 'Simpan Materi'}
         </button>
       </div>
     </form>

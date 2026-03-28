@@ -7,12 +7,14 @@ import HierarchySelector from './HierarchySelector';
 type BacaanFormProps = {
   onCancel: () => void;
   onSave: (data: any) => void;
+  isSubmitting?: boolean;
 };
 
-export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
+export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    courseId: '',
     levelId: '',
     unitId: '',
     lessonId: '',
@@ -60,6 +62,7 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
       title: formData.title,
       type: 'jsx',
       category: 'bacaan',
+      course_id: formData.courseId,
       level_id: formData.levelId,
       unit_id: formData.unitId,
       lesson_id: formData.lessonId,
@@ -87,13 +90,15 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
           placeholder="Contoh: The Adventures of Tom Sawyer"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
           required
+          disabled={isSubmitting}
         />
       </div>
 
       {/* Hierarchy Selector */}
       <HierarchySelector
+        onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
         onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
         onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
         onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
@@ -120,6 +125,7 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
               accept=".jsx,.tsx"
               onChange={handleFileChange}
               className="hidden"
+              disabled={isSubmitting}
             />
           </label>
         ) : (
@@ -138,7 +144,8 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
             <button
               type="button"
               onClick={handleRemoveFile}
-              className="p-1 text-red-600 hover:bg-red-50 rounded"
+              disabled={isSubmitting}
+              className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
             >
               <X size={18} />
             </button>
@@ -164,7 +171,8 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           placeholder="Ringkasan cerita atau topik bacaan..."
           rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent resize-none"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent resize-none text-gray-900 placeholder:text-gray-400"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -176,6 +184,7 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
             checked={formData.isPublished}
             onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
             className="mt-1 w-4 h-4 text-[#5C4FE5] border-gray-300 rounded focus:ring-[#5C4FE5]"
+            disabled={isSubmitting}
           />
           <div>
             <span className="text-sm font-medium text-gray-900">Publish materi</span>
@@ -191,15 +200,17 @@ export default function BacaanForm({ onCancel, onSave }: BacaanFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Batal
         </button>
         <button
           type="submit"
-          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Simpan Materi
+          {isSubmitting ? 'Menyimpan...' : 'Simpan Materi'}
         </button>
       </div>
     </form>

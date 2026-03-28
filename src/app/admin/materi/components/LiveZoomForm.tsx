@@ -7,13 +7,15 @@ import HierarchySelector from './HierarchySelector';
 type LiveZoomFormProps = {
   onCancel: () => void;
   onSave: (data: any) => void;
+  isSubmitting?: boolean;
 };
 
-export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
+export default function LiveZoomForm({ onCancel, onSave, isSubmitting }: LiveZoomFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     platform: '',
     url: '',
+    courseId: '',
     levelId: '',
     unitId: '',
     lessonId: '',
@@ -35,6 +37,7 @@ export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
       title: formData.title,
       type: 'url',
       category: 'live_zoom',
+      course_id: formData.courseId,
       level_id: formData.levelId,
       unit_id: formData.unitId,
       lesson_id: formData.lessonId,
@@ -62,13 +65,15 @@ export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
           placeholder="Contoh: Greetings and Introductions"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
           required
+          disabled={isSubmitting}
         />
       </div>
 
       {/* Hierarchy Selector */}
       <HierarchySelector
+        onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
         onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
         onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
         onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
@@ -87,8 +92,9 @@ export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
           <select
             value={formData.platform}
             onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900"
             required
+            disabled={isSubmitting}
           >
             <option value="">Pilih platform...</option>
             <option value="canva">Canva</option>
@@ -107,8 +113,9 @@ export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
             value={formData.url}
             onChange={(e) => setFormData({ ...formData, url: e.target.value })}
             placeholder="https://www.canva.com/design/..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
             required
+            disabled={isSubmitting}
           />
           <p className="text-xs text-gray-600 mt-1">
             Paste link dari Canva atau Google Drive
@@ -132,6 +139,7 @@ export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
             checked={formData.isPublished}
             onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
             className="mt-1 w-4 h-4 text-[#5C4FE5] border-gray-300 rounded focus:ring-[#5C4FE5]"
+            disabled={isSubmitting}
           />
           <div>
             <span className="text-sm font-medium text-gray-900">Publish materi</span>
@@ -147,15 +155,17 @@ export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Batal
         </button>
         <button
           type="submit"
-          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Simpan Materi
+          {isSubmitting ? 'Menyimpan...' : 'Simpan Materi'}
         </button>
       </div>
     </form>
