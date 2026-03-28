@@ -64,21 +64,20 @@ export async function POST(request: NextRequest) {
     // ============================================================
     // 3. UPLOAD FILE TO SUPABASE STORAGE (if exists)
     // ============================================================
-    let fileUrl = null;
+    let fileUrl: string | null = null;
+    let storageBucket = '';
+    let storagePath = '';
 
     if (file) {
       const fileExtension = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
-      
-      let storageBucket = '';
-      let storagePath = '';
 
       // Determine bucket based on category
       if (category === 'cefr') {
         storageBucket = 'audio';
         storagePath = `cefr/${fileName}`;
       } else if (category === 'bacaan') {
-        storageBucket = 'components'; // Create this bucket for .jsx files
+        storageBucket = 'components';
         storagePath = `bacaan/${fileName}`;
       }
 
@@ -133,7 +132,7 @@ export async function POST(request: NextRequest) {
       console.error('Insert material error:', insertError);
       
       // Clean up uploaded file if insert fails
-      if (fileUrl) {
+      if (fileUrl && storageBucket && storagePath) {
         await supabase.storage.from(storageBucket).remove([storagePath]);
       }
 
