@@ -36,32 +36,34 @@ export default function MateriTutorPage() {
   const [activeTab, setActiveTab] = useState<TabType>('live_zoom');
   const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
 
   const handleEdit = (material: Material) => {
-    // TODO: Implement edit functionality
-    alert('Edit functionality coming soon!');
-    console.log('Edit material:', material);
+    setEditingMaterial(material);
+    setShowForm(true);
   };
 
   const handleSave = () => {
     setShowForm(false);
+    setEditingMaterial(null);
     setRefreshKey(prev => prev + 1);
   };
 
   const handleCancel = () => {
     setShowForm(false);
+    setEditingMaterial(null);
   };
 
   const renderForm = () => {
     switch (activeTab) {
       case 'live_zoom':
-        return <LiveZoomForm onSave={handleSave} onCancel={handleCancel} />;
+        return <LiveZoomForm onSave={handleSave} onCancel={handleCancel} editData={editingMaterial} />;
       case 'bacaan':
-        return <BacaanForm onSave={handleSave} onCancel={handleCancel} />;
+        return <BacaanForm onSave={handleSave} onCancel={handleCancel} editData={editingMaterial} />;
       case 'kosakata':
-        return <KosakataForm onSave={handleSave} onCancel={handleCancel} />;
+        return <KosakataForm onSave={handleSave} onCancel={handleCancel} editData={editingMaterial} />;
       case 'cefr':
-        return <CEFRForm onSave={handleSave} onCancel={handleCancel} />;
+        return <CEFRForm onSave={handleSave} onCancel={handleCancel} editData={editingMaterial} />;
     }
   };
 
