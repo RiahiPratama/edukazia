@@ -110,18 +110,33 @@ export async function POST(request: NextRequest) {
       console.log('✅ Judul created:', judulId);
     }
 
-    // 2. Create Unit if new
+    // 2. Create Unit if new (NO CHAPTER_ID REQUIRED!)
     if (unitId === 'NEW' && unitName && judulId) {
       console.log('🆕 Creating new Unit:', unitName);
+      
+      // Get max unit_number for this judul
+      const { data: existingUnits } = await supabase
+        .from('units')
+        .select('unit_number')
+        .eq('judul_id', judulId)
+        .order('unit_number', { ascending: false })
+        .limit(1);
+      
+      const nextUnitNumber = existingUnits && existingUnits.length > 0 
+        ? existingUnits[0].unit_number + 1 
+        : 1;
       
       const { data: newUnit, error: unitError } = await supabase
         .from('units')
         .insert({
           judul_id: judulId,
           level_id: levelId,
-          name: unitName,
+          unit_name: unitName,        // Use unit_name, not name!
+          unit_number: nextUnitNumber, // Required field!
+          chapter_id: null,            // NULL if made nullable!
+          order_number: 0,
           is_active: true,
-          sort_order: 0,
+          description: '',
         })
         .select()
         .single();
@@ -288,7 +303,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint remains the same
+// GET endpoint
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
