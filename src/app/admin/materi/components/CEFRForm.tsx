@@ -73,7 +73,16 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
 
   const fetchJuduls = async (levelId: string) => {
     const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId);
-    setJuduls(data || []);
+    
+    // Deduplicate by name
+    const uniqueJuduls = data?.reduce((acc: any[], curr) => {
+      if (!acc.find(j => j.name === curr.name)) {
+        acc.push(curr);
+      }
+      return acc;
+    }, []) || [];
+    
+    setJuduls(uniqueJuduls);
   };
 
   const fetchUnits = async (judulId: string) => {
