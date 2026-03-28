@@ -62,7 +62,7 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
     const materialData = {
       // Material title = Lesson name
       title: formData.lessonName,
-      type: 'jsx',
+      type: 'bacaan_interaktif', // ✅ Correct enum value!
       category: 'bacaan',
       course_id: formData.courseId,
       level_id: formData.levelId,

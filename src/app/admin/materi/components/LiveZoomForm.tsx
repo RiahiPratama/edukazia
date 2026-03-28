@@ -36,7 +36,7 @@ export default function LiveZoomForm({ onCancel, onSave, isSubmitting }: LiveZoo
 
     const materialData = {
       title: formData.lessonName, // Lesson name = Material title
-      type: 'url',
+      type: 'live_zoom', // ✅ Correct enum value!
       category: 'live_zoom',
       course_id: formData.courseId,
       level_id: formData.levelId,

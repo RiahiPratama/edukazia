@@ -42,7 +42,7 @@ export default function KosakataForm({ onCancel, onSave, isSubmitting }: Kosakat
 
     const materialData = {
       title: formData.lessonName, // Lesson name = Material title
-      type: 'url',
+      type: 'kosa_kata', // ✅ Correct enum value!
       category: 'kosakata',
       course_id: formData.courseId,
       level_id: formData.levelId,

@@ -62,7 +62,7 @@ export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormPro
 
     const materialData = {
       title: formData.lessonName, // Lesson name = Material title
-      type: 'audio',
+      type: 'cefr', // ✅ Correct enum value!
       category: 'cefr',
       course_id: formData.courseId,
       level_id: formData.levelId,
