@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, FileCode, X, Info } from 'lucide-react';
+import { Upload, FileCode, X, Info, Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type Material = {
@@ -10,6 +10,7 @@ type Material = {
   content_data: any;
   order_number: number;
   is_published: boolean;
+  lesson_id: string;
 };
 
 type BacaanFormProps = {
@@ -26,7 +27,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [selectedLevel, setSelectedLevel] = useState('');
+  const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
   const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
@@ -52,12 +53,39 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
   useEffect(() => {
     if (editData) {
-      // Pre-fill form with edit data
+      // When editing, fetch lesson hierarchy to populate dropdowns
+      fetchLessonHierarchy(editData.lesson_id);
       setDescription(editData.content_data?.description || '');
       setOrderNumber(editData.order_number || 1);
       setIsPublished(editData.is_published || false);
     }
   }, [editData]);
+
+  const fetchLessonHierarchy = async (lessonId: string) => {
+    // Get lesson → unit → judul → level → course
+    const { data: lesson } = await supabase
+      .from('lessons')
+      .select('*, units(*,juduls(*,levels(*,courses(*))))')
+      .eq('id', lessonId)
+      .single();
+
+    if (lesson) {
+      const unit = lesson.units;
+      const judul = unit.juduls;
+      const level = judul.levels;
+      const course = level.courses;
+
+      setSelectedCourse(course.id);
+      await fetchLevels(course.id);
+      setSelectedLevels([level.id]); // Single level when editing
+      await fetchJuduls(level.id);
+      setSelectedJudul(judul.id);
+      await fetchUnits(judul.id);
+      setSelectedUnit(unit.id);
+      await fetchLessons(unit.id);
+      setSelectedLesson(lessonId);
+    }
+  };
 
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').eq('is_active', true);
@@ -72,7 +100,6 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const fetchJuduls = async (levelId: string) => {
     const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId);
     
-    // Deduplicate by name
     const uniqueJuduls = data?.reduce((acc: any[], curr) => {
       if (!acc.find(j => j.name === curr.name)) {
         acc.push(curr);
@@ -91,6 +118,30 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const fetchLessons = async (unitId: string) => {
     const { data } = await supabase.from('lessons').select('*').eq('unit_id', unitId);
     setLessons(data || []);
+  };
+
+  const toggleLevel = (levelId: string) => {
+    if (isEditing) {
+      // When editing, only allow single level
+      setSelectedLevels([levelId]);
+    } else {
+      // When creating, allow multiple levels
+      setSelectedLevels(prev => {
+        if (prev.includes(levelId)) {
+          return prev.filter(id => id !== levelId);
+        } else {
+          return [...prev, levelId];
+        }
+      });
+    }
+  };
+
+  const selectAllLevels = () => {
+    setSelectedLevels(levels.map(l => l.id));
+  };
+
+  const clearAllLevels = () => {
+    setSelectedLevels([]);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,10 +173,9 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
     setLoading(true);
 
     try {
-      const formData = new FormData();
-
       if (isEditing) {
-        // UPDATE existing material
+        // EDIT: Update existing material (can change hierarchy)
+        const formData = new FormData();
         formData.append('material_id', editData.id);
         formData.append('title', newLessonName || selectedLesson);
         formData.append('order_number', orderNumber.toString());
@@ -135,7 +185,16 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
           description 
         }));
 
-        // Add new file if selected
+        // Allow changing hierarchy
+        formData.append('course_id', selectedCourse);
+        formData.append('level_id', selectedLevels[0]); // Single level when editing
+        formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
+        formData.append('judul_name', newJudulName);
+        formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
+        formData.append('unit_name', newUnitName);
+        formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
+        formData.append('lesson_name', newLessonName);
+
         if (jsxFile) {
           formData.append('file', jsxFile);
         }
@@ -152,48 +211,75 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
         }
 
         alert('✅ Material berhasil diupdate!');
+        onSave();
       } else {
-        // CREATE new material
+        // CREATE: Multiple levels
+        if (selectedLevels.length === 0) {
+          alert('Pilih minimal 1 level!');
+          setLoading(false);
+          return;
+        }
+
         if (!jsxFile) {
           alert('File JSX harus diupload!');
           setLoading(false);
           return;
         }
 
-        formData.append('title', newLessonName || selectedLesson);
-        formData.append('type', 'jsx');
-        formData.append('category', 'bacaan');
-        formData.append('course_id', selectedCourse);
-        formData.append('level_id', selectedLevel);
-        formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-        formData.append('judul_name', newJudulName);
-        formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
-        formData.append('unit_name', newUnitName);
-        formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
-        formData.append('lesson_name', newLessonName);
-        formData.append('order_number', orderNumber.toString());
-        formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ 
-          type: 'jsx',
-          description 
-        }));
-        formData.append('file', jsxFile);
+        let successCount = 0;
+        let failedLevels: string[] = [];
 
-        const response = await fetch('/api/admin/materials', {
-          method: 'POST',
-          body: formData,
-        });
+        for (const levelId of selectedLevels) {
+          try {
+            const formData = new FormData();
+            formData.append('title', newLessonName || selectedLesson);
+            formData.append('type', 'jsx');
+            formData.append('category', 'bacaan');
+            formData.append('course_id', selectedCourse);
+            formData.append('level_id', levelId);
+            formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
+            formData.append('judul_name', newJudulName);
+            formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
+            formData.append('unit_name', newUnitName);
+            formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
+            formData.append('lesson_name', newLessonName);
+            formData.append('order_number', orderNumber.toString());
+            formData.append('is_published', isPublished.toString());
+            formData.append('content_data', JSON.stringify({ 
+              type: 'jsx',
+              description 
+            }));
+            formData.append('file', jsxFile);
 
-        const result = await response.json();
+            const response = await fetch('/api/admin/materials', {
+              method: 'POST',
+              body: formData,
+            });
 
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to create material');
+            const result = await response.json();
+
+            if (!response.ok) {
+              const levelName = levels.find(l => l.id === levelId)?.name || levelId;
+              failedLevels.push(levelName);
+            } else {
+              successCount++;
+            }
+          } catch (error) {
+            const levelName = levels.find(l => l.id === levelId)?.name || levelId;
+            failedLevels.push(levelName);
+          }
         }
 
-        alert('✅ Material Bacaan berhasil dibuat!');
+        if (successCount === selectedLevels.length) {
+          alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
+          onSave();
+        } else if (successCount > 0) {
+          alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal untuk: ${failedLevels.join(', ')}`);
+          onSave();
+        } else {
+          alert(`❌ Gagal membuat material untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
+        }
       }
-
-      onSave();
     } catch (error) {
       console.error('Error:', error);
       alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -204,160 +290,215 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Only show hierarchy fields when creating (not editing) */}
-      {!isEditing && (
-        <>
-          {/* Course Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Mata Pelajaran *
-            </label>
-            <select
-              value={selectedCourse}
-              onChange={(e) => {
-                setSelectedCourse(e.target.value);
-                fetchLevels(e.target.value);
-              }}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
-            >
-              <option value="">Pilih Mata Pelajaran</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Level Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Level *
-            </label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => {
-                setSelectedLevel(e.target.value);
-                fetchJuduls(e.target.value);
-              }}
-              required
-              disabled={!selectedCourse}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Level</option>
-              {levels.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Judul */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Judul *
-            </label>
-            <select
-              value={selectedJudul}
-              onChange={(e) => {
-                setSelectedJudul(e.target.value);
-                if (e.target.value !== 'NEW') {
-                  fetchUnits(e.target.value);
-                }
-              }}
-              required
-              disabled={!selectedLevel}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Judul</option>
-              <option value="NEW">+ Buat Judul Baru</option>
-              {juduls.map((j) => (
-                <option key={j.id} value={j.id}>{j.name}</option>
-              ))}
-            </select>
-            {selectedJudul === 'NEW' && (
-              <input
-                type="text"
-                value={newJudulName}
-                onChange={(e) => setNewJudulName(e.target.value)}
-                placeholder="Nama Judul Baru"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
-          </div>
-
-          {/* Unit */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Unit *
-            </label>
-            <select
-              value={selectedUnit}
-              onChange={(e) => {
-                setSelectedUnit(e.target.value);
-                if (e.target.value !== 'NEW') {
-                  fetchLessons(e.target.value);
-                }
-              }}
-              required
-              disabled={!selectedJudul}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Unit</option>
-              <option value="NEW">+ Buat Unit Baru</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>{u.unit_name}</option>
-              ))}
-            </select>
-            {selectedUnit === 'NEW' && (
-              <input
-                type="text"
-                value={newUnitName}
-                onChange={(e) => setNewUnitName(e.target.value)}
-                placeholder="Nama Unit Baru"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
-          </div>
-
-          {/* Lesson */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Lesson (Nama Materi) *
-            </label>
-            <select
-              value={selectedLesson}
-              onChange={(e) => setSelectedLesson(e.target.value)}
-              required
-              disabled={!selectedUnit}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Lesson</option>
-              <option value="NEW">+ Buat Lesson Baru</option>
-              {lessons.map((l) => (
-                <option key={l.id} value={l.id}>{l.lesson_name}</option>
-              ))}
-            </select>
-            {selectedLesson === 'NEW' && (
-              <input
-                type="text"
-                value={newLessonName}
-                onChange={(e) => setNewLessonName(e.target.value)}
-                placeholder="Nama Lesson Baru (akan menjadi judul materi)"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Material Content Fields (shown for both create and edit) */}
+      {/* Editing Banner */}
       {isEditing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-800">
             <strong>Editing:</strong> {editData.title}
           </p>
+          <p className="text-xs text-blue-600 mt-1">
+            Anda bisa mengubah Level, Judul, Unit, Lesson untuk memindahkan materi
+          </p>
+        </div>
+      )}
+
+      {/* Course Selection */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Mata Pelajaran *
+        </label>
+        <select
+          value={selectedCourse}
+          onChange={(e) => {
+            setSelectedCourse(e.target.value);
+            fetchLevels(e.target.value);
+            setSelectedLevels([]);
+          }}
+          required
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+        >
+          <option value="">Pilih Mata Pelajaran</option>
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Multi-Level Selection */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Level * {!isEditing && '(Pilih 1 atau lebih)'}
+        </label>
+        
+        {!isEditing && levels.length > 0 && (
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={selectAllLevels}
+              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+            >
+              Pilih Semua
+            </button>
+            <button
+              type="button"
+              onClick={clearAllLevels}
+              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+            >
+              Hapus Semua
+            </button>
+            <span className="text-xs text-gray-600 self-center ml-auto">
+              {selectedLevels.length} level dipilih
+            </span>
+          </div>
+        )}
+
+        {!selectedCourse ? (
+          <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600">
+            Pilih Mata Pelajaran dulu
+          </div>
+        ) : levels.length === 0 ? (
+          <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600">
+            Tidak ada level tersedia
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 p-4 border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
+            {levels.map((level) => (
+              <label
+                key={level.id}
+                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                  selectedLevels.includes(level.id)
+                    ? 'bg-[#5C4FE5] text-white'
+                    : 'bg-gray-50 text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedLevels.includes(level.id)}
+                  onChange={() => toggleLevel(level.id)}
+                  className="hidden"
+                />
+                <div className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${
+                  selectedLevels.includes(level.id)
+                    ? 'border-white bg-white'
+                    : 'border-gray-300'
+                }`}>
+                  {selectedLevels.includes(level.id) && (
+                    <Check size={14} className="text-[#5C4FE5]" />
+                  )}
+                </div>
+                <span className="text-sm font-medium">{level.name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {selectedLevels.length > 0 && !isEditing && (
+          <p className="mt-2 text-xs text-gray-600">
+            Material akan dibuat untuk {selectedLevels.length} level yang dipilih
+          </p>
+        )}
+      </div>
+
+      {/* Judul */}
+      {selectedLevels.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Judul *
+          </label>
+          <select
+            value={selectedJudul}
+            onChange={(e) => {
+              setSelectedJudul(e.target.value);
+              if (e.target.value !== 'NEW') {
+                fetchUnits(e.target.value);
+              }
+            }}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          >
+            <option value="">Pilih Judul</option>
+            <option value="NEW">+ Buat Judul Baru</option>
+            {juduls.map((j) => (
+              <option key={j.id} value={j.id}>{j.name}</option>
+            ))}
+          </select>
+          {selectedJudul === 'NEW' && (
+            <input
+              type="text"
+              value={newJudulName}
+              onChange={(e) => setNewJudulName(e.target.value)}
+              placeholder="Nama Judul Baru"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+            />
+          )}
+        </div>
+      )}
+
+      {/* Unit */}
+      {selectedJudul && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Unit *
+          </label>
+          <select
+            value={selectedUnit}
+            onChange={(e) => {
+              setSelectedUnit(e.target.value);
+              if (e.target.value !== 'NEW') {
+                fetchLessons(e.target.value);
+              }
+            }}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          >
+            <option value="">Pilih Unit</option>
+            <option value="NEW">+ Buat Unit Baru</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.unit_name}</option>
+            ))}
+          </select>
+          {selectedUnit === 'NEW' && (
+            <input
+              type="text"
+              value={newUnitName}
+              onChange={(e) => setNewUnitName(e.target.value)}
+              placeholder="Nama Unit Baru"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+            />
+          )}
+        </div>
+      )}
+
+      {/* Lesson */}
+      {selectedUnit && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Lesson (Nama Materi) *
+          </label>
+          <select
+            value={selectedLesson}
+            onChange={(e) => setSelectedLesson(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          >
+            <option value="">Pilih Lesson</option>
+            <option value="NEW">+ Buat Lesson Baru</option>
+            {lessons.map((l) => (
+              <option key={l.id} value={l.id}>{l.lesson_name}</option>
+            ))}
+          </select>
+          {selectedLesson === 'NEW' && (
+            <input
+              type="text"
+              value={newLessonName}
+              onChange={(e) => setNewLessonName(e.target.value)}
+              placeholder="Nama Lesson Baru (akan menjadi judul materi)"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+            />
+          )}
         </div>
       )}
 

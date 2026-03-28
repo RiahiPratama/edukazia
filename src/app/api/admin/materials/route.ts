@@ -1,13 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+// UPDATED PATCH METHOD - Add to src/app/api/admin/materials/route.ts
 
-// POST - Create new material (existing code remains same)
-export async function POST(request: NextRequest) {
-  // ... existing POST code stays the same ...
-  // (Keep all the existing code from route-FINAL-FIX.ts)
-}
-
-// PATCH - Update existing material
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -39,6 +31,16 @@ export async function PATCH(request: NextRequest) {
     const contentDataStr = formData.get('content_data') as string;
     const file = formData.get('file') as File | null;
 
+    // HIERARCHY CHANGE SUPPORT
+    const courseId = formData.get('course_id') as string;
+    const levelId = formData.get('level_id') as string;
+    const judulId = formData.get('judul_id') as string;
+    const judulName = formData.get('judul_name') as string;
+    const unitId = formData.get('unit_id') as string;
+    const unitName = formData.get('unit_name') as string;
+    const lessonId = formData.get('lesson_id') as string;
+    const lessonName = formData.get('lesson_name') as string;
+
     console.log('📝 Updating material:', materialId);
 
     if (!materialId) {
@@ -64,7 +66,6 @@ export async function PATCH(request: NextRequest) {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
       
-      // Sanitize filename
       const originalName = file.name;
       const sanitizedName = originalName
         .replace(/[^a-zA-Z0-9.-]/g, '_')
@@ -75,7 +76,6 @@ export async function PATCH(request: NextRequest) {
       const baseName = sanitizedName.replace(`.${ext}`, '');
       const fileName = `${baseName}-${timestamp}-${random}.${ext}`;
 
-      // Upload to appropriate bucket
       let bucket = '';
       let filePath = '';
 
@@ -110,7 +110,6 @@ export async function PATCH(request: NextRequest) {
           }, { status: 500 });
         }
 
-        // Update content data with new file path
         if (category === 'bacaan') {
           contentData.jsx_file_path = filePath;
         } else if (category === 'cefr') {
@@ -119,11 +118,104 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // ============================================================
+    // HANDLE HIERARCHY CHANGES
+    // ============================================================
+    let finalLessonId = existingMaterial.lesson_id;
+
+    // If hierarchy info provided, handle inline creation + get correct lesson_id
+    if (courseId && levelId && lessonId) {
+      // 1. Create Judul if new
+      let actualJudulId = judulId;
+      if (judulId === 'NEW' && judulName && levelId) {
+        console.log('🆕 Creating new Judul:', judulName);
+        
+        const { data: newJudul, error: judulError } = await supabase
+          .from('juduls')
+          .insert({
+            level_id: levelId,
+            name: judulName,
+            is_active: true,
+            sort_order: 0,
+          })
+          .select()
+          .single();
+        
+        if (judulError) {
+          console.error('Judul creation error:', judulError);
+          return NextResponse.json({ 
+            error: 'Failed to create judul',
+            details: judulError.message 
+          }, { status: 500 });
+        }
+        
+        actualJudulId = newJudul.id;
+        console.log('✅ Judul created:', actualJudulId);
+      }
+
+      // 2. Create Unit if new
+      let actualUnitId = unitId;
+      if (unitId === 'NEW' && unitName && actualJudulId) {
+        console.log('🆕 Creating new Unit:', unitName);
+        
+        const { data: newUnit, error: unitError } = await supabase
+          .from('units')
+          .insert({
+            judul_id: actualJudulId,
+            unit_name: unitName,
+            sort_order: 0,
+          })
+          .select()
+          .single();
+        
+        if (unitError) {
+          console.error('Unit creation error:', unitError);
+          return NextResponse.json({ 
+            error: 'Failed to create unit',
+            details: unitError.message 
+          }, { status: 500 });
+        }
+        
+        actualUnitId = newUnit.id;
+        console.log('✅ Unit created:', actualUnitId);
+      }
+
+      // 3. Create Lesson if new
+      if (lessonId === 'NEW' && lessonName && actualUnitId) {
+        console.log('🆕 Creating new Lesson:', lessonName);
+        
+        const { data: newLesson, error: lessonError } = await supabase
+          .from('lessons')
+          .insert({
+            unit_id: actualUnitId,
+            lesson_name: lessonName,
+            sort_order: 0,
+          })
+          .select()
+          .single();
+        
+        if (lessonError) {
+          console.error('Lesson creation error:', lessonError);
+          return NextResponse.json({ 
+            error: 'Failed to create lesson',
+            details: lessonError.message 
+          }, { status: 500 });
+        }
+        
+        finalLessonId = newLesson.id;
+        console.log('✅ Lesson created:', finalLessonId);
+      } else if (lessonId && lessonId !== 'NEW') {
+        // Use existing lesson
+        finalLessonId = lessonId;
+      }
+    }
+
     // Update material
     const { data: updatedMaterial, error: updateError } = await supabase
       .from('materials')
       .update({
         title,
+        lesson_id: finalLessonId, // Can be changed!
         order_number: orderNumber,
         is_published: isPublished,
         content_data: contentData,
