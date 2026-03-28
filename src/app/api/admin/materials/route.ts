@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// ================================================================
-// POST /api/admin/materials
-// Create new material with file upload
-// ================================================================
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // ============================================================
-    // 1. AUTHENTICATION CHECK
-    // ============================================================
+    // Authentication check
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      console.error('Auth error:', authError);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -29,50 +20,172 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!profile || profile.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin only' },
-        { status: 403 }
-      );
+      console.error('User is not admin:', profile);
+      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
     }
 
-    // ============================================================
-    // 2. PARSE FORM DATA
-    // ============================================================
+    // Parse form data
     const formData = await request.formData();
     
     const title = formData.get('title') as string;
     const type = formData.get('type') as string;
     const category = formData.get('category') as string;
+    const courseId = formData.get('course_id') as string;
     const levelId = formData.get('level_id') as string;
-    const unitId = formData.get('unit_id') as string;
-    const lessonId = formData.get('lesson_id') as string;
     const orderNumber = parseInt(formData.get('order_number') as string);
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
     const file = formData.get('file') as File | null;
+    
+    // Inline creation fields
+    let judulId = formData.get('judul_id') as string;
+    const judulName = formData.get('judul_name') as string;
+    let unitId = formData.get('unit_id') as string;
+    const unitName = formData.get('unit_name') as string;
+    let lessonId = formData.get('lesson_id') as string;
+    const lessonName = formData.get('lesson_name') as string;
 
-    // Validate required fields
-    if (!title || !type || !category || !lessonId || !contentDataStr) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    console.log('📥 Received data:', {
+      title,
+      type,
+      category,
+      courseId,
+      levelId,
+      judulId,
+      judulName,
+      unitId,
+      unitName,
+      lessonId,
+      lessonName,
+      orderNumber,
+      isPublished,
+      hasFile: !!file,
+    });
+
+    // Validation
+    if (!type || !category) {
+      return NextResponse.json({ 
+        error: 'Missing required fields', 
+        details: 'type and category are required' 
+      }, { status: 400 });
+    }
+
+    if (!lessonId && !lessonName) {
+      return NextResponse.json({ 
+        error: 'Missing lesson information', 
+        details: 'Either lesson_id or lesson_name must be provided' 
+      }, { status: 400 });
     }
 
     const contentData = JSON.parse(contentDataStr);
 
     // ============================================================
-    // 3. UPLOAD FILE TO SUPABASE STORAGE (if exists)
+    // INLINE CREATION: Create judul/unit/lesson if needed
+    // ============================================================
+    
+    // 1. Create Judul if new
+    if (judulId === 'NEW' && judulName && levelId) {
+      console.log('🆕 Creating new Judul:', judulName);
+      
+      const { data: newJudul, error: judulError } = await supabase
+        .from('juduls')
+        .insert({
+          level_id: levelId,
+          name: judulName,
+          is_active: true,
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (judulError) {
+        console.error('❌ Failed to create judul:', judulError);
+        return NextResponse.json(
+          { error: 'Failed to create judul', details: judulError.message },
+          { status: 500 }
+        );
+      }
+      
+      judulId = newJudul.id;
+      console.log('✅ Judul created:', judulId);
+    }
+
+    // 2. Create Unit if new
+    if (unitId === 'NEW' && unitName && judulId) {
+      console.log('🆕 Creating new Unit:', unitName);
+      
+      const { data: newUnit, error: unitError } = await supabase
+        .from('units')
+        .insert({
+          judul_id: judulId,
+          level_id: levelId,
+          name: unitName,
+          is_active: true,
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (unitError) {
+        console.error('❌ Failed to create unit:', unitError);
+        return NextResponse.json(
+          { error: 'Failed to create unit', details: unitError.message },
+          { status: 500 }
+        );
+      }
+      
+      unitId = newUnit.id;
+      console.log('✅ Unit created:', unitId);
+    }
+
+    // 3. Create Lesson if new
+    if (lessonId === 'NEW' && lessonName && unitId) {
+      console.log('🆕 Creating new Lesson:', lessonName);
+      
+      const { data: newLesson, error: lessonError } = await supabase
+        .from('lessons')
+        .insert({
+          unit_id: unitId,
+          name: lessonName,
+          is_active: true,
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (lessonError) {
+        console.error('❌ Failed to create lesson:', lessonError);
+        return NextResponse.json(
+          { error: 'Failed to create lesson', details: lessonError.message },
+          { status: 500 }
+        );
+      }
+      
+      lessonId = newLesson.id;
+      console.log('✅ Lesson created:', lessonId);
+    }
+
+    // Final validation
+    if (!lessonId) {
+      return NextResponse.json(
+        { error: 'Lesson ID not found after creation', details: 'This should not happen' },
+        { status: 500 }
+      );
+    }
+
+    // ============================================================
+    // FILE UPLOAD
     // ============================================================
     let fileUrl: string | null = null;
     let storageBucket = '';
     let storagePath = '';
 
     if (file) {
+      console.log('📤 Uploading file:', file.name, file.size, 'bytes');
+      
       const fileExtension = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
 
-      // Determine bucket based on category
       if (category === 'cefr') {
         storageBucket = 'audio';
         storagePath = `cefr/${fileName}`;
@@ -83,7 +196,7 @@ export async function POST(request: NextRequest) {
 
       if (storageBucket) {
         const fileBuffer = await file.arrayBuffer();
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from(storageBucket)
           .upload(storagePath, fileBuffer, {
             contentType: file.type,
@@ -91,7 +204,7 @@ export async function POST(request: NextRequest) {
           });
 
         if (uploadError) {
-          console.error('File upload error:', uploadError);
+          console.error('❌ File upload error:', uploadError);
           return NextResponse.json(
             { error: 'Failed to upload file', details: uploadError.message },
             { status: 500 }
@@ -100,24 +213,30 @@ export async function POST(request: NextRequest) {
 
         fileUrl = storagePath;
 
-        // Update content_data with file URL
         if (category === 'cefr') {
           contentData.audio_url = fileUrl;
         } else if (category === 'bacaan') {
           contentData.jsx_file_path = fileUrl;
         }
+        
+        console.log('✅ File uploaded:', storagePath);
       }
     }
 
     // ============================================================
-    // 4. INSERT MATERIAL TO DATABASE
+    // INSERT MATERIAL
     // ============================================================
+    console.log('💾 Inserting material...');
+    
+    const materialTitle = title || lessonName;
+    
     const { data: material, error: insertError } = await supabase
       .from('materials')
       .insert({
-        title,
+        title: materialTitle,
         type,
         category,
+        course_id: courseId || null,
         level_id: levelId || null,
         unit_id: unitId || null,
         lesson_id: lessonId,
@@ -129,22 +248,27 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error('Insert material error:', insertError);
+      console.error('❌ Insert material error:', insertError);
       
-      // Clean up uploaded file if insert fails
+      // Cleanup uploaded file if material insert fails
       if (fileUrl && storageBucket && storagePath) {
+        console.log('🗑️ Cleaning up uploaded file...');
         await supabase.storage.from(storageBucket).remove([storagePath]);
       }
 
       return NextResponse.json(
-        { error: 'Failed to create material', details: insertError.message },
+        { 
+          error: 'Failed to create material', 
+          details: insertError.message,
+          code: insertError.code,
+          hint: insertError.hint,
+        },
         { status: 500 }
       );
     }
 
-    // ============================================================
-    // 5. SUCCESS RESPONSE
-    // ============================================================
+    console.log('✅ Material created successfully:', material.id);
+
     return NextResponse.json({
       success: true,
       material,
@@ -152,35 +276,29 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('API error:', error);
+    console.error('💥 API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Internal server error', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      },
       { status: 500 }
     );
   }
 }
 
-// ================================================================
-// GET /api/admin/materials
-// Get all materials (with optional category filter)
-// ================================================================
+// GET endpoint remains the same
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // ============================================================
-    // 1. AUTHENTICATION CHECK
-    // ============================================================
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -188,21 +306,12 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (!profile || profile.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin only' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
     }
 
-    // ============================================================
-    // 2. GET QUERY PARAMS
-    // ============================================================
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
 
-    // ============================================================
-    // 3. FETCH MATERIALS
-    // ============================================================
     let query = supabase
       .from('materials')
       .select(`
@@ -210,6 +319,7 @@ export async function GET(request: NextRequest) {
         title,
         type,
         category,
+        course_id,
         level_id,
         unit_id,
         lesson_id,
@@ -227,22 +337,12 @@ export async function GET(request: NextRequest) {
     const { data: materials, error } = await query;
 
     if (error) {
-      console.error('Fetch materials error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch materials' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch materials' }, { status: 500 });
     }
 
-    return NextResponse.json({
-      materials: materials || [],
-    });
+    return NextResponse.json({ materials: materials || [] });
 
   } catch (error) {
-    console.error('API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
