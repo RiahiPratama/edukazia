@@ -1,161 +1,386 @@
 'use client';
 
-import { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
-import HierarchySelector from './HierarchySelector';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
-type LiveZoomFormProps = {
-  onCancel: () => void;
-  onSave: (data: any) => void;
-  isSubmitting?: boolean;
+type Material = {
+  id: string;
+  title: string;
+  content_data: any;
+  order_number: number;
+  is_published: boolean;
 };
 
-export default function LiveZoomForm({ onCancel, onSave, isSubmitting }: LiveZoomFormProps) {
-  const [formData, setFormData] = useState({
-    platform: '',
-    url: '',
-    courseId: '',
-    levelId: '',
-    judulId: '',
-    judulName: '',
-    unitId: '',
-    unitName: '',
-    lessonId: '',
-    lessonName: '',
-    orderNumber: 1,
-    isPublished: true,
-  });
+type LiveZoomFormProps = {
+  onSave: () => void;
+  onCancel: () => void;
+  editData?: Material | null;
+};
+
+export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFormProps) {
+  const [courses, setCourses] = useState<any[]>([]);
+  const [levels, setLevels] = useState<any[]>([]);
+  const [juduls, setJuduls] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [lessons, setLessons] = useState<any[]>([]);
+
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState('');
+  const [selectedJudul, setSelectedJudul] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState('');
+  const [selectedLesson, setSelectedLesson] = useState('');
+
+  const [newJudulName, setNewJudulName] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newLessonName, setNewLessonName] = useState('');
+
+  const [platform, setPlatform] = useState('canva');
+  const [url, setUrl] = useState('');
+  const [orderNumber, setOrderNumber] = useState(1);
+  const [isPublished, setIsPublished] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+
+  const supabase = createClient();
+
+  const isEditing = !!editData;
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  useEffect(() => {
+    if (editData) {
+      // Pre-fill form with edit data
+      setPlatform(editData.content_data?.platform || 'canva');
+      setUrl(editData.content_data?.url || '');
+      setOrderNumber(editData.order_number || 1);
+      setIsPublished(editData.is_published || false);
+    }
+  }, [editData]);
+
+  const fetchCourses = async () => {
+    const { data } = await supabase.from('courses').select('*').eq('is_active', true);
+    setCourses(data || []);
+  };
+
+  const fetchLevels = async (courseId: string) => {
+    const { data } = await supabase.from('levels').select('*').eq('course_id', courseId);
+    setLevels(data || []);
+  };
+
+  const fetchJuduls = async (levelId: string) => {
+    const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId);
+    setJuduls(data || []);
+  };
+
+  const fetchUnits = async (judulId: string) => {
+    const { data } = await supabase.from('units').select('*').eq('judul_id', judulId);
+    setUnits(data || []);
+  };
+
+  const fetchLessons = async (unitId: string) => {
+    const { data } = await supabase.from('lessons').select('*').eq('unit_id', unitId);
+    setLessons(data || []);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.platform || !formData.url || !formData.lessonName) {
-      alert('Mohon isi semua field yang required!');
-      return;
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+
+      if (isEditing) {
+        // UPDATE existing material
+        formData.append('material_id', editData.id);
+        formData.append('title', newLessonName || selectedLesson);
+        formData.append('order_number', orderNumber.toString());
+        formData.append('is_published', isPublished.toString());
+        formData.append('content_data', JSON.stringify({ platform, url }));
+
+        const response = await fetch('/api/admin/materials', {
+          method: 'PATCH',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update material');
+        }
+
+        alert('✅ Material berhasil diupdate!');
+      } else {
+        // CREATE new material
+        formData.append('title', newLessonName || selectedLesson);
+        formData.append('type', 'live_zoom');
+        formData.append('category', 'live_zoom');
+        formData.append('course_id', selectedCourse);
+        formData.append('level_id', selectedLevel);
+        formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
+        formData.append('judul_name', newJudulName);
+        formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
+        formData.append('unit_name', newUnitName);
+        formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
+        formData.append('lesson_name', newLessonName);
+        formData.append('order_number', orderNumber.toString());
+        formData.append('is_published', isPublished.toString());
+        formData.append('content_data', JSON.stringify({ platform, url }));
+
+        const response = await fetch('/api/admin/materials', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to create material');
+        }
+
+        alert('✅ Material Live Zoom berhasil dibuat!');
+      }
+
+      onSave();
+    } catch (error) {
+      console.error('Error:', error);
+      alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
-
-    const materialData = {
-      title: formData.lessonName, // Lesson name = Material title
-      type: 'live_zoom', // ✅ Correct enum value!
-      category: 'live_zoom',
-      course_id: formData.courseId,
-      level_id: formData.levelId,
-      judul_id: formData.judulId,
-      judul_name: formData.judulName,
-      unit_id: formData.unitId,
-      unit_name: formData.unitName,
-      lesson_id: formData.lessonId,
-      lesson_name: formData.lessonName,
-      order_number: formData.orderNumber,
-      is_published: formData.isPublished,
-      content_data: {
-        type: 'url',
-        platform: formData.platform,
-        url: formData.url,
-      },
-    };
-
-    onSave(materialData);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Hierarchy Selector */}
-      <HierarchySelector
-        onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
-        onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
-        onJudulChange={(judulId, judulName) => setFormData({ ...formData, judulId, judulName })}
-        onUnitChange={(unitId, unitName) => setFormData({ ...formData, unitId, unitName })}
-        onLessonChange={(lessonId, lessonName) => setFormData({ ...formData, lessonId, lessonName })}
-        onOrderChange={(orderNumber) => setFormData({ ...formData, orderNumber })}
-      />
+      {/* Only show hierarchy fields when creating (not editing) */}
+      {!isEditing && (
+        <>
+          {/* Course Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Mata Pelajaran *
+            </label>
+            <select
+              value={selectedCourse}
+              onChange={(e) => {
+                setSelectedCourse(e.target.value);
+                fetchLevels(e.target.value);
+              }}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+            >
+              <option value="">Pilih Mata Pelajaran</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
 
-      {/* URL Link Section */}
-      <div className="p-6 bg-gray-50 rounded-lg">
-        <h4 className="text-base font-medium text-gray-900 mb-4">URL Link</h4>
+          {/* Level Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Level *
+            </label>
+            <select
+              value={selectedLevel}
+              onChange={(e) => {
+                setSelectedLevel(e.target.value);
+                fetchJuduls(e.target.value);
+              }}
+              required
+              disabled={!selectedCourse}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
+            >
+              <option value="">Pilih Level</option>
+              {levels.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </div>
 
-        {/* Platform */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Platform *
-          </label>
-          <select
-            value={formData.platform}
-            onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900"
-            required
-            disabled={isSubmitting}
-          >
-            <option value="">Pilih platform...</option>
-            <option value="canva">Canva</option>
-            <option value="google_drive">Google Drive</option>
-            <option value="other">Lainnya</option>
-          </select>
-        </div>
+          {/* Judul */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Judul *
+            </label>
+            <select
+              value={selectedJudul}
+              onChange={(e) => {
+                setSelectedJudul(e.target.value);
+                if (e.target.value !== 'NEW') {
+                  fetchUnits(e.target.value);
+                }
+              }}
+              required
+              disabled={!selectedLevel}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
+            >
+              <option value="">Pilih Judul</option>
+              <option value="NEW">+ Buat Judul Baru</option>
+              {juduls.map((j) => (
+                <option key={j.id} value={j.id}>{j.name}</option>
+              ))}
+            </select>
+            {selectedJudul === 'NEW' && (
+              <input
+                type="text"
+                value={newJudulName}
+                onChange={(e) => setNewJudulName(e.target.value)}
+                placeholder="Nama Judul Baru"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+              />
+            )}
+          </div>
 
-        {/* URL */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            URL Link *
-          </label>
-          <input
-            type="url"
-            value={formData.url}
-            onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-            placeholder="https://www.canva.com/design/..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
-            required
-            disabled={isSubmitting}
-          />
-          <p className="text-xs text-gray-600 mt-1">
-            Paste link dari Canva atau Google Drive
+          {/* Unit */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Unit *
+            </label>
+            <select
+              value={selectedUnit}
+              onChange={(e) => {
+                setSelectedUnit(e.target.value);
+                if (e.target.value !== 'NEW') {
+                  fetchLessons(e.target.value);
+                }
+              }}
+              required
+              disabled={!selectedJudul}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
+            >
+              <option value="">Pilih Unit</option>
+              <option value="NEW">+ Buat Unit Baru</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>{u.unit_name}</option>
+              ))}
+            </select>
+            {selectedUnit === 'NEW' && (
+              <input
+                type="text"
+                value={newUnitName}
+                onChange={(e) => setNewUnitName(e.target.value)}
+                placeholder="Nama Unit Baru"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+              />
+            )}
+          </div>
+
+          {/* Lesson */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Lesson (Nama Materi) *
+            </label>
+            <select
+              value={selectedLesson}
+              onChange={(e) => setSelectedLesson(e.target.value)}
+              required
+              disabled={!selectedUnit}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
+            >
+              <option value="">Pilih Lesson</option>
+              <option value="NEW">+ Buat Lesson Baru</option>
+              {lessons.map((l) => (
+                <option key={l.id} value={l.id}>{l.lesson_name}</option>
+              ))}
+            </select>
+            {selectedLesson === 'NEW' && (
+              <input
+                type="text"
+                value={newLessonName}
+                onChange={(e) => setNewLessonName(e.target.value)}
+                placeholder="Nama Lesson Baru (akan menjadi judul materi)"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Material Content Fields (shown for both create and edit) */}
+      {isEditing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-blue-800">
+            <strong>Editing:</strong> {editData.title}
           </p>
         </div>
+      )}
 
-        {/* Warning */}
-        <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <AlertCircle size={18} className="text-yellow-700 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-yellow-700">
-            <strong>Note:</strong> Pastikan link sudah di-share dengan akses "Anyone with the link"
-          </p>
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Platform *
+        </label>
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          required
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+        >
+          <option value="canva">Canva</option>
+          <option value="zoom">Zoom</option>
+          <option value="google_meet">Google Meet</option>
+        </select>
       </div>
 
-      {/* Publish Checkbox */}
       <div>
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={formData.isPublished}
-            onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
-            className="mt-1 w-4 h-4 text-[#5C4FE5] border-gray-300 rounded focus:ring-[#5C4FE5]"
-            disabled={isSubmitting}
-          />
-          <div>
-            <span className="text-sm font-medium text-gray-900">Publish materi</span>
-            <p className="text-xs text-gray-600 mt-0.5">
-              Materi akan langsung terlihat oleh siswa
-            </p>
-          </div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          URL Link *
+        </label>
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://..."
+          required
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Order Number *
+        </label>
+        <input
+          type="number"
+          value={orderNumber}
+          onChange={(e) => setOrderNumber(parseInt(e.target.value))}
+          min="1"
+          required
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="isPublished"
+          checked={isPublished}
+          onChange={(e) => setIsPublished(e.target.checked)}
+          className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]"
+        />
+        <label htmlFor="isPublished" className="text-sm font-medium text-gray-700">
+          Publish (siswa bisa lihat)
         </label>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+      <div className="flex gap-3 pt-4">
         <button
           type="button"
           onClick={onCancel}
-          disabled={isSubmitting}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
         >
           Batal
         </button>
         <button
           type="submit"
-          disabled={isSubmitting}
-          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading}
+          className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50"
         >
-          {isSubmitting ? 'Menyimpan...' : 'Simpan Materi'}
+          {loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
         </button>
       </div>
     </form>
