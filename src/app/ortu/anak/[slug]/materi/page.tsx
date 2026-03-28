@@ -2,14 +2,21 @@ import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import MateriContent from './MateriContent';
 
-export default async function OrtuMateriPage({ params }: { params: { slug: string } }) {
+export default async function OrtuMateriPage({ 
+  params 
+}: { 
+  params: Promise<{ slug: string }> 
+}) {
+  // Next.js 15: params is a Promise, must await it
+  const { slug } = await params;
+  
   const supabase = await createClient();
 
   // Get student by slug
   const { data: student, error: studentError } = await supabase
     .from('students')
     .select('id, slug, full_name, profile_id')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single();
 
   if (studentError || !student) {
