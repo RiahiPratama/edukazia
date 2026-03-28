@@ -12,12 +12,15 @@ type BacaanFormProps = {
 
 export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFormProps) {
   const [formData, setFormData] = useState({
-    title: '',
     description: '',
     courseId: '',
     levelId: '',
+    judulId: '',
+    judulName: '',
     unitId: '',
+    unitName: '',
     lessonId: '',
+    lessonName: '',
     orderNumber: 1,
     isPublished: true,
   });
@@ -27,7 +30,6 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       const validExtensions = ['.jsx', '.tsx'];
       const fileExtension = file.name.slice(file.name.lastIndexOf('.'));
       
@@ -36,7 +38,6 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
         return;
       }
 
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('File terlalu besar! Maksimal 5MB');
         return;
@@ -53,26 +54,31 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !jsxFile || !formData.lessonId) {
+    if (!jsxFile || !formData.lessonId || !formData.lessonName) {
       alert('Mohon isi semua field yang required!');
       return;
     }
 
     const materialData = {
-      title: formData.title,
+      // Material title = Lesson name
+      title: formData.lessonName,
       type: 'jsx',
       category: 'bacaan',
       course_id: formData.courseId,
       level_id: formData.levelId,
+      judul_id: formData.judulId,
+      judul_name: formData.judulName,
       unit_id: formData.unitId,
+      unit_name: formData.unitName,
       lesson_id: formData.lessonId,
+      lesson_name: formData.lessonName,
       order_number: formData.orderNumber,
       is_published: formData.isPublished,
       content_data: {
         type: 'jsx',
         description: formData.description,
       },
-      file: jsxFile, // Will be uploaded separately
+      file: jsxFile,
     };
 
     onSave(materialData);
@@ -80,28 +86,13 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Title */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Judul Bacaan *
-        </label>
-        <input
-          type="text"
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          placeholder="Contoh: The Adventures of Tom Sawyer"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
-          required
-          disabled={isSubmitting}
-        />
-      </div>
-
-      {/* Hierarchy Selector */}
+      {/* Hierarchy Selector - THIS DEFINES THE MATERIAL */}
       <HierarchySelector
         onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
         onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
-        onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
-        onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
+        onJudulChange={(judulId, judulName) => setFormData({ ...formData, judulId, judulName })}
+        onUnitChange={(unitId, unitName) => setFormData({ ...formData, unitId, unitName })}
+        onLessonChange={(lessonId, lessonName) => setFormData({ ...formData, lessonId, lessonName })}
         onOrderChange={(orderNumber) => setFormData({ ...formData, orderNumber })}
       />
 
@@ -152,7 +143,6 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
           </div>
         )}
 
-        {/* Info */}
         <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg mt-4">
           <Info size={18} className="text-blue-700 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-blue-700">
@@ -161,10 +151,10 @@ export default function BacaanForm({ onCancel, onSave, isSubmitting }: BacaanFor
         </div>
       </div>
 
-      {/* Description */}
+      {/* Description (Optional) */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-2">
-          Deskripsi Singkat
+          Deskripsi Singkat (Opsional)
         </label>
         <textarea
           value={formData.description}

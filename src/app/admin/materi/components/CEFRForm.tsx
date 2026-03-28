@@ -13,14 +13,17 @@ type CEFRFormProps = {
 
 export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormProps) {
   const [formData, setFormData] = useState({
-    title: '',
     textContent: '',
     skillFocus: 'pronunciation',
     cefrSkill: 'speaking',
     courseId: '',
     levelId: '',
+    judulId: '',
+    judulName: '',
     unitId: '',
+    unitName: '',
     lessonId: '',
+    lessonName: '',
     orderNumber: 1,
     isPublished: true,
   });
@@ -30,14 +33,12 @@ export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormPro
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a'];
       if (!validTypes.includes(file.type)) {
         alert('File harus berformat MP3, WAV, atau M4A');
         return;
       }
 
-      // Validate file size (max 50MB)
       if (file.size > 50 * 1024 * 1024) {
         alert('File terlalu besar! Maksimal 50MB');
         return;
@@ -54,19 +55,23 @@ export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !audioFile || !formData.textContent || !formData.lessonId) {
+    if (!audioFile || !formData.textContent || !formData.lessonName) {
       alert('Mohon isi semua field yang required!');
       return;
     }
 
     const materialData = {
-      title: formData.title,
+      title: formData.lessonName, // Lesson name = Material title
       type: 'audio',
       category: 'cefr',
       course_id: formData.courseId,
       level_id: formData.levelId,
+      judul_id: formData.judulId,
+      judul_name: formData.judulName,
       unit_id: formData.unitId,
+      unit_name: formData.unitName,
       lesson_id: formData.lessonId,
+      lesson_name: formData.lessonName,
       order_number: formData.orderNumber,
       is_published: formData.isPublished,
       content_data: {
@@ -75,7 +80,7 @@ export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormPro
         skill_focus: formData.skillFocus,
         cefr_skill: formData.cefrSkill,
       },
-      file: audioFile, // Will be uploaded separately
+      file: audioFile,
     };
 
     onSave(materialData);
@@ -89,28 +94,13 @@ export default function CEFRForm({ onCancel, onSave, isSubmitting }: CEFRFormPro
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Title */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Judul Materi *
-        </label>
-        <input
-          type="text"
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          placeholder="Contoh: Pronunciation Practice - Th Sounds"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
-          required
-          disabled={isSubmitting}
-        />
-      </div>
-
       {/* Hierarchy Selector */}
       <HierarchySelector
         onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
         onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
-        onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
-        onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
+        onJudulChange={(judulId, judulName) => setFormData({ ...formData, judulId, judulName })}
+        onUnitChange={(unitId, unitName) => setFormData({ ...formData, unitId, unitName })}
+        onLessonChange={(lessonId, lessonName) => setFormData({ ...formData, lessonId, lessonName })}
         onOrderChange={(orderNumber) => setFormData({ ...formData, orderNumber })}
       />
 

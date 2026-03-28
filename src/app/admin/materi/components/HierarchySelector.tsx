@@ -1,15 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type HierarchySelectorProps = {
   onCourseChange?: (courseId: string) => void;
   onLevelChange?: (levelId: string) => void;
-  onJudulChange?: (judulId: string) => void;
-  onUnitChange?: (unitId: string) => void;
-  onLessonChange?: (lessonId: string) => void;
+  onJudulChange?: (judulId: string, judulName: string) => void;
+  onUnitChange?: (unitId: string, unitName: string) => void;
+  onLessonChange?: (lessonId: string, lessonName: string) => void;
   onOrderChange?: (order: number) => void;
 };
 
@@ -62,6 +62,16 @@ export default function HierarchySelector({
   const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
+  
+  // New state for inline creation
+  const [judulMode, setJudulMode] = useState<'select' | 'create'>('select');
+  const [unitMode, setUnitMode] = useState<'select' | 'create'>('select');
+  const [lessonMode, setLessonMode] = useState<'select' | 'create'>('select');
+  
+  const [newJudulName, setNewJudulName] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newLessonName, setNewLessonName] = useState('');
+  
   const [orderNumber, setOrderNumber] = useState(1);
 
   const supabase = createClient();
@@ -88,28 +98,31 @@ export default function HierarchySelector({
     } else {
       setJuduls([]);
       setSelectedJudul('');
+      setJudulMode('select');
     }
   }, [selectedLevel]);
 
   // Fetch units when judul changes
   useEffect(() => {
-    if (selectedJudul) {
+    if (selectedJudul && judulMode === 'select') {
       fetchUnits(selectedJudul);
     } else {
       setUnits([]);
       setSelectedUnit('');
+      setUnitMode('select');
     }
-  }, [selectedJudul]);
+  }, [selectedJudul, judulMode]);
 
   // Fetch lessons when unit changes
   useEffect(() => {
-    if (selectedUnit) {
+    if (selectedUnit && unitMode === 'select') {
       fetchLessons(selectedUnit);
     } else {
       setLessons([]);
       setSelectedLesson('');
+      setLessonMode('select');
     }
-  }, [selectedUnit]);
+  }, [selectedUnit, unitMode]);
 
   const fetchCourses = async () => {
     const { data, error } = await supabase
@@ -121,7 +134,6 @@ export default function HierarchySelector({
     if (error) {
       console.error('Error fetching courses:', error);
     } else {
-      console.log('Courses fetched:', data);
       setCourses(data || []);
     }
   };
@@ -137,7 +149,6 @@ export default function HierarchySelector({
     if (error) {
       console.error('Error fetching levels:', error);
     } else {
-      console.log('Levels fetched:', data);
       setLevels(data || []);
     }
   };
@@ -153,7 +164,6 @@ export default function HierarchySelector({
     if (error) {
       console.error('Error fetching juduls:', error);
     } else {
-      console.log('Juduls fetched:', data);
       setJuduls(data || []);
     }
   };
@@ -169,7 +179,6 @@ export default function HierarchySelector({
     if (error) {
       console.error('Error fetching units:', error);
     } else {
-      console.log('Units fetched:', data);
       setUnits(data || []);
     }
   };
@@ -185,7 +194,6 @@ export default function HierarchySelector({
     if (error) {
       console.error('Error fetching lessons:', error);
     } else {
-      console.log('Lessons fetched:', data);
       setLessons(data || []);
     }
   };
@@ -204,25 +212,66 @@ export default function HierarchySelector({
     setSelectedJudul('');
     setSelectedUnit('');
     setSelectedLesson('');
+    setJudulMode('select');
+    setUnitMode('select');
+    setLessonMode('select');
     onLevelChange?.(levelId);
   };
 
-  const handleJudulChange = (judulId: string) => {
-    setSelectedJudul(judulId);
-    setSelectedUnit('');
-    setSelectedLesson('');
-    onJudulChange?.(judulId);
+  const handleJudulChange = (value: string) => {
+    if (judulMode === 'select') {
+      setSelectedJudul(value);
+      onJudulChange?.(value, juduls.find(j => j.id === value)?.name || '');
+    }
   };
 
-  const handleUnitChange = (unitId: string) => {
-    setSelectedUnit(unitId);
-    setSelectedLesson('');
-    onUnitChange?.(unitId);
+  const handleJudulModeToggle = () => {
+    if (judulMode === 'select') {
+      setJudulMode('create');
+      setSelectedJudul('');
+      setNewJudulName('');
+    } else {
+      setJudulMode('select');
+      setNewJudulName('');
+    }
   };
 
-  const handleLessonChange = (lessonId: string) => {
-    setSelectedLesson(lessonId);
-    onLessonChange?.(lessonId);
+  const handleNewJudulChange = (value: string) => {
+    setNewJudulName(value);
+    // Pass 'NEW' as ID and the name
+    onJudulChange?.('NEW', value);
+  };
+
+  const handleUnitModeToggle = () => {
+    if (unitMode === 'select') {
+      setUnitMode('create');
+      setSelectedUnit('');
+      setNewUnitName('');
+    } else {
+      setUnitMode('select');
+      setNewUnitName('');
+    }
+  };
+
+  const handleNewUnitChange = (value: string) => {
+    setNewUnitName(value);
+    onUnitChange?.('NEW', value);
+  };
+
+  const handleLessonModeToggle = () => {
+    if (lessonMode === 'select') {
+      setLessonMode('create');
+      setSelectedLesson('');
+      setNewLessonName('');
+    } else {
+      setLessonMode('select');
+      setNewLessonName('');
+    }
+  };
+
+  const handleNewLessonChange = (value: string) => {
+    setNewLessonName(value);
+    onLessonChange?.('NEW', value);
   };
 
   const handleOrderChange = (value: number) => {
@@ -274,78 +323,146 @@ export default function HierarchySelector({
             </option>
           ))}
         </select>
-        <p className="text-xs text-gray-600 mt-1">
-          Level akan difilter berdasarkan pelajaran yang dipilih
-        </p>
       </div>
 
-      {/* 3. Judul (NEW!) */}
+      {/* 3. Judul */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          3. Judul *
-        </label>
-        <select
-          value={selectedJudul}
-          onChange={(e) => handleJudulChange(e.target.value)}
-          disabled={!selectedLevel}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-        >
-          <option value="">Pilih judul...</option>
-          {juduls.map((judul) => (
-            <option key={judul.id} value={judul.id}>
-              {judul.name}
-              {judul.description && ` - ${judul.description}`}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-gray-900">
+            3. Judul *
+          </label>
+          <button
+            type="button"
+            onClick={handleJudulModeToggle}
+            disabled={!selectedLevel}
+            className="flex items-center gap-1 text-xs px-2 py-1 text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={14} />
+            {judulMode === 'select' ? 'Tambah Baru' : 'Pilih Existing'}
+          </button>
+        </div>
+        
+        {judulMode === 'select' ? (
+          <select
+            value={selectedJudul}
+            onChange={(e) => handleJudulChange(e.target.value)}
+            disabled={!selectedLevel}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          >
+            <option value="">Pilih judul...</option>
+            {juduls.map((judul) => (
+              <option key={judul.id} value={judul.id}>
+                {judul.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={newJudulName}
+            onChange={(e) => handleNewJudulChange(e.target.value)}
+            placeholder="Ketik nama judul baru (contoh: Part of Speech)"
+            className="w-full px-3 py-2 border border-[#5C4FE5] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400 bg-blue-50"
+          />
+        )}
         <p className="text-xs text-gray-600 mt-1">
-          Judul akan difilter berdasarkan level yang dipilih
+          {judulMode === 'select' ? 'Judul akan difilter berdasarkan level' : 'Judul baru akan dibuat otomatis'}
         </p>
       </div>
 
       {/* 4. Unit */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          4. Unit *
-        </label>
-        <select
-          value={selectedUnit}
-          onChange={(e) => handleUnitChange(e.target.value)}
-          disabled={!selectedJudul}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-        >
-          <option value="">Pilih unit...</option>
-          {units.map((unit) => (
-            <option key={unit.id} value={unit.id}>
-              {unit.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-gray-900">
+            4. Unit *
+          </label>
+          <button
+            type="button"
+            onClick={handleUnitModeToggle}
+            disabled={!selectedJudul && judulMode === 'select'}
+            className="flex items-center gap-1 text-xs px-2 py-1 text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={14} />
+            {unitMode === 'select' ? 'Tambah Baru' : 'Pilih Existing'}
+          </button>
+        </div>
+        
+        {unitMode === 'select' ? (
+          <select
+            value={selectedUnit}
+            onChange={(e) => {
+              setSelectedUnit(e.target.value);
+              onUnitChange?.(e.target.value, units.find(u => u.id === e.target.value)?.name || '');
+            }}
+            disabled={!selectedJudul && judulMode === 'select'}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          >
+            <option value="">Pilih unit...</option>
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={newUnitName}
+            onChange={(e) => handleNewUnitChange(e.target.value)}
+            placeholder="Ketik nama unit baru (contoh: Unit 01 - Noun)"
+            className="w-full px-3 py-2 border border-[#5C4FE5] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400 bg-blue-50"
+          />
+        )}
         <p className="text-xs text-gray-600 mt-1">
-          Unit akan difilter berdasarkan judul yang dipilih
+          {unitMode === 'select' ? 'Unit akan difilter berdasarkan judul' : 'Unit baru akan dibuat otomatis'}
         </p>
       </div>
 
       {/* 5. Lesson */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          5. Lesson *
-        </label>
-        <select
-          value={selectedLesson}
-          onChange={(e) => handleLessonChange(e.target.value)}
-          disabled={!selectedUnit}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-        >
-          <option value="">Pilih lesson...</option>
-          {lessons.map((lesson) => (
-            <option key={lesson.id} value={lesson.id}>
-              {lesson.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-gray-900">
+            5. Lesson *
+          </label>
+          <button
+            type="button"
+            onClick={handleLessonModeToggle}
+            disabled={!selectedUnit && unitMode === 'select'}
+            className="flex items-center gap-1 text-xs px-2 py-1 text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={14} />
+            {lessonMode === 'select' ? 'Tambah Baru' : 'Pilih Existing'}
+          </button>
+        </div>
+        
+        {lessonMode === 'select' ? (
+          <select
+            value={selectedLesson}
+            onChange={(e) => {
+              setSelectedLesson(e.target.value);
+              onLessonChange?.(e.target.value, lessons.find(l => l.id === e.target.value)?.name || '');
+            }}
+            disabled={!selectedUnit && unitMode === 'select'}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          >
+            <option value="">Pilih lesson...</option>
+            {lessons.map((lesson) => (
+              <option key={lesson.id} value={lesson.id}>
+                {lesson.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={newLessonName}
+            onChange={(e) => handleNewLessonChange(e.target.value)}
+            placeholder="Ketik nama lesson baru (contoh: Lesson 01 - Apa itu Noun?)"
+            className="w-full px-3 py-2 border border-[#5C4FE5] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400 bg-blue-50"
+          />
+        )}
         <p className="text-xs text-gray-600 mt-1">
-          Lesson akan difilter berdasarkan unit yang dipilih
+          {lessonMode === 'select' ? 'Lesson akan difilter berdasarkan unit' : 'Lesson baru akan dibuat otomatis'}
         </p>
       </div>
 

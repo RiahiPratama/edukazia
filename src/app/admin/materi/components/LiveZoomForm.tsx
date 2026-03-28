@@ -12,13 +12,16 @@ type LiveZoomFormProps = {
 
 export default function LiveZoomForm({ onCancel, onSave, isSubmitting }: LiveZoomFormProps) {
   const [formData, setFormData] = useState({
-    title: '',
     platform: '',
     url: '',
     courseId: '',
     levelId: '',
+    judulId: '',
+    judulName: '',
     unitId: '',
+    unitName: '',
     lessonId: '',
+    lessonName: '',
     orderNumber: 1,
     isPublished: true,
   });
@@ -26,21 +29,23 @@ export default function LiveZoomForm({ onCancel, onSave, isSubmitting }: LiveZoo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate
-    if (!formData.title || !formData.platform || !formData.url || !formData.lessonId) {
+    if (!formData.platform || !formData.url || !formData.lessonName) {
       alert('Mohon isi semua field yang required!');
       return;
     }
 
-    // Prepare data
     const materialData = {
-      title: formData.title,
+      title: formData.lessonName, // Lesson name = Material title
       type: 'url',
       category: 'live_zoom',
       course_id: formData.courseId,
       level_id: formData.levelId,
+      judul_id: formData.judulId,
+      judul_name: formData.judulName,
       unit_id: formData.unitId,
+      unit_name: formData.unitName,
       lesson_id: formData.lessonId,
+      lesson_name: formData.lessonName,
       order_number: formData.orderNumber,
       is_published: formData.isPublished,
       content_data: {
@@ -55,28 +60,13 @@ export default function LiveZoomForm({ onCancel, onSave, isSubmitting }: LiveZoo
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Title */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Judul Materi *
-        </label>
-        <input
-          type="text"
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          placeholder="Contoh: Greetings and Introductions"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent text-gray-900 placeholder:text-gray-400"
-          required
-          disabled={isSubmitting}
-        />
-      </div>
-
       {/* Hierarchy Selector */}
       <HierarchySelector
         onCourseChange={(courseId) => setFormData({ ...formData, courseId })}
         onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
-        onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
-        onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
+        onJudulChange={(judulId, judulName) => setFormData({ ...formData, judulId, judulName })}
+        onUnitChange={(unitId, unitName) => setFormData({ ...formData, unitId, unitName })}
+        onLessonChange={(lessonId, lessonName) => setFormData({ ...formData, lessonId, lessonName })}
         onOrderChange={(orderNumber) => setFormData({ ...formData, orderNumber })}
       />
 
