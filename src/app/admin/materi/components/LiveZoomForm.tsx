@@ -1,0 +1,163 @@
+'use client';
+
+import { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
+import HierarchySelector from './HierarchySelector';
+
+type LiveZoomFormProps = {
+  onCancel: () => void;
+  onSave: (data: any) => void;
+};
+
+export default function LiveZoomForm({ onCancel, onSave }: LiveZoomFormProps) {
+  const [formData, setFormData] = useState({
+    title: '',
+    platform: '',
+    url: '',
+    levelId: '',
+    unitId: '',
+    lessonId: '',
+    orderNumber: 1,
+    isPublished: true,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate
+    if (!formData.title || !formData.platform || !formData.url || !formData.lessonId) {
+      alert('Mohon isi semua field yang required!');
+      return;
+    }
+
+    // Prepare data
+    const materialData = {
+      title: formData.title,
+      type: 'url',
+      category: 'live_zoom',
+      level_id: formData.levelId,
+      unit_id: formData.unitId,
+      lesson_id: formData.lessonId,
+      order_number: formData.orderNumber,
+      is_published: formData.isPublished,
+      content_data: {
+        type: 'url',
+        platform: formData.platform,
+        url: formData.url,
+      },
+    };
+
+    onSave(materialData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Title */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Judul Materi *
+        </label>
+        <input
+          type="text"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          placeholder="Contoh: Greetings and Introductions"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent"
+          required
+        />
+      </div>
+
+      {/* Hierarchy Selector */}
+      <HierarchySelector
+        onLevelChange={(levelId) => setFormData({ ...formData, levelId })}
+        onUnitChange={(unitId) => setFormData({ ...formData, unitId })}
+        onLessonChange={(lessonId) => setFormData({ ...formData, lessonId })}
+        onOrderChange={(orderNumber) => setFormData({ ...formData, orderNumber })}
+      />
+
+      {/* URL Link Section */}
+      <div className="p-6 bg-gray-50 rounded-lg">
+        <h4 className="text-base font-medium text-gray-900 mb-4">URL Link</h4>
+
+        {/* Platform */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Platform *
+          </label>
+          <select
+            value={formData.platform}
+            onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white"
+            required
+          >
+            <option value="">Pilih platform...</option>
+            <option value="canva">Canva</option>
+            <option value="google_drive">Google Drive</option>
+            <option value="other">Lainnya</option>
+          </select>
+        </div>
+
+        {/* URL */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            URL Link *
+          </label>
+          <input
+            type="url"
+            value={formData.url}
+            onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+            placeholder="https://www.canva.com/design/..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent"
+            required
+          />
+          <p className="text-xs text-gray-600 mt-1">
+            Paste link dari Canva atau Google Drive
+          </p>
+        </div>
+
+        {/* Warning */}
+        <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <AlertCircle size={18} className="text-yellow-700 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-yellow-700">
+            <strong>Note:</strong> Pastikan link sudah di-share dengan akses "Anyone with the link"
+          </p>
+        </div>
+      </div>
+
+      {/* Publish Checkbox */}
+      <div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={formData.isPublished}
+            onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
+            className="mt-1 w-4 h-4 text-[#5C4FE5] border-gray-300 rounded focus:ring-[#5C4FE5]"
+          />
+          <div>
+            <span className="text-sm font-medium text-gray-900">Publish materi</span>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Materi akan langsung terlihat oleh siswa
+            </p>
+          </div>
+        </label>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          className="px-6 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors"
+        >
+          Simpan Materi
+        </button>
+      </div>
+    </form>
+  );
+}
