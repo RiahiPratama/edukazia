@@ -14,26 +14,26 @@ type HierarchySelectorProps = {
 
 type Course = {
   id: string;
-  course_name: string;
+  name: string;
 };
 
 type Level = {
   id: string;
-  level_number: string;
-  level_name: string;
-  age_group: string;
+  name: string;
+  description: string;
+  target_age: string;
 };
 
 type Unit = {
   id: string;
-  unit_number: number;
-  unit_name: string;
+  name: string;
+  sort_order: number;
 };
 
 type Lesson = {
   id: string;
-  lesson_number: number;
-  lesson_name: string;
+  name: string;
+  sort_order: number;
 };
 
 export default function HierarchySelector({
@@ -94,55 +94,63 @@ export default function HierarchySelector({
   const fetchCourses = async () => {
     const { data, error } = await supabase
       .from('courses')
-      .select('id, course_name')
-      .order('course_name');
+      .select('id, name')
+      .eq('is_active', true)
+      .order('sort_order');
 
-    if (!error && data) {
-      setCourses(data);
-    } else {
+    if (error) {
       console.error('Error fetching courses:', error);
+    } else {
+      console.log('Courses fetched:', data);
+      setCourses(data || []);
     }
   };
 
   const fetchLevels = async (courseId: string) => {
     const { data, error } = await supabase
       .from('levels')
-      .select('id, level_number, level_name, age_group')
+      .select('id, name, description, target_age')
       .eq('course_id', courseId)
-      .order('level_number');
+      .eq('is_active', true)
+      .order('sort_order');
 
-    if (!error && data) {
-      setLevels(data);
-    } else {
+    if (error) {
       console.error('Error fetching levels:', error);
+    } else {
+      console.log('Levels fetched:', data);
+      setLevels(data || []);
     }
   };
 
   const fetchUnits = async (levelId: string) => {
     const { data, error } = await supabase
       .from('units')
-      .select('id, unit_number, unit_name')
+      .select('id, name, sort_order')
       .eq('level_id', levelId)
-      .order('unit_number');
+      .eq('is_active', true)
+      .order('sort_order');
 
-    if (!error && data) {
-      setUnits(data);
-    } else {
+    if (error) {
       console.error('Error fetching units:', error);
+    } else {
+      console.log('Units fetched:', data);
+      setUnits(data || []);
     }
   };
 
   const fetchLessons = async (unitId: string) => {
     const { data, error } = await supabase
       .from('lessons')
-      .select('id, lesson_number, lesson_name')
+      .select('id, name, sort_order')
       .eq('unit_id', unitId)
-      .order('lesson_number');
+      .eq('is_active', true)
+      .order('sort_order');
 
-    if (!error && data) {
-      setLessons(data);
-    } else {
+    if (error) {
       console.error('Error fetching lessons:', error);
+    } else {
+      console.log('Lessons fetched:', data);
+      setLessons(data || []);
     }
   };
 
@@ -197,7 +205,7 @@ export default function HierarchySelector({
           <option value="">Pilih pelajaran...</option>
           {courses.map((course) => (
             <option key={course.id} value={course.id}>
-              {course.course_name}
+              {course.name}
             </option>
           ))}
         </select>
@@ -217,7 +225,7 @@ export default function HierarchySelector({
           <option value="">Pilih level...</option>
           {levels.map((level) => (
             <option key={level.id} value={level.id}>
-              {level.level_number} - {level.level_name} ({level.age_group})
+              {level.name} - {level.description} ({level.target_age})
             </option>
           ))}
         </select>
@@ -240,7 +248,7 @@ export default function HierarchySelector({
           <option value="">Pilih unit...</option>
           {units.map((unit) => (
             <option key={unit.id} value={unit.id}>
-              Unit {unit.unit_number.toString().padStart(2, '0')} - {unit.unit_name}
+              {unit.name}
             </option>
           ))}
         </select>
@@ -263,7 +271,7 @@ export default function HierarchySelector({
           <option value="">Pilih lesson...</option>
           {lessons.map((lesson) => (
             <option key={lesson.id} value={lesson.id}>
-              Lesson {lesson.lesson_number.toString().padStart(2, '0')} - {lesson.lesson_name}
+              {lesson.name}
             </option>
           ))}
         </select>
