@@ -35,31 +35,30 @@ const tabs = [
 export default function MateriTutorPage() {
   const [activeTab, setActiveTab] = useState<TabType>('live_zoom');
   const [showForm, setShowForm] = useState(false);
-
-  const handleSaveSuccess = () => {
-    setShowForm(false);
-    // Force remount of MaterialList to refresh data
-    setTimeout(() => setShowForm(true), 10);
-    setTimeout(() => setShowForm(false), 20);
-  };
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleEdit = (material: Material) => {
     // TODO: Implement edit functionality
-    // Will need to update forms to accept editData prop
     alert('Edit functionality coming soon!');
     console.log('Edit material:', material);
+  };
+
+  const handleFormClose = () => {
+    setShowForm(false);
+    // Refresh material list
+    setRefreshKey(prev => prev + 1);
   };
 
   const renderForm = () => {
     switch (activeTab) {
       case 'live_zoom':
-        return <LiveZoomForm onSaveSuccess={handleSaveSuccess} />;
+        return <LiveZoomForm />;
       case 'bacaan':
-        return <BacaanForm onSaveSuccess={handleSaveSuccess} />;
+        return <BacaanForm />;
       case 'kosakata':
-        return <KosakataForm onSaveSuccess={handleSaveSuccess} />;
+        return <KosakataForm />;
       case 'cefr':
-        return <CEFRForm onSaveSuccess={handleSaveSuccess} />;
+        return <CEFRForm />;
     }
   };
 
@@ -126,7 +125,7 @@ export default function MateriTutorPage() {
                 </>
               ) : (
                 <button
-                  onClick={() => setShowForm(false)}
+                  onClick={handleFormClose}
                   className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
                 >
                   <List size={18} />
@@ -139,7 +138,7 @@ export default function MateriTutorPage() {
           {showForm ? (
             renderForm()
           ) : (
-            <MaterialList category={activeTab} onEdit={handleEdit} />
+            <MaterialList key={refreshKey} category={activeTab} onEdit={handleEdit} />
           )}
         </div>
       </div>
