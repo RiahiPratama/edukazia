@@ -71,12 +71,12 @@ export default function MateriTutorPage() {
       }
 
       alert('✅ Material berhasil disimpan!');
-      setShowForm(false);
       
-      // Reset form after 1 second
+      // Force form remount to reset all state
+      setShowForm(false);
       setTimeout(() => {
         setShowForm(true);
-      }, 100);
+      }, 10);
 
     } catch (error) {
       console.error('Error saving material:', error);
