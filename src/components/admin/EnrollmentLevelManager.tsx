@@ -291,38 +291,52 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                       Pilih Level (bisa lebih dari 1)
                     </p>
 
-                    {/* STATIC LIST - NO DROPDOWN! */}
-                    <div className="border-2 border-[#E5E3FF] rounded-xl overflow-hidden mb-3">
-                      {enr.availableLevels.map((level, levelIdx) => {
+                    {/* GRID LAYOUT - 2 cols mobile, 3 cols tablet, 4 cols desktop */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
+                      {enr.availableLevels.map((level) => {
                         const isSelected = enr.selectedLevels.includes(level.id)
                         const isSaved = enr.savedLevels.includes(level.id)
 
                         return (
                           <label
                             key={level.id}
-                            className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors ${
-                              levelIdx !== enr.availableLevels.length - 1 ? 'border-b border-[#E5E3FF]' : ''
-                            } ${
+                            className={`relative flex items-start gap-2 p-3 border-2 rounded-xl cursor-pointer transition-all ${
                               isSelected
-                                ? 'bg-[#E6F4EC] hover:bg-[#D1EBE0]'
-                                : 'hover:bg-[#F7F6FF]'
+                                ? 'border-[#27A05A] bg-[#E6F4EC]'
+                                : 'border-[#E5E3FF] bg-white hover:border-[#C4BFFF] hover:bg-[#F7F6FF]'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleLevel(enr.id, level.id)}
-                              className="w-4 h-4 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer flex-shrink-0"
+                              className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer flex-shrink-0"
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className="flex items-start justify-between gap-1">
                                 <span
-                                  className={`text-xs font-bold ${
+                                  className={`text-xs font-bold leading-tight ${
                                     isSelected ? 'text-[#1A5C36]' : 'text-[#1A1640]'
                                   }`}
                                 >
                                   {level.name}
                                 </span>
+                                {isSelected && (
+                                  <Check size={14} className="text-[#27A05A] flex-shrink-0" />
+                                )}
+                              </div>
+                              
+                              {level.description && (
+                                <p
+                                  className={`text-[10px] mt-1 leading-tight ${
+                                    isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
+                                  }`}
+                                >
+                                  {level.description}
+                                </p>
+                              )}
+                              
+                              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                                 {level.target_age && (
                                   <span
                                     className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
@@ -341,19 +355,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                   </span>
                                 )}
                               </div>
-                              {level.description && (
-                                <p
-                                  className={`text-[10px] mt-0.5 ${
-                                    isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
-                                  }`}
-                                >
-                                  {level.description}
-                                </p>
-                              )}
                             </div>
-                            {isSelected && (
-                              <Check size={14} className="text-[#27A05A] flex-shrink-0" />
-                            )}
                           </label>
                         )
                       })}
