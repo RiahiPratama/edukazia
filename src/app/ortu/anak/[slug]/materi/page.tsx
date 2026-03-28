@@ -1,288 +1,50 @@
-'use client';
+import { createClient } from '@/lib/supabase/server';
+import { notFound } from 'next/navigation';
+import MateriContent from './MateriContent';
 
-import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Lock, Play, ChevronDown } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import CEFRAudioPlayer from './components/CEFRAudioPlayer';
-import { useParams } from 'next/navigation';
+export default async function OrtuMateriPage({ params }: { params: { slug: string } }) {
+  const supabase = await createClient();
 
-type Material = {
-  id: string;
-  title: string;
-  type: string;
-  category: string;
-  level_id: string;
-  lesson_id: string;
-  order_number: number;
-  content_data: any;
-  created_at: string;
-};
+  // Get student by slug
+  const { data: student, error: studentError } = await supabase
+    .from('students')
+    .select('id, slug, full_name, profile_id')
+    .eq('slug', params.slug)
+    .single();
 
-type ActiveClass = {
-  class_id: string;
-  class_name: string;
-  course_name: string;
-  level_id: string;
-  level_name: string;
-};
-
-type GroupedMaterials = {
-  lessonId: string;
-  lessonName: string;
-  materials: Material[];
-};
-
-type TabType = 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
-
-const tabs = [
-  { id: 'live_zoom' as TabType, label: 'Live Zoom', icon: Video },
-  { id: 'bacaan' as TabType, label: 'Bacaan', icon: BookOpen },
-  { id: 'kosakata' as TabType, label: 'Kosakata', icon: FileText },
-  { id: 'cefr' as TabType, label: 'CEFR', icon: Headphones },
-];
-
-export default function MateriPage() {
-  const params = useParams();
-  const slug = params.slug as string;
-
-  const [studentName, setStudentName] = useState<string>('');
-  const [activeClasses, setActiveClasses] = useState<ActiveClass[]>([]);
-  const [selectedClass, setSelectedClass] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<TabType>('live_zoom');
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [lessons, setLessons] = useState<{ id: string; lesson_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasAccess, setHasAccess] = useState(false);
-
-  // Modal states
-  const [showBacaanModal, setShowBacaanModal] = useState(false);
-  const [selectedBacaan, setSelectedBacaan] = useState<Material | null>(null);
-  const [bacaanComponent, setBacaanComponent] = useState<string>('');
-  
-  // CEFR player state
-  const [showCEFRPlayer, setShowCEFRPlayer] = useState(false);
-  const [selectedCEFR, setSelectedCEFR] = useState<Material | null>(null);
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    fetchStudentAndClasses();
-  }, [slug]);
-
-  useEffect(() => {
-    if (selectedClass) {
-      fetchMaterials();
-    }
-  }, [selectedClass, activeTab]);
-
-  const fetchStudentAndClasses = async () => {
-    setLoading(true);
-    
-    try {
-      // Get student by slug
-      const { data: studentData } = await supabase
-        .from('students')
-        .select('id, name')
-        .eq('slug', slug)
-        .single();
-
-      if (!studentData) {
-        setHasAccess(false);
-        setLoading(false);
-        return;
-      }
-
-      setStudentName(studentData.name);
-
-      // Get active enrollments - step by step to avoid nested array issues
-      const { data: enrollments } = await supabase
-        .from('enrollments')
-        .select('class_id')
-        .eq('student_id', studentData.id)
-        .gte('end_date', new Date().toISOString().split('T')[0]);
-
-      if (!enrollments || enrollments.length === 0) {
-        setHasAccess(false);
-        setLoading(false);
-        return;
-      }
-
-      // Get class details
-      const classIds = enrollments.map(e => e.class_id);
-      const { data: classData } = await supabase
-        .from('class_groups')
-        .select('id, name, level_id, course_id')
-        .in('id', classIds);
-
-      if (!classData || classData.length === 0) {
-        setHasAccess(false);
-        setLoading(false);
-        return;
-      }
-
-      // Get level and course names separately
-      const levelIds = [...new Set(classData.map(c => c.level_id))];
-      const courseIds = [...new Set(classData.map(c => c.course_id))];
-
-      const { data: levels } = await supabase
-        .from('levels')
-        .select('id, name')
-        .in('id', levelIds);
-
-      const { data: courses } = await supabase
-        .from('courses')
-        .select('id, name')
-        .in('id', courseIds);
-
-      // Format active classes
-      const classes: ActiveClass[] = classData.map(c => {
-        const level = levels?.find(l => l.id === c.level_id);
-        const course = courses?.find(co => co.id === c.course_id);
-        return {
-          class_id: c.id,
-          class_name: c.name,
-          course_name: course?.name || '',
-          level_id: c.level_id,
-          level_name: level?.name || '',
-        };
-      });
-
-      setActiveClasses(classes);
-      setHasAccess(true);
-      
-      if (classes.length > 0) {
-        setSelectedClass(classes[0].level_id);
-      }
-    } catch (error) {
-      console.error('Error fetching student data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMaterials = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('materials')
-        .select('*')
-        .eq('category', activeTab)
-        .eq('level_id', selectedClass)
-        .eq('is_published', true)
-        .order('order_number');
-
-      if (error) throw error;
-
-      setMaterials(data || []);
-
-      // Fetch lesson names
-      if (data && data.length > 0) {
-        const lessonIds = [...new Set(data.map(m => m.lesson_id))];
-        const { data: lessonsData } = await supabase
-          .from('lessons')
-          .select('id, lesson_name')
-          .in('id', lessonIds);
-        
-        setLessons(lessonsData || []);
-      }
-    } catch (error) {
-      console.error('Error fetching materials:', error);
-    }
-  };
-
-  const groupByLesson = (): GroupedMaterials[] => {
-    const groups: { [key: string]: GroupedMaterials } = {};
-
-    materials.forEach(material => {
-      const lessonId = material.lesson_id || 'no-lesson';
-      
-      if (!groups[lessonId]) {
-        const lesson = lessons.find(l => l.id === lessonId);
-        groups[lessonId] = {
-          lessonId,
-          lessonName: lesson?.lesson_name || material.title,
-          materials: []
-        };
-      }
-
-      groups[lessonId].materials.push(material);
-    });
-
-    return Object.values(groups).sort((a, b) => 
-      a.lessonName.localeCompare(b.lessonName)
-    );
-  };
-
-  const handleOpenMaterial = async (material: Material) => {
-    const data = material.content_data;
-
-    switch (material.category) {
-      case 'live_zoom':
-        if (data?.url) {
-          window.open(data.url, '_blank');
-        }
-        break;
-      
-      case 'bacaan':
-        if (data?.jsx_file_path) {
-          // Fetch JSX component from storage
-          const { data: fileData } = await supabase.storage
-            .from('components')
-            .download(data.jsx_file_path);
-          
-          if (fileData) {
-            const text = await fileData.text();
-            setBacaanComponent(text);
-            setSelectedBacaan(material);
-            setShowBacaanModal(true);
-          }
-        }
-        break;
-      
-      case 'kosakata':
-        if (data?.url) {
-          window.open(data.url, '_blank');
-        }
-        break;
-      
-      case 'cefr':
-        setSelectedCEFR(material);
-        setShowCEFRPlayer(true);
-        break;
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'live_zoom': return <Video size={16} className="text-blue-600" />;
-      case 'bacaan': return <BookOpen size={16} className="text-green-600" />;
-      case 'kosakata': return <FileText size={16} className="text-yellow-600" />;
-      case 'cefr': return <Headphones size={16} className="text-red-600" />;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F7F6FF] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-12 h-12 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div>
-          <p className="text-gray-600 mt-4">Memuat materi...</p>
-        </div>
-      </div>
-    );
+  if (studentError || !student) {
+    notFound();
   }
 
-  if (!hasAccess) {
+  // CORRECT: Get ACTIVE enrollments (status = 'active')
+  // NOT using end_date because it's NULL!
+  const { data: enrollments, error: enrollError } = await supabase
+    .from('enrollments')
+    .select('id, class_group_id, level_id, status, enrolled_at')
+    .eq('student_id', student.id)
+    .eq('status', 'active'); // Check status instead of end_date!
+
+  console.log('📊 Active enrollments found:', enrollments?.length || 0, enrollments);
+
+  if (enrollError) {
+    console.error('❌ Enrollment error:', enrollError);
+  }
+
+  // If no active enrollments, show lock screen
+  if (!enrollments || enrollments.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F7F6FF] flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Lock size={40} className="text-gray-400" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 text-white rounded-2xl p-12 max-w-md text-center">
+          <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Materi Terkunci</h2>
-          <p className="text-gray-600 mb-6">
-            {studentName || 'Siswa'} belum terdaftar di kelas manapun atau kelas sudah berakhir.
+          <h2 className="text-2xl font-bold mb-4">Materi Terkunci</h2>
+          <p className="text-gray-300 mb-6">
+            Siswa belum terdaftar di kelas manapun atau kelas sudah berakhir.
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-400">
             Hubungi admin untuk mendaftar kelas atau perpanjang kelas yang sudah ada.
           </p>
         </div>
@@ -290,172 +52,147 @@ export default function MateriPage() {
     );
   }
 
-  const groupedMaterials = groupByLesson();
-  const currentClass = activeClasses.find(c => c.level_id === selectedClass);
+  // Get class_group_id (not class_id!)
+  const classGroupIds = enrollments.map(e => e.class_group_id);
+  console.log('🎓 Class Group IDs:', classGroupIds);
 
-  return (
-    <div className="min-h-screen bg-[#F7F6FF] p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">📚 Materi Pembelajaran</h1>
-          <p className="text-gray-600 mt-1">Materi untuk {studentName}</p>
-        </div>
+  // Get class_groups
+  const { data: classGroups, error: classError } = await supabase
+    .from('class_groups')
+    .select('id, name, level_id')
+    .in('id', classGroupIds);
 
-        {/* Class Selector */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
-            Kelas Aktif:
-          </label>
-          <select
-            value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
-            className="w-full px-4 py-3 text-base font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900"
-          >
-            {activeClasses.map((cls) => (
-              <option key={cls.level_id} value={cls.level_id}>
-                {cls.course_name} - {cls.level_name}
-              </option>
-            ))}
-          </select>
-          {currentClass && (
-            <p className="text-sm text-gray-500 mt-2">
-              Kelas: {currentClass.class_name}
-            </p>
-          )}
-        </div>
+  console.log('📚 Class groups found:', classGroups?.length || 0, classGroups);
 
-        {/* Category Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 whitespace-nowrap ${
-                  isActive
-                    ? 'text-[#5C4FE5] border-[#5C4FE5]'
-                    : 'text-gray-600 border-transparent hover:text-gray-900'
-                }`}
-              >
-                <Icon size={18} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Materials */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          {groupedMaterials.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                {getCategoryIcon(activeTab)}
-              </div>
-              <p className="text-gray-600 font-medium">Belum ada materi tersedia</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Materi untuk kategori ini akan segera ditambahkan
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {groupedMaterials.map(group => (
-                <div key={group.lessonId} className="border border-gray-200 rounded-lg overflow-hidden">
-                  {/* Group Header */}
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                    <div className="flex items-center gap-2">
-                      <ChevronDown size={16} className="text-gray-500" />
-                      <span className="font-medium text-gray-900">{group.lessonName}</span>
-                      <span className="text-sm text-gray-500">({group.materials.length} materi)</span>
-                    </div>
-                  </div>
-
-                  {/* Materials */}
-                  <div className="divide-y divide-gray-100">
-                    {group.materials.map(material => (
-                      <div
-                        key={material.id}
-                        className="p-4 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              {getCategoryIcon(material.category)}
-                              <h4 className="font-medium text-gray-900">{material.title}</h4>
-                              <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">
-                                Published
-                              </span>
-                            </div>
-
-                            <div className="text-xs text-gray-500 mb-3">
-                              Order: #{material.order_number}
-                            </div>
-
-                            <button
-                              onClick={() => handleOpenMaterial(material)}
-                              className="px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors flex items-center gap-2 text-sm font-medium"
-                            >
-                              <Play size={16} />
-                              Buka Materi
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+  if (classError || !classGroups || classGroups.length === 0) {
+    console.error('❌ Class groups error:', classError);
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 text-white rounded-2xl p-12 max-w-md text-center">
+          <p className="text-gray-300">Error loading classes. Please contact admin.</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Bacaan Modal */}
-      {showBacaanModal && selectedBacaan && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {selectedBacaan.title}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowBacaanModal(false);
-                  setSelectedBacaan(null);
-                  setBacaanComponent('');
-                }}
-                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
-              >
-                ×
-              </button>
-            </div>
-            <div className="p-6">
-              {/* Render JSX component here */}
-              <div className="prose max-w-none">
-                <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded">
-                  {bacaanComponent}
-                </pre>
-                <p className="text-sm text-gray-500 mt-4">
-                  Note: Interactive component rendering will be implemented next
-                </p>
-              </div>
-            </div>
-          </div>
+  // Get unique level IDs from enrollments (directly!)
+  // Enrollments have level_id column!
+  const levelIds = [...new Set(enrollments.map(e => e.level_id))];
+  console.log('📊 Level IDs from enrollments:', levelIds);
+
+  // Get levels
+  const { data: levels, error: levelError } = await supabase
+    .from('levels')
+    .select('id, name, course_id')
+    .in('id', levelIds);
+
+  console.log('📖 Levels found:', levels?.length || 0, levels);
+
+  if (levelError || !levels || levels.length === 0) {
+    console.error('❌ Levels error:', levelError);
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 text-white rounded-2xl p-12 max-w-md text-center">
+          <p className="text-gray-300">Error loading levels. Please contact admin.</p>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* CEFR Audio Player */}
-      {showCEFRPlayer && selectedCEFR && (
-        <CEFRAudioPlayer
-          material={selectedCEFR}
-          onClose={() => {
-            setShowCEFRPlayer(false);
-            setSelectedCEFR(null);
-          }}
-        />
-      )}
-    </div>
+  // Get courses
+  const courseIds = [...new Set(levels.map(l => l.course_id))];
+  const { data: courses } = await supabase
+    .from('courses')
+    .select('id, name')
+    .in('id', courseIds);
+
+  console.log('📘 Courses found:', courses?.length || 0);
+
+  // Get ALL published materials
+  const { data: allMaterials, error: materialError } = await supabase
+    .from('materials')
+    .select('id, title, category, order_number, is_published, lesson_id, content_data')
+    .eq('is_published', true);
+
+  console.log('📝 Total published materials:', allMaterials?.length || 0);
+
+  if (materialError) {
+    console.error('❌ Material error:', materialError);
+  }
+
+  if (!allMaterials || allMaterials.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 text-white rounded-2xl p-12 max-w-md text-center">
+          <h2 className="text-2xl font-bold mb-4">Belum Ada Materi</h2>
+          <p className="text-gray-300">
+            Belum ada materi yang dipublish untuk level ini.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Get lessons for these materials
+  const lessonIds = allMaterials.map(m => m.lesson_id);
+  const { data: lessons } = await supabase
+    .from('lessons')
+    .select('id, lesson_name, unit_id')
+    .in('id', lessonIds);
+
+  // Get units
+  const unitIds = [...new Set(lessons?.map(l => l.unit_id) || [])];
+  const { data: units } = await supabase
+    .from('units')
+    .select('id, unit_name, judul_id')
+    .in('id', unitIds);
+
+  // Get juduls
+  const judulIds = [...new Set(units?.map(u => u.judul_id) || [])];
+  const { data: juduls } = await supabase
+    .from('juduls')
+    .select('id, name, level_id')
+    .in('id', judulIds);
+
+  // Filter materials by accessible levels
+  const accessibleMaterials = allMaterials.filter(material => {
+    const lesson = lessons?.find(l => l.id === material.lesson_id);
+    if (!lesson) return false;
+
+    const unit = units?.find(u => u.id === lesson.unit_id);
+    if (!unit) return false;
+
+    const judul = juduls?.find(j => j.id === unit.judul_id);
+    if (!judul) return false;
+
+    return levelIds.includes(judul.level_id);
+  });
+
+  console.log('✅ Accessible materials:', accessibleMaterials.length);
+
+  if (accessibleMaterials.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 text-white rounded-2xl p-12 max-w-md text-center">
+          <h2 className="text-2xl font-bold mb-4">Belum Ada Materi</h2>
+          <p className="text-gray-300">
+            Belum ada materi yang tersedia untuk level kelas ini.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Pass data to client component
+  return (
+    <MateriContent
+      studentName={student.full_name}
+      materials={accessibleMaterials}
+      lessons={lessons || []}
+      units={units || []}
+      juduls={juduls || []}
+      levels={levels || []}
+      courses={courses || []}
+    />
   );
 }
