@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { Check } from 'lucide-react';
 
 type Material = {
   id: string;
@@ -17,7 +18,7 @@ type LiveZoomFormProps = {
   editData?: Material | null;
 };
 
-export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFormProps) {
+export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: LiveZoomFormProps) {
   const [courses, setCourses] = useState<any[]>([]);
   const [levels, setLevels] = useState<any[]>([]);
   const [juduls, setJuduls] = useState<any[]>([]);
@@ -25,7 +26,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [selectedLevel, setSelectedLevel] = useState('');
+  const [selectedLevels, setSelectedLevels] = useState<string[]>([]); // CHANGED: Array of level IDs
   const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
@@ -51,7 +52,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   useEffect(() => {
     if (editData) {
-      // Pre-fill form with edit data
       setPlatform(editData.content_data?.platform || 'canva');
       setUrl(editData.content_data?.url || '');
       setOrderNumber(editData.order_number || 1);
@@ -93,15 +93,35 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
     setLessons(data || []);
   };
 
+  // Toggle level selection
+  const toggleLevel = (levelId: string) => {
+    setSelectedLevels(prev => {
+      if (prev.includes(levelId)) {
+        return prev.filter(id => id !== levelId);
+      } else {
+        return [...prev, levelId];
+      }
+    });
+  };
+
+  // Select all levels
+  const selectAllLevels = () => {
+    setSelectedLevels(levels.map(l => l.id));
+  };
+
+  // Clear all levels
+  const clearAllLevels = () => {
+    setSelectedLevels([]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const formData = new FormData();
-
       if (isEditing) {
-        // UPDATE existing material
+        // EDIT mode - single update
+        const formData = new FormData();
         formData.append('material_id', editData.id);
         formData.append('title', newLessonName || selectedLesson);
         formData.append('order_number', orderNumber.toString());
@@ -120,38 +140,65 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         }
 
         alert('✅ Material berhasil diupdate!');
+        onSave();
       } else {
-        // CREATE new material
-        formData.append('title', newLessonName || selectedLesson);
-        formData.append('type', 'live_zoom');
-        formData.append('category', 'live_zoom');
-        formData.append('course_id', selectedCourse);
-        formData.append('level_id', selectedLevel);
-        formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-        formData.append('judul_name', newJudulName);
-        formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
-        formData.append('unit_name', newUnitName);
-        formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
-        formData.append('lesson_name', newLessonName);
-        formData.append('order_number', orderNumber.toString());
-        formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ platform, url }));
-
-        const response = await fetch('/api/admin/materials', {
-          method: 'POST',
-          body: formData,
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to create material');
+        // CREATE mode - loop through selected levels
+        if (selectedLevels.length === 0) {
+          alert('Pilih minimal 1 level!');
+          setLoading(false);
+          return;
         }
 
-        alert('✅ Material Live Zoom berhasil dibuat!');
-      }
+        let successCount = 0;
+        let failedLevels: string[] = [];
 
-      onSave();
+        for (const levelId of selectedLevels) {
+          try {
+            const formData = new FormData();
+            formData.append('title', newLessonName || selectedLesson);
+            formData.append('type', 'live_zoom');
+            formData.append('category', 'live_zoom');
+            formData.append('course_id', selectedCourse);
+            formData.append('level_id', levelId); // Create for THIS level
+            formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
+            formData.append('judul_name', newJudulName);
+            formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
+            formData.append('unit_name', newUnitName);
+            formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
+            formData.append('lesson_name', newLessonName);
+            formData.append('order_number', orderNumber.toString());
+            formData.append('is_published', isPublished.toString());
+            formData.append('content_data', JSON.stringify({ platform, url }));
+
+            const response = await fetch('/api/admin/materials', {
+              method: 'POST',
+              body: formData,
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+              const levelName = levels.find(l => l.id === levelId)?.name || levelId;
+              failedLevels.push(levelName);
+            } else {
+              successCount++;
+            }
+          } catch (error) {
+            const levelName = levels.find(l => l.id === levelId)?.name || levelId;
+            failedLevels.push(levelName);
+          }
+        }
+
+        if (successCount === selectedLevels.length) {
+          alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
+          onSave();
+        } else if (successCount > 0) {
+          alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal untuk: ${failedLevels.join(', ')}`);
+          onSave();
+        } else {
+          alert(`❌ Gagal membuat material untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
+        }
+      }
     } catch (error) {
       console.error('Error:', error);
       alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -162,7 +209,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Only show hierarchy fields when creating (not editing) */}
       {!isEditing && (
         <>
           {/* Course Selection */}
@@ -175,6 +221,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
               onChange={(e) => {
                 setSelectedCourse(e.target.value);
                 fetchLevels(e.target.value);
+                setSelectedLevels([]); // Clear selected levels when course changes
               }}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
@@ -186,131 +233,187 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             </select>
           </div>
 
-          {/* Level Selection */}
+          {/* Multi-Level Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Level *
+              Level * (Pilih 1 atau lebih)
             </label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => {
-                setSelectedLevel(e.target.value);
-                fetchJuduls(e.target.value);
-              }}
-              required
-              disabled={!selectedCourse}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Level</option>
-              {levels.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
-          </div>
+            
+            {levels.length > 0 && (
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={selectAllLevels}
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  Pilih Semua
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAllLevels}
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  Hapus Semua
+                </button>
+                <span className="text-xs text-gray-600 self-center ml-auto">
+                  {selectedLevels.length} level dipilih
+                </span>
+              </div>
+            )}
 
-          {/* Judul */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Judul *
-            </label>
-            <select
-              value={selectedJudul}
-              onChange={(e) => {
-                setSelectedJudul(e.target.value);
-                if (e.target.value !== 'NEW') {
-                  fetchUnits(e.target.value);
-                }
-              }}
-              required
-              disabled={!selectedLevel}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Judul</option>
-              <option value="NEW">+ Buat Judul Baru</option>
-              {juduls.map((j) => (
-                <option key={j.id} value={j.id}>{j.name}</option>
-              ))}
-            </select>
-            {selectedJudul === 'NEW' && (
-              <input
-                type="text"
-                value={newJudulName}
-                onChange={(e) => setNewJudulName(e.target.value)}
-                placeholder="Nama Judul Baru"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
+            {!selectedCourse ? (
+              <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600">
+                Pilih Mata Pelajaran dulu
+              </div>
+            ) : levels.length === 0 ? (
+              <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600">
+                Tidak ada level tersedia
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 p-4 border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
+                {levels.map((level) => (
+                  <label
+                    key={level.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                      selectedLevels.includes(level.id)
+                        ? 'bg-[#5C4FE5] text-white'
+                        : 'bg-gray-50 text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedLevels.includes(level.id)}
+                      onChange={() => toggleLevel(level.id)}
+                      className="hidden"
+                    />
+                    <div className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${
+                      selectedLevels.includes(level.id)
+                        ? 'border-white bg-white'
+                        : 'border-gray-300'
+                    }`}>
+                      {selectedLevels.includes(level.id) && (
+                        <Check size={14} className="text-[#5C4FE5]" />
+                      )}
+                    </div>
+                    <span className="text-sm font-medium">{level.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {selectedLevels.length > 0 && (
+              <p className="mt-2 text-xs text-gray-600">
+                Material akan dibuat untuk {selectedLevels.length} level yang dipilih
+              </p>
             )}
           </div>
+
+          {/* Judul - Only show when at least 1 level selected */}
+          {selectedLevels.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Judul *
+              </label>
+              <select
+                value={selectedJudul}
+                onChange={(e) => {
+                  setSelectedJudul(e.target.value);
+                  if (e.target.value !== 'NEW') {
+                    fetchUnits(e.target.value);
+                  }
+                }}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+              >
+                <option value="">Pilih Judul</option>
+                <option value="NEW">+ Buat Judul Baru</option>
+                {juduls.map((j) => (
+                  <option key={j.id} value={j.id}>{j.name}</option>
+                ))}
+              </select>
+              {selectedJudul === 'NEW' && (
+                <input
+                  type="text"
+                  value={newJudulName}
+                  onChange={(e) => setNewJudulName(e.target.value)}
+                  placeholder="Nama Judul Baru"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+                />
+              )}
+            </div>
+          )}
 
           {/* Unit */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Unit *
-            </label>
-            <select
-              value={selectedUnit}
-              onChange={(e) => {
-                setSelectedUnit(e.target.value);
-                if (e.target.value !== 'NEW') {
-                  fetchLessons(e.target.value);
-                }
-              }}
-              required
-              disabled={!selectedJudul}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Unit</option>
-              <option value="NEW">+ Buat Unit Baru</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>{u.unit_name}</option>
-              ))}
-            </select>
-            {selectedUnit === 'NEW' && (
-              <input
-                type="text"
-                value={newUnitName}
-                onChange={(e) => setNewUnitName(e.target.value)}
-                placeholder="Nama Unit Baru"
+          {selectedJudul && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Unit *
+              </label>
+              <select
+                value={selectedUnit}
+                onChange={(e) => {
+                  setSelectedUnit(e.target.value);
+                  if (e.target.value !== 'NEW') {
+                    fetchLessons(e.target.value);
+                  }
+                }}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
-          </div>
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+              >
+                <option value="">Pilih Unit</option>
+                <option value="NEW">+ Buat Unit Baru</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>{u.unit_name}</option>
+                ))}
+              </select>
+              {selectedUnit === 'NEW' && (
+                <input
+                  type="text"
+                  value={newUnitName}
+                  onChange={(e) => setNewUnitName(e.target.value)}
+                  placeholder="Nama Unit Baru"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+                />
+              )}
+            </div>
+          )}
 
           {/* Lesson */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Lesson (Nama Materi) *
-            </label>
-            <select
-              value={selectedLesson}
-              onChange={(e) => setSelectedLesson(e.target.value)}
-              required
-              disabled={!selectedUnit}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
-              <option value="">Pilih Lesson</option>
-              <option value="NEW">+ Buat Lesson Baru</option>
-              {lessons.map((l) => (
-                <option key={l.id} value={l.id}>{l.lesson_name}</option>
-              ))}
-            </select>
-            {selectedLesson === 'NEW' && (
-              <input
-                type="text"
-                value={newLessonName}
-                onChange={(e) => setNewLessonName(e.target.value)}
-                placeholder="Nama Lesson Baru (akan menjadi judul materi)"
+          {selectedUnit && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Lesson (Nama Materi) *
+              </label>
+              <select
+                value={selectedLesson}
+                onChange={(e) => setSelectedLesson(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
-          </div>
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+              >
+                <option value="">Pilih Lesson</option>
+                <option value="NEW">+ Buat Lesson Baru</option>
+                {lessons.map((l) => (
+                  <option key={l.id} value={l.id}>{l.lesson_name}</option>
+                ))}
+              </select>
+              {selectedLesson === 'NEW' && (
+                <input
+                  type="text"
+                  value={newLessonName}
+                  onChange={(e) => setNewLessonName(e.target.value)}
+                  placeholder="Nama Lesson Baru (akan menjadi judul materi)"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+                />
+              )}
+            </div>
+          )}
         </>
       )}
 
-      {/* Material Content Fields (shown for both create and edit) */}
+      {/* Material Content Fields */}
       {isEditing && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
           <p className="text-sm text-blue-800">
