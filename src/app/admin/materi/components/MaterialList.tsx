@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type Material = {
@@ -19,6 +19,17 @@ type Material = {
   created_at: string;
 };
 
+type Level = { id: string; name: string; };
+type Judul = { id: string; name: string; };
+type Unit = { id: string; unit_name: string; };
+type Lesson = { id: string; lesson_name: string; };
+
+type GroupedMaterials = {
+  lessonId: string;
+  lessonName: string;
+  materials: Material[];
+};
+
 type MaterialListProps = {
   category: 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
   onEdit?: (material: Material) => void;
@@ -26,14 +37,58 @@ type MaterialListProps = {
 
 export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [filteredMaterials, setFilteredMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter states
+  const [levels, setLevels] = useState<Level[]>([]);
+  const [juduls, setJuduls] = useState<Judul[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+
+  const [selectedLevel, setSelectedLevel] = useState('');
+  const [selectedJudul, setSelectedJudul] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState('');
+  const [selectedLesson, setSelectedLesson] = useState('');
 
   const supabase = createClient();
 
   useEffect(() => {
     fetchMaterials();
+    fetchLevels();
   }, [category]);
+
+  useEffect(() => {
+    if (selectedLevel) {
+      fetchJuduls(selectedLevel);
+    } else {
+      setJuduls([]);
+      setSelectedJudul('');
+    }
+  }, [selectedLevel]);
+
+  useEffect(() => {
+    if (selectedJudul) {
+      fetchUnits(selectedJudul);
+    } else {
+      setUnits([]);
+      setSelectedUnit('');
+    }
+  }, [selectedJudul]);
+
+  useEffect(() => {
+    if (selectedUnit) {
+      fetchLessons(selectedUnit);
+    } else {
+      setLessons([]);
+      setSelectedLesson('');
+    }
+  }, [selectedUnit]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [materials, selectedLevel, selectedJudul, selectedUnit, selectedLesson]);
 
   const fetchMaterials = async () => {
     setLoading(true);
@@ -55,6 +110,90 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchLevels = async () => {
+    const { data } = await supabase
+      .from('levels')
+      .select('id, name')
+      .order('sort_order');
+    
+    setLevels(data || []);
+  };
+
+  const fetchJuduls = async (levelId: string) => {
+    const { data } = await supabase
+      .from('juduls')
+      .select('id, name')
+      .eq('level_id', levelId)
+      .order('sort_order');
+    
+    setJuduls(data || []);
+  };
+
+  const fetchUnits = async (judulId: string) => {
+    const { data } = await supabase
+      .from('units')
+      .select('id, unit_name')
+      .eq('judul_id', judulId)
+      .order('unit_number');
+    
+    setUnits(data || []);
+  };
+
+  const fetchLessons = async (unitId: string) => {
+    const { data } = await supabase
+      .from('lessons')
+      .select('id, lesson_name')
+      .eq('unit_id', unitId)
+      .order('lesson_number');
+    
+    setLessons(data || []);
+  };
+
+  const applyFilters = () => {
+    let filtered = [...materials];
+
+    if (selectedLevel) {
+      filtered = filtered.filter(m => m.level_id === selectedLevel);
+    }
+    if (selectedJudul) {
+      filtered = filtered.filter(m => {
+        // Need to check if material's unit belongs to this judul
+        return true; // TODO: Add judul_id to materials or do complex join
+      });
+    }
+    if (selectedUnit) {
+      filtered = filtered.filter(m => m.unit_id === selectedUnit);
+    }
+    if (selectedLesson) {
+      filtered = filtered.filter(m => m.lesson_id === selectedLesson);
+    }
+
+    setFilteredMaterials(filtered);
+  };
+
+  const groupByLesson = (): GroupedMaterials[] => {
+    const groups: { [key: string]: GroupedMaterials } = {};
+
+    filteredMaterials.forEach(material => {
+      const lessonId = material.lesson_id || 'no-lesson';
+      
+      if (!groups[lessonId]) {
+        const lesson = lessons.find(l => l.id === lessonId);
+        groups[lessonId] = {
+          lessonId,
+          lessonName: lesson?.lesson_name || material.title,
+          materials: []
+        };
+      }
+
+      groups[lessonId].materials.push(material);
+    });
+
+    return Object.values(groups).sort((a, b) => 
+      a.lessonName.localeCompare(b.lessonName)
+    );
   };
 
   const handleDelete = async (id: string) => {
@@ -119,10 +258,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         return (
           <div className="text-sm text-gray-600">
             {data?.jsx_file_path && (
-              <span className="text-green-600">✓ JSX Component uploaded</span>
-            )}
-            {data?.description && (
-              <p className="mt-1 text-xs line-clamp-2">{data.description}</p>
+              <span className="text-green-600">✓ Component</span>
             )}
           </div>
         );
@@ -130,37 +266,19 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         return (
           <div className="text-sm text-gray-600">
             <span className="font-medium">{data?.file_type || 'N/A'}</span>
-            {data?.url && (
-              <a 
-                href={data.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="ml-2 text-[#5C4FE5] hover:underline inline-flex items-center gap-1"
-              >
-                <ExternalLink size={12} />
-                Link
-              </a>
-            )}
           </div>
         );
       case 'cefr':
         return (
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-600 flex gap-2">
             {data?.audio_url && (
-              <span className="text-red-600">✓ Audio uploaded</span>
+              <span className="text-red-600">✓ Audio</span>
             )}
-            <div className="flex gap-2 mt-1">
-              {data?.skill_focus && (
-                <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">
-                  {data.skill_focus}
-                </span>
-              )}
-              {data?.cefr_skill && (
-                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
-                  {data.cefr_skill}
-                </span>
-              )}
-            </div>
+            {data?.skill_focus && (
+              <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">
+                {data.skill_focus}
+              </span>
+            )}
           </div>
         );
     }
@@ -189,84 +307,180 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     );
   }
 
-  if (materials.length === 0) {
-    return (
-      <div className="p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-          {getCategoryIcon()}
-        </div>
-        <p className="text-gray-600 font-medium">Belum ada materi {getCategoryLabel()}</p>
-        <p className="text-sm text-gray-500 mt-1">Klik tombol "Tambah Materi" untuk membuat materi baru</p>
-      </div>
-    );
-  }
+  const groupedMaterials = groupByLesson();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Level</label>
+          <select
+            value={selectedLevel}
+            onChange={(e) => {
+              setSelectedLevel(e.target.value);
+              setSelectedJudul('');
+              setSelectedUnit('');
+              setSelectedLesson('');
+            }}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white"
+          >
+            <option value="">Semua Level</option>
+            {levels.map(level => (
+              <option key={level.id} value={level.id}>{level.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Judul</label>
+          <select
+            value={selectedJudul}
+            onChange={(e) => {
+              setSelectedJudul(e.target.value);
+              setSelectedUnit('');
+              setSelectedLesson('');
+            }}
+            disabled={!selectedLevel}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white disabled:bg-gray-100"
+          >
+            <option value="">Semua Judul</option>
+            {juduls.map(judul => (
+              <option key={judul.id} value={judul.id}>{judul.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Unit</label>
+          <select
+            value={selectedUnit}
+            onChange={(e) => {
+              setSelectedUnit(e.target.value);
+              setSelectedLesson('');
+            }}
+            disabled={!selectedJudul}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white disabled:bg-gray-100"
+          >
+            <option value="">Semua Unit</option>
+            {units.map(unit => (
+              <option key={unit.id} value={unit.id}>{unit.unit_name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Lesson</label>
+          <select
+            value={selectedLesson}
+            onChange={(e) => setSelectedLesson(e.target.value)}
+            disabled={!selectedUnit}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white disabled:bg-gray-100"
+          >
+            <option value="">Semua Lesson</option>
+            {lessons.map(lesson => (
+              <option key={lesson.id} value={lesson.id}>{lesson.lesson_name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">
-          Daftar Materi {getCategoryLabel()} ({materials.length})
+          {filteredMaterials.length} Materi
         </h3>
       </div>
 
-      <div className="space-y-3">
-        {materials.map((material) => (
-          <div
-            key={material.id}
-            className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  {getCategoryIcon()}
-                  <h4 className="font-medium text-gray-900">{material.title}</h4>
-                  {!material.is_published && (
-                    <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                      Draft
-                    </span>
-                  )}
-                  {material.is_published && (
-                    <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">
-                      Published
-                    </span>
-                  )}
-                </div>
-
-                {getContentPreview(material)}
-
-                <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                  <span>Order: #{material.order_number}</span>
-                  <span>•</span>
-                  <span>{new Date(material.created_at).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric'
-                  })}</span>
+      {/* Grouped Materials */}
+      {groupedMaterials.length === 0 ? (
+        <div className="p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+            {getCategoryIcon()}
+          </div>
+          <p className="text-gray-600 font-medium">Tidak ada materi yang sesuai filter</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {materials.length === 0 
+              ? 'Klik tombol "Tambah Materi" untuk membuat materi baru'
+              : 'Coba ubah filter atau reset filter'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groupedMaterials.map(group => (
+            <div key={group.lessonId} className="border border-gray-200 rounded-lg overflow-hidden">
+              {/* Group Header */}
+              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                <div className="flex items-center gap-2">
+                  <ChevronDown size={16} className="text-gray-500" />
+                  <span className="font-medium text-gray-900">{group.lessonName}</span>
+                  <span className="text-sm text-gray-500">({group.materials.length} materi)</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 ml-4">
-                {onEdit && (
-                  <button
-                    onClick={() => onEdit(material)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Edit"
+              {/* Materials in this lesson */}
+              <div className="divide-y divide-gray-100">
+                {group.materials.map(material => (
+                  <div
+                    key={material.id}
+                    className="p-4 hover:bg-gray-50 transition-colors"
                   >
-                    <Edit size={18} />
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(material.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Hapus"
-                >
-                  <Trash2 size={18} />
-                </button>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          {getCategoryIcon()}
+                          <h4 className="font-medium text-gray-900">{material.title}</h4>
+                          {!material.is_published && (
+                            <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                              Draft
+                            </span>
+                          )}
+                          {material.is_published && (
+                            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">
+                              Published
+                            </span>
+                          )}
+                        </div>
+
+                        {getContentPreview(material)}
+
+                        <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                          <span>Order: #{material.order_number}</span>
+                          <span>•</span>
+                          <span>{new Date(material.created_at).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(material)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit size={18} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(material.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Hapus"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
