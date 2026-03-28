@@ -14,7 +14,7 @@ import { checkBulkMaterialAccess, filterMaterialsByAccess } from '@/lib/access-c
 // ----------------------------------------------------------------
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient(); // Await if async
     
     // ============================================================
     // 1. AUTHENTICATION CHECK
@@ -85,7 +85,6 @@ export async function GET(request: NextRequest) {
     let studentId: string;
 
     if (profile.role === 'student') {
-      // Current user is a student
       const { data: student } = await supabase
         .from('students')
         .select('id')
@@ -101,8 +100,6 @@ export async function GET(request: NextRequest) {
 
       studentId = student.id;
     } else if (profile.role === 'parent') {
-      // Parent accessing for their child
-      // Get student_id from query params
       const { searchParams } = new URL(request.url);
       const childStudentId = searchParams.get('student_id');
 
@@ -113,7 +110,6 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Verify this parent owns this student
       const { data: student } = await supabase
         .from('students')
         .select('id')
@@ -139,7 +135,6 @@ export async function GET(request: NextRequest) {
     // ============================================================
     // 5. FETCH PUBLISHED MATERIALS
     // ============================================================
-    // RLS will filter by: role + is_published
     const { data: materials, error: materialsError } = await supabase
       .from('materials')
       .select(`
@@ -175,7 +170,6 @@ export async function GET(request: NextRequest) {
     // ============================================================
     // 6. BULK ACCESS CHECK (THE MAGIC!)
     // ============================================================
-    // 1 query for 100 materials instead of 300 queries!
     const materialIds = materials.map(m => m.id);
     const accessMap = await checkBulkMaterialAccess(studentId, materialIds);
 

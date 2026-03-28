@@ -36,7 +36,7 @@ export async function checkBulkMaterialAccess(
   studentId: string,
   materialIds: string[]
 ): Promise<Map<string, AccessResult>> {
-  const supabase = createClient();
+  const supabase = await createClient(); // Await if async
 
   // Call our PostgreSQL function
   const { data, error } = await supabase.rpc('check_bulk_material_access', {
@@ -46,7 +46,6 @@ export async function checkBulkMaterialAccess(
 
   if (error) {
     console.error('Bulk access check error:', error);
-    // Return empty access (no access to anything)
     return new Map();
   }
 

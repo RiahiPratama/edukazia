@@ -17,8 +17,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = createClient();
-    const { id: materialId } = await params; // Next.js 15+ params is Promise
+    const supabase = await createClient(); // Await if async
+    const { id: materialId } = await params;
 
     // ============================================================
     // 1. AUTHENTICATION
@@ -107,7 +107,6 @@ export async function GET(
         );
       }
 
-      // Verify ownership
       const { data: student } = await supabase
         .from('students')
         .select('id')
