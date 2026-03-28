@@ -183,8 +183,7 @@ export default function SiswaEditPage() {
 
   async function handleBuatAkunOrtu() {
     if (!parentEmailInput.trim()) { setParentError('Email ortu wajib diisi.'); return }
-    if (!parentPassword || parentPassword.length < 6) { setParentError('Password minimal 6 karakter.'); return }
-
+    if (parentPassword.length < 6) { setParentError('Password minimal 6 karakter.'); return }
     setSavingParent(true); setParentError(''); setParentSuccess('')
 
     try {
@@ -192,94 +191,120 @@ export default function SiswaEditPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email:      parentEmailInput.trim(),
-          password:   parentPassword,
-          role:       'parent',
-          full_name:  form.relation_name || `Ortu ${form.full_name}`,
-          student_id: siswaId,
+          email:     parentEmailInput.trim(),
+          password:  parentPassword,
+          role:      'parent',
+          full_name: form.relation_name.trim() || null,
+          phone:     form.relation_phone.trim() || null,
         }),
       })
+
       const json = await res.json()
-      if (!res.ok) { setParentError(json.error ?? 'Gagal membuat akun.'); setSavingParent(false); return }
+      if (!res.ok) throw new Error(json.error || 'Gagal membuat akun')
+
+      // Update students.parent_profile_id
+      await supabase
+        .from('students')
+        .update({ parent_profile_id: json.profile_id })
+        .eq('id', siswaId)
 
       setParentProfileId(json.profile_id)
       setParentEmail(parentEmailInput.trim())
+      setParentHasAuth(true)
+      setParentSuccess('Akun orang tua berhasil dibuat!')
       setParentEmailInput('')
       setParentPassword('')
-      setParentSuccess('Akun orang tua berhasil dibuat!')
+
+      setTimeout(() => setParentSuccess(''), 3000)
     } catch (err: any) {
-      setParentError(err.message ?? 'Terjadi kesalahan.')
+      setParentError(err.message)
     }
     setSavingParent(false)
   }
 
   async function handleResetPassword() {
-    if (!parentPassword || parentPassword.length < 6) { setParentError('Password baru minimal 6 karakter.'); return }
+    if (!parentPassword.trim()) { setParentError('Password baru wajib diisi.'); return }
+    if (parentPassword.length < 6) { setParentError('Password minimal 6 karakter.'); return }
     setSavingParent(true); setParentError(''); setParentSuccess('')
 
     try {
       const res = await fetch('/api/admin/create-user', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        // Untuk 'Diri Sendiri': reset profileId siswa, bukan parentProfileId
-      body: JSON.stringify({ profile_id: form.relation_role === 'Diri Sendiri' ? profileId : parentProfileId, password: parentPassword }),
+        body: JSON.stringify({
+          profile_id: parentProfileId,
+          password:   parentPassword,
+        }),
       })
+
       const json = await res.json()
-      if (!res.ok) { setParentError(json.error ?? 'Gagal reset password.'); setSavingParent(false); return }
+      if (!res.ok) throw new Error(json.error || 'Gagal reset password')
+
+      setParentSuccess('Password berhasil direset!')
       setParentPassword('')
-      setParentSuccess('Password orang tua berhasil direset!')
+      setTimeout(() => setParentSuccess(''), 3000)
     } catch (err: any) {
-      setParentError(err.message ?? 'Terjadi kesalahan.')
+      setParentError(err.message)
     }
     setSavingParent(false)
   }
 
-  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
-  const labelCls = "block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5"
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <p className="text-gray-600">Memuat data siswa...</p>
+      </div>
+    )
+  }
 
-  if (loading) return <div className="p-6 text-sm text-[#7B78A8]">Memuat data siswa...</div>
+  const labelCls = 'block text-xs font-bold text-[#1A1640] uppercase tracking-wide mb-2'
+  const inputCls = 'w-full px-4 py-2.5 border-2 border-[#E5E3FF] rounded-xl text-sm text-[#1A1640] font-semibold placeholder:text-[#C4BFFF] placeholder:font-normal focus:outline-none focus:border-[#5C4FE5] transition'
 
   return (
-    <div className="max-w-xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/siswa" className="text-[#7B78A8] hover:text-[#5C4FE5] transition-colors">← Kembali</Link>
-        <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Edit Siswa</h1>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-3xl mx-auto mb-6">
+        <h1 className="text-2xl font-black text-[#1A1640]">Edit Data Siswa</h1>
+        <p className="text-sm text-[#7B78A8] mt-1">Perbarui informasi siswa dan akun orang tua</p>
       </div>
 
-      {success && (
-        <div className="mb-4 px-4 py-3 bg-[#E6F4EC] border border-green-200 rounded-xl text-sm text-green-700 font-semibold">
-          ✅ Data siswa berhasil diperbarui! Mengalihkan...
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-6">
+        {success && (
+          <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600 font-semibold">
+            ✅ Data berhasil disimpan! Mengalihkan...
+          </div>
+        )}
 
         {/* DATA SISWA */}
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
-          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Data Siswa</p>
+          <div>
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Data Siswa</p>
+            <p className="text-xs text-[#7B78A8] mt-0.5">Informasi dasar tentang siswa</p>
+          </div>
 
           <div>
-            <label className={labelCls}>Nama Lengkap <span className="text-red-500">*</span></label>
+            <label className={labelCls}>Nama Lengkap Siswa <span className="text-red-500">*</span></label>
             <input type="text" name="full_name" value={form.full_name} onChange={handleChange}
-              placeholder="Nama lengkap siswa" className={inputCls}/>
+              placeholder="Nama lengkap siswa" className={inputCls} required />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>No. HP Siswa</label>
+              <label className={labelCls}>No. HP Siswa <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
               <input type="text" name="phone" value={form.phone} onChange={handleChange}
                 placeholder="08xxxxxxxxxx" className={inputCls}/>
             </div>
             <div>
-              <label className={labelCls}>Email <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <label className={labelCls}>Email Siswa <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
               <input type="email" name="email" value={form.email} onChange={handleChange}
-                placeholder="email@contoh.com" className={inputCls}/>
+                placeholder="email@siswa.com" className={inputCls}/>
             </div>
           </div>
 
-          <div>
-            <label className={labelCls}>Tanggal Lahir <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-            <input type="date" name="birth_date" value={form.birth_date} onChange={handleChange} className={inputCls}/>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Tanggal Lahir <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
+              <input type="date" name="birth_date" value={form.birth_date} onChange={handleChange} className={inputCls}/>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -292,8 +317,7 @@ export default function SiswaEditPage() {
             </div>
             <div>
               <label className={labelCls}>Kabupaten/Kota <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-              <select name="city" value={form.city} onChange={handleChange}
-                disabled={!form.province} className={`${inputCls} ${!form.province ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <select name="city" value={form.city} onChange={handleChange} className={inputCls} disabled={!form.province}>
                 <option value="">-- Pilih Kab/Kota --</option>
                 {cities.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
