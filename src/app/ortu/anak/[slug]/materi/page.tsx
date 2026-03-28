@@ -94,20 +94,10 @@ export default function MateriPage() {
 
       setStudentName(studentData.name);
 
-      // Get active enrollments
+      // Get active enrollments - step by step to avoid nested array issues
       const { data: enrollments } = await supabase
         .from('enrollments')
-        .select(`
-          class_id,
-          class_groups (
-            id,
-            name,
-            level_id,
-            course_id,
-            courses (name),
-            levels (name)
-          )
-        `)
+        .select('class_id')
         .eq('student_id', studentData.id)
         .gte('end_date', new Date().toISOString().split('T')[0]);
 
@@ -117,14 +107,45 @@ export default function MateriPage() {
         return;
       }
 
+      // Get class details
+      const classIds = enrollments.map(e => e.class_id);
+      const { data: classData } = await supabase
+        .from('class_groups')
+        .select('id, name, level_id, course_id')
+        .in('id', classIds);
+
+      if (!classData || classData.length === 0) {
+        setHasAccess(false);
+        setLoading(false);
+        return;
+      }
+
+      // Get level and course names separately
+      const levelIds = [...new Set(classData.map(c => c.level_id))];
+      const courseIds = [...new Set(classData.map(c => c.course_id))];
+
+      const { data: levels } = await supabase
+        .from('levels')
+        .select('id, name')
+        .in('id', levelIds);
+
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id, name')
+        .in('id', courseIds);
+
       // Format active classes
-      const classes: ActiveClass[] = enrollments.map(e => ({
-        class_id: e.class_groups.id,
-        class_name: e.class_groups.name,
-        course_name: e.class_groups.courses.name,
-        level_id: e.class_groups.level_id,
-        level_name: e.class_groups.levels.name,
-      }));
+      const classes: ActiveClass[] = classData.map(c => {
+        const level = levels?.find(l => l.id === c.level_id);
+        const course = courses?.find(co => co.id === c.course_id);
+        return {
+          class_id: c.id,
+          class_name: c.name,
+          course_name: course?.name || '',
+          level_id: c.level_id,
+          level_name: level?.name || '',
+        };
+      });
 
       setActiveClasses(classes);
       setHasAccess(true);
