@@ -1,234 +1,271 @@
 'use client';
 
-import { useState } from 'react';
-import { BookOpen, Video, FileText, Headphones, Plus, List } from 'lucide-react';
-import LiveZoomForm from './components/LiveZoomForm';
-import BacaanForm from './components/BacaanForm';
-import KosakataForm from './components/KosakataForm';
-import CEFRForm from './components/CEFRForm';
-import MaterialList from './components/MaterialList';
+import { useState, useEffect } from 'react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
-type TabType = 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
+type Material = {
+  id: string;
+  title: string;
+  type: string;
+  category: string;
+  course_id: string;
+  level_id: string;
+  unit_id: string;
+  lesson_id: string;
+  order_number: number;
+  is_published: boolean;
+  content_data: any;
+  created_at: string;
+};
 
-const tabs = [
-  { id: 'live_zoom' as TabType, label: 'Live Zoom', icon: Video, color: 'bg-blue-500' },
-  { id: 'bacaan' as TabType, label: 'Bacaan', icon: BookOpen, color: 'bg-green-500' },
-  { id: 'kosakata' as TabType, label: 'Kosakata', icon: FileText, color: 'bg-yellow-500' },
-  { id: 'cefr' as TabType, label: 'CEFR', icon: Headphones, color: 'bg-red-500' },
-];
+type MaterialListProps = {
+  category: 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
+  onEdit?: (material: Material) => void;
+};
 
-export default function MateriTutorPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('live_zoom');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(true);
-  const [view, setView] = useState<'form' | 'list'>('list'); // Default to list view
+export default function MaterialList({ category, onEdit }: MaterialListProps) {
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSave = async (materialData: any) => {
-    console.log('Saving material:', materialData);
-    setIsSubmitting(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchMaterials();
+  }, [category]);
+
+  const fetchMaterials = async () => {
+    setLoading(true);
+    setError(null);
 
     try {
-      const formData = new FormData();
-      
-      // Basic fields
-      formData.append('title', materialData.title || '');
-      formData.append('type', materialData.type);
-      formData.append('category', materialData.category);
-      
-      // Hierarchy fields
-      formData.append('course_id', materialData.course_id || '');
-      formData.append('level_id', materialData.level_id || '');
-      
-      // NEW: Inline creation fields
-      formData.append('judul_id', materialData.judul_id || '');
-      formData.append('judul_name', materialData.judul_name || '');
-      formData.append('unit_id', materialData.unit_id || '');
-      formData.append('unit_name', materialData.unit_name || '');
-      formData.append('lesson_id', materialData.lesson_id || '');
-      formData.append('lesson_name', materialData.lesson_name || '');
-      
-      // Other fields
-      formData.append('order_number', materialData.order_number?.toString() || '1');
-      formData.append('is_published', materialData.is_published?.toString() || 'false');
-      formData.append('content_data', JSON.stringify(materialData.content_data));
+      const { data, error: fetchError } = await supabase
+        .from('materials')
+        .select('*')
+        .eq('category', category)
+        .order('created_at', { ascending: false });
 
-      // File upload (if exists)
-      if (materialData.file) {
-        formData.append('file', materialData.file);
-      }
+      if (fetchError) throw fetchError;
 
-      console.log('FormData prepared, sending to API...');
-
-      const response = await fetch('/api/admin/materials', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      console.log('API Response:', result);
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create material');
-      }
-
-      alert('✅ Material berhasil disimpan!');
-      
-      // Force form remount to reset all state
-      setShowForm(false);
-      setTimeout(() => {
-        setShowForm(true);
-      }, 10);
-
-    } catch (error) {
-      console.error('Error saving material:', error);
-      alert(`❌ Gagal menyimpan material: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setMaterials(data || []);
+    } catch (err) {
+      console.error('Error fetching materials:', err);
+      setError('Gagal memuat daftar materi');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    if (confirm('Batalkan perubahan?')) {
-      setShowForm(false);
-      setTimeout(() => setShowForm(true), 100);
+  const handleDelete = async (id: string) => {
+    if (!confirm('Yakin ingin menghapus materi ini?')) return;
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('materials')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) throw deleteError;
+
+      alert('✅ Materi berhasil dihapus!');
+      fetchMaterials();
+    } catch (err) {
+      console.error('Error deleting material:', err);
+      alert('❌ Gagal menghapus materi');
     }
   };
 
-  const renderForm = () => {
-    if (!showForm) return null;
+  const getCategoryIcon = () => {
+    switch (category) {
+      case 'live_zoom': return <Video size={16} className="text-blue-600" />;
+      case 'bacaan': return <BookOpen size={16} className="text-green-600" />;
+      case 'kosakata': return <FileText size={16} className="text-yellow-600" />;
+      case 'cefr': return <Headphones size={16} className="text-red-600" />;
+    }
+  };
 
-    switch (activeTab) {
+  const getCategoryLabel = () => {
+    switch (category) {
+      case 'live_zoom': return 'Live Zoom';
+      case 'bacaan': return 'Bacaan';
+      case 'kosakata': return 'Kosakata';
+      case 'cefr': return 'CEFR';
+    }
+  };
+
+  const getContentPreview = (material: Material) => {
+    const data = material.content_data;
+    
+    switch (category) {
       case 'live_zoom':
         return (
-          <LiveZoomForm
-            onSave={handleSave}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
+          <div className="text-sm text-gray-600">
+            <span className="font-medium">{data?.platform || 'N/A'}</span>
+            {data?.url && (
+              <a 
+                href={data.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="ml-2 text-[#5C4FE5] hover:underline inline-flex items-center gap-1"
+              >
+                <ExternalLink size={12} />
+                Link
+              </a>
+            )}
+          </div>
         );
       case 'bacaan':
         return (
-          <BacaanForm
-            onSave={handleSave}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
+          <div className="text-sm text-gray-600">
+            {data?.jsx_file_path && (
+              <span className="text-green-600">✓ JSX Component uploaded</span>
+            )}
+            {data?.description && (
+              <p className="mt-1 text-xs line-clamp-2">{data.description}</p>
+            )}
+          </div>
         );
       case 'kosakata':
         return (
-          <KosakataForm
-            onSave={handleSave}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
+          <div className="text-sm text-gray-600">
+            <span className="font-medium">{data?.file_type || 'N/A'}</span>
+            {data?.url && (
+              <a 
+                href={data.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="ml-2 text-[#5C4FE5] hover:underline inline-flex items-center gap-1"
+              >
+                <ExternalLink size={12} />
+                Link
+              </a>
+            )}
+          </div>
         );
       case 'cefr':
         return (
-          <CEFRForm
-            onSave={handleSave}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
+          <div className="text-sm text-gray-600">
+            {data?.audio_url && (
+              <span className="text-red-600">✓ Audio uploaded</span>
+            )}
+            <div className="flex gap-2 mt-1">
+              {data?.skill_focus && (
+                <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">
+                  {data.skill_focus}
+                </span>
+              )}
+              {data?.cefr_skill && (
+                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                  {data.cefr_skill}
+                </span>
+              )}
+            </div>
+          </div>
         );
-      default:
-        return null;
     }
   };
 
+  if (loading) {
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin w-8 h-8 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div>
+        <p className="text-gray-600 mt-4">Memuat daftar materi...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-red-600">{error}</p>
+        <button
+          onClick={fetchMaterials}
+          className="mt-4 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7]"
+        >
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
+
+  if (materials.length === 0) {
+    return (
+      <div className="p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+          {getCategoryIcon()}
+        </div>
+        <p className="text-gray-600 font-medium">Belum ada materi {getCategoryLabel()}</p>
+        <p className="text-sm text-gray-500 mt-1">Klik tombol "Tambah Materi" untuk membuat materi baru</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Materi Tutor</h1>
-          <p className="text-gray-600">
-            Kelola materi pembelajaran untuk siswa
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">
+          Daftar Materi {getCategoryLabel()} ({materials.length})
+        </h3>
+      </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 mb-6">
-          <div className="flex gap-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              
-              return (
+      <div className="space-y-3">
+        {materials.map((material) => (
+          <div
+            key={material.id}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  {getCategoryIcon()}
+                  <h4 className="font-medium text-gray-900">{material.title}</h4>
+                  {!material.is_published && (
+                    <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                      Draft
+                    </span>
+                  )}
+                  {material.is_published && (
+                    <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">
+                      Published
+                    </span>
+                  )}
+                </div>
+
+                {getContentPreview(material)}
+
+                <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                  <span>Order: #{material.order_number}</span>
+                  <span>•</span>
+                  <span>{new Date(material.created_at).toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                  })}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 ml-4">
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(material)}
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Edit"
+                  >
+                    <Edit size={18} />
+                  </button>
+                )}
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  disabled={isSubmitting}
-                  className={`
-                    flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all flex-1
-                    ${isActive
-                      ? 'bg-[#5C4FE5] text-white shadow-md'
-                      : 'text-gray-600 hover:bg-gray-100'
-                    }
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                  `}
+                  onClick={() => handleDelete(material.id)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Hapus"
                 >
-                  <Icon size={20} />
-                  <span>{tab.label}</span>
+                  <Trash2 size={18} />
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Form Container */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          {/* Header with toggle buttons */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {view === 'form' ? 'Tambah' : 'Daftar'} Materi {tabs.find(t => t.id === activeTab)?.label}
-            </h2>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => setView('list')}
-                className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
-                  ${view === 'list'
-                    ? 'bg-[#5C4FE5] text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                  }
-                `}
-              >
-                <List size={18} />
-                Daftar Materi
-              </button>
-              <button
-                onClick={() => {
-                  setView('form');
-                  setShowForm(false);
-                  setTimeout(() => setShowForm(true), 10);
-                }}
-                className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
-                  ${view === 'form'
-                    ? 'bg-[#5C4FE5] text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                  }
-                `}
-              >
-                <Plus size={18} />
-                Tambah Materi
-              </button>
+              </div>
             </div>
           </div>
-
-          {/* Content */}
-          {view === 'form' ? renderForm() : (
-            <MaterialList 
-              category={activeTab}
-              onEdit={(material) => {
-                // TODO: Implement edit functionality
-                console.log('Edit material:', material);
-              }}
-            />
-          )}
-        </div>
+        ))}
       </div>
     </div>
   );
