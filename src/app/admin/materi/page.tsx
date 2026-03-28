@@ -43,22 +43,25 @@ export default function MateriTutorPage() {
     console.log('Edit material:', material);
   };
 
-  const handleFormClose = () => {
+  const handleSave = () => {
     setShowForm(false);
-    // Refresh material list
     setRefreshKey(prev => prev + 1);
+  };
+
+  const handleCancel = () => {
+    setShowForm(false);
   };
 
   const renderForm = () => {
     switch (activeTab) {
       case 'live_zoom':
-        return <LiveZoomForm />;
+        return <LiveZoomForm onSave={handleSave} onCancel={handleCancel} />;
       case 'bacaan':
-        return <BacaanForm />;
+        return <BacaanForm onSave={handleSave} onCancel={handleCancel} />;
       case 'kosakata':
-        return <KosakataForm />;
+        return <KosakataForm onSave={handleSave} onCancel={handleCancel} />;
       case 'cefr':
-        return <CEFRForm />;
+        return <CEFRForm onSave={handleSave} onCancel={handleCancel} />;
     }
   };
 
@@ -125,7 +128,7 @@ export default function MateriTutorPage() {
                 </>
               ) : (
                 <button
-                  onClick={handleFormClose}
+                  onClick={handleCancel}
                   className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
                 >
                   <List size={18} />
