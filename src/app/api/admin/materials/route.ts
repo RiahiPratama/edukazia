@@ -1,5 +1,17 @@
-// UPDATED PATCH METHOD - Add to src/app/api/admin/materials/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 
+// ============================================================
+// POST - CREATE NEW MATERIAL
+// ============================================================
+export async function POST(request: NextRequest) {
+  // ... KEEP ALL YOUR EXISTING POST CODE HERE ...
+  // (Don't delete your existing POST function!)
+}
+
+// ============================================================
+// PATCH - UPDATE EXISTING MATERIAL (WITH HIERARCHY SUPPORT)
+// ============================================================
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient();
