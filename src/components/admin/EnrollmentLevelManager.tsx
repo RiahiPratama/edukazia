@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, Check, AlertCircle, Save } from 'lucide-react'
+import { BookOpen, Check, AlertCircle, Save, CheckCircle } from 'lucide-react'
 
 type Enrollment = {
   id: string
@@ -241,6 +241,11 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
             JSON.stringify([...enr.selectedLevels].sort()) !==
             JSON.stringify([...enr.savedLevels].sort())
 
+          // Get active level names
+          const activeLevelNames = enr.availableLevels
+            .filter(lvl => enr.savedLevels.includes(lvl.id))
+            .map(lvl => lvl.name)
+
           return (
             <div
               key={enr.id}
@@ -287,6 +292,41 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                   </div>
                 ) : (
                   <>
+                    {/* STATUS LEVEL AKTIF */}
+                    {enr.savedLevels.length > 0 ? (
+                      <div className="mb-4 px-4 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
+                          <p className="text-xs font-bold text-green-800 uppercase tracking-wide">
+                            Level Aktif Saat Ini
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {activeLevelNames.map((name, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg"
+                            >
+                              <Check size={12} />
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-green-700 mt-2 font-semibold">
+                          ✓ Siswa saat ini terdaftar di {enr.savedLevels.length} level
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mb-4 px-4 py-3 bg-amber-50 border-2 border-amber-200 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-amber-600 flex-shrink-0" />
+                          <p className="text-xs font-bold text-amber-800">
+                            Belum ada level aktif - silakan pilih level di bawah
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-3">
                       Pilih Level (bisa lebih dari 1)
                     </p>
@@ -301,7 +341,9 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                           <label
                             key={level.id}
                             className={`relative flex items-start gap-2 p-3 border-2 rounded-xl cursor-pointer transition-all ${
-                              isSelected
+                              isSaved
+                                ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                                : isSelected
                                 ? 'border-[#27A05A] bg-[#E6F4EC]'
                                 : 'border-[#E5E3FF] bg-white hover:border-[#C4BFFF] hover:bg-[#F7F6FF]'
                             }`}
@@ -316,12 +358,19 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                               <div className="flex items-start justify-between gap-1">
                                 <span
                                   className={`text-xs font-bold leading-tight ${
-                                    isSelected ? 'text-[#1A5C36]' : 'text-[#1A1640]'
+                                    isSaved
+                                      ? 'text-green-800'
+                                      : isSelected
+                                      ? 'text-[#1A5C36]'
+                                      : 'text-[#1A1640]'
                                   }`}
                                 >
                                   {level.name}
                                 </span>
-                                {isSelected && (
+                                {isSaved && (
+                                  <CheckCircle size={14} className="text-green-600 flex-shrink-0" />
+                                )}
+                                {isSelected && !isSaved && (
                                   <Check size={14} className="text-[#27A05A] flex-shrink-0" />
                                 )}
                               </div>
@@ -329,7 +378,11 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                               {level.description && (
                                 <p
                                   className={`text-[10px] mt-1 leading-tight ${
-                                    isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
+                                    isSaved
+                                      ? 'text-green-700'
+                                      : isSelected
+                                      ? 'text-[#1A5C36]'
+                                      : 'text-[#7B78A8]'
                                   }`}
                                 >
                                   {level.description}
@@ -340,7 +393,9 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                 {level.target_age && (
                                   <span
                                     className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
-                                      isSelected
+                                      isSaved
+                                        ? 'bg-green-600 text-white'
+                                        : isSelected
                                         ? 'bg-[#27A05A] text-white'
                                         : 'bg-[#E5E3FF] text-[#5C4FE5]'
                                     }`}
@@ -350,8 +405,8 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                   </span>
                                 )}
                                 {isSaved && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700">
-                                    ✓ Aktif
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-green-600 text-white">
+                                    ✓ AKTIF
                                   </span>
                                 )}
                               </div>
@@ -360,15 +415,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                         )
                       })}
                     </div>
-
-                    {enr.savedLevels.length > 0 && (
-                      <div className="px-3 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl mb-3 flex items-center gap-2">
-                        <Check size={14} className="text-[#27A05A]" />
-                        <p className="text-xs font-semibold text-[#1A5C36]">
-                          {enr.savedLevels.length} level tersimpan di database
-                        </p>
-                      </div>
-                    )}
 
                     <button
                       onClick={() => saveLevels(enr.id)}
