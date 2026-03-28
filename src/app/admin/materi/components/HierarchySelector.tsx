@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 type HierarchySelectorProps = {
   onCourseChange?: (courseId: string) => void;
   onLevelChange?: (levelId: string) => void;
+  onJudulChange?: (judulId: string) => void;
   onUnitChange?: (unitId: string) => void;
   onLessonChange?: (lessonId: string) => void;
   onOrderChange?: (order: number) => void;
@@ -24,6 +25,12 @@ type Level = {
   target_age: string;
 };
 
+type Judul = {
+  id: string;
+  name: string;
+  description: string;
+};
+
 type Unit = {
   id: string;
   name: string;
@@ -39,17 +46,20 @@ type Lesson = {
 export default function HierarchySelector({
   onCourseChange,
   onLevelChange,
+  onJudulChange,
   onUnitChange,
   onLessonChange,
   onOrderChange,
 }: HierarchySelectorProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
+  const [juduls, setJuduls] = useState<Judul[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
+  const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
   const [orderNumber, setOrderNumber] = useState(1);
@@ -71,15 +81,25 @@ export default function HierarchySelector({
     }
   }, [selectedCourse]);
 
-  // Fetch units when level changes
+  // Fetch juduls when level changes
   useEffect(() => {
     if (selectedLevel) {
-      fetchUnits(selectedLevel);
+      fetchJuduls(selectedLevel);
+    } else {
+      setJuduls([]);
+      setSelectedJudul('');
+    }
+  }, [selectedLevel]);
+
+  // Fetch units when judul changes
+  useEffect(() => {
+    if (selectedJudul) {
+      fetchUnits(selectedJudul);
     } else {
       setUnits([]);
       setSelectedUnit('');
     }
-  }, [selectedLevel]);
+  }, [selectedJudul]);
 
   // Fetch lessons when unit changes
   useEffect(() => {
@@ -122,11 +142,27 @@ export default function HierarchySelector({
     }
   };
 
-  const fetchUnits = async (levelId: string) => {
+  const fetchJuduls = async (levelId: string) => {
+    const { data, error } = await supabase
+      .from('juduls')
+      .select('id, name, description')
+      .eq('level_id', levelId)
+      .eq('is_active', true)
+      .order('sort_order');
+
+    if (error) {
+      console.error('Error fetching juduls:', error);
+    } else {
+      console.log('Juduls fetched:', data);
+      setJuduls(data || []);
+    }
+  };
+
+  const fetchUnits = async (judulId: string) => {
     const { data, error } = await supabase
       .from('units')
       .select('id, name, sort_order')
-      .eq('level_id', levelId)
+      .eq('judul_id', judulId)
       .eq('is_active', true)
       .order('sort_order');
 
@@ -157,6 +193,7 @@ export default function HierarchySelector({
   const handleCourseChange = (courseId: string) => {
     setSelectedCourse(courseId);
     setSelectedLevel('');
+    setSelectedJudul('');
     setSelectedUnit('');
     setSelectedLesson('');
     onCourseChange?.(courseId);
@@ -164,9 +201,17 @@ export default function HierarchySelector({
 
   const handleLevelChange = (levelId: string) => {
     setSelectedLevel(levelId);
+    setSelectedJudul('');
     setSelectedUnit('');
     setSelectedLesson('');
     onLevelChange?.(levelId);
+  };
+
+  const handleJudulChange = (judulId: string) => {
+    setSelectedJudul(judulId);
+    setSelectedUnit('');
+    setSelectedLesson('');
+    onJudulChange?.(judulId);
   };
 
   const handleUnitChange = (unitId: string) => {
@@ -234,15 +279,39 @@ export default function HierarchySelector({
         </p>
       </div>
 
-      {/* 3. Unit */}
+      {/* 3. Judul (NEW!) */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-900 mb-2">
-          3. Unit *
+          3. Judul *
+        </label>
+        <select
+          value={selectedJudul}
+          onChange={(e) => handleJudulChange(e.target.value)}
+          disabled={!selectedLevel}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        >
+          <option value="">Pilih judul...</option>
+          {juduls.map((judul) => (
+            <option key={judul.id} value={judul.id}>
+              {judul.name}
+              {judul.description && ` - ${judul.description}`}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-600 mt-1">
+          Judul akan difilter berdasarkan level yang dipilih
+        </p>
+      </div>
+
+      {/* 4. Unit */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          4. Unit *
         </label>
         <select
           value={selectedUnit}
           onChange={(e) => handleUnitChange(e.target.value)}
-          disabled={!selectedLevel}
+          disabled={!selectedJudul}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
         >
           <option value="">Pilih unit...</option>
@@ -253,14 +322,14 @@ export default function HierarchySelector({
           ))}
         </select>
         <p className="text-xs text-gray-600 mt-1">
-          Unit akan difilter berdasarkan level yang dipilih
+          Unit akan difilter berdasarkan judul yang dipilih
         </p>
       </div>
 
-      {/* 4. Lesson */}
+      {/* 5. Lesson */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-900 mb-2">
-          4. Lesson *
+          5. Lesson *
         </label>
         <select
           value={selectedLesson}
@@ -280,10 +349,10 @@ export default function HierarchySelector({
         </p>
       </div>
 
-      {/* 5. Order Number */}
+      {/* 6. Order Number */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-2">
-          5. Order Number *
+          6. Order Number *
         </label>
         <input
           type="number"
