@@ -122,13 +122,22 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   };
 
   const fetchJuduls = async (levelId: string) => {
+    // Use DISTINCT to avoid duplicates
     const { data } = await supabase
       .from('juduls')
       .select('id, name')
       .eq('level_id', levelId)
-      .order('sort_order');
+      .order('name');
     
-    setJuduls(data || []);
+    // Manually remove duplicates by name
+    const uniqueJuduls = data?.reduce((acc: Judul[], curr) => {
+      if (!acc.find(j => j.name === curr.name)) {
+        acc.push(curr);
+      }
+      return acc;
+    }, []) || [];
+    
+    setJuduls(uniqueJuduls);
   };
 
   const fetchUnits = async (judulId: string) => {
@@ -156,12 +165,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
     if (selectedLevel) {
       filtered = filtered.filter(m => m.level_id === selectedLevel);
-    }
-    if (selectedJudul) {
-      filtered = filtered.filter(m => {
-        // Need to check if material's unit belongs to this judul
-        return true; // TODO: Add judul_id to materials or do complex join
-      });
     }
     if (selectedUnit) {
       filtered = filtered.filter(m => m.unit_id === selectedUnit);
@@ -312,9 +315,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="grid grid-cols-4 gap-4 p-4 bg-white rounded-lg border-2 border-gray-200 shadow-sm">
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Level</label>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">Level</label>
           <select
             value={selectedLevel}
             onChange={(e) => {
@@ -323,7 +326,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               setSelectedUnit('');
               setSelectedLesson('');
             }}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white"
+            className="w-full px-3 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900"
           >
             <option value="">Semua Level</option>
             {levels.map(level => (
@@ -333,7 +336,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Judul</label>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">Judul</label>
           <select
             value={selectedJudul}
             onChange={(e) => {
@@ -342,7 +345,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               setSelectedLesson('');
             }}
             disabled={!selectedLevel}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white disabled:bg-gray-100"
+            className="w-full px-3 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
           >
             <option value="">Semua Judul</option>
             {juduls.map(judul => (
@@ -352,7 +355,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Unit</label>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">Unit</label>
           <select
             value={selectedUnit}
             onChange={(e) => {
@@ -360,7 +363,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               setSelectedLesson('');
             }}
             disabled={!selectedJudul}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white disabled:bg-gray-100"
+            className="w-full px-3 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
           >
             <option value="">Semua Unit</option>
             {units.map(unit => (
@@ -370,12 +373,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Lesson</label>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson</label>
           <select
             value={selectedLesson}
             onChange={(e) => setSelectedLesson(e.target.value)}
             disabled={!selectedUnit}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent bg-white disabled:bg-gray-100"
+            className="w-full px-3 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500"
           >
             <option value="">Semua Lesson</option>
             {lessons.map(lesson => (
