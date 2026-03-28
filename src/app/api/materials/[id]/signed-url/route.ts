@@ -14,11 +14,11 @@ import { checkBulkMaterialAccess } from '@/lib/access-control';
 // ----------------------------------------------------------------
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createClient();
-    const materialId = params.id;
+    const { id: materialId } = await params; // Next.js 15+ params is Promise
 
     // ============================================================
     // 1. AUTHENTICATION
@@ -137,7 +137,6 @@ export async function GET(
     const access = accessMap.get(materialId);
 
     if (!access || !access.can_access) {
-      // Log denied access (optional: save to material_access_logs)
       return NextResponse.json(
         { 
           error: 'Access denied',
@@ -150,12 +149,7 @@ export async function GET(
     // ============================================================
     // 6. GENERATE SIGNED URL
     // ============================================================
-    const result = await generateSignedUrl(supabase, material);
-
-    // Optional: Log access (intelligent sampling)
-    // await logAccess(supabase, user.id, materialId, studentId, 200, 'signed_url_generated');
-
-    return result;
+    return await generateSignedUrl(supabase, material);
 
   } catch (error) {
     console.error('Signed URL generation error:', error);
@@ -170,7 +164,6 @@ export async function GET(
 // Helper: Generate signed URL from Supabase Storage
 // ----------------------------------------------------------------
 async function generateSignedUrl(supabase: any, material: any) {
-  // Extract audio path from content_data
   const audioPath = material.content_data?.audio_url;
 
   if (!audioPath) {
@@ -180,10 +173,9 @@ async function generateSignedUrl(supabase: any, material: any) {
     );
   }
 
-  // Generate signed URL (expires in 1 hour)
   const { data, error } = await supabase.storage
     .from('audio')
-    .createSignedUrl(audioPath, 3600); // 1 hour expiry
+    .createSignedUrl(audioPath, 3600);
 
   if (error) {
     console.error('Storage signed URL error:', error);
