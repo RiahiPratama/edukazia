@@ -92,7 +92,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       .eq('student_id', studentId)
       .eq('status', 'active')
 
-    console.log('📊 ENROLLMENTS DATA:', enrData) // DEBUG
+    console.log('📊 ENROLLMENTS DATA:', enrData)
 
     if (!enrData || enrData.length === 0) {
       setEnrollments([])
@@ -112,9 +112,8 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
     const enriched = await Promise.all(
       enrollmentsData.map(async (enr) => {
-        console.log(`🔍 Fetching levels for course: ${enr.course_name} (${enr.course_id})`) // DEBUG
+        console.log(`🔍 Fetching levels for course: ${enr.course_name} (${enr.course_id})`)
         
-        // Fetch available levels untuk course ini
         const { data: levels, error: levelsError } = await supabase
           .from('levels')
           .select('id, name, description, target_age, sort_order, is_active')
@@ -122,14 +121,13 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
           .eq('is_active', true)
           .order('sort_order')
 
-        console.log(`📚 LEVELS FETCHED for ${enr.course_name}:`, levels) // DEBUG
-        console.log(`   Total levels: ${levels?.length || 0}`) // DEBUG
+        console.log(`📚 LEVELS FETCHED for ${enr.course_name}:`, levels)
+        console.log(`   Total levels: ${levels?.length || 0}`)
         
         if (levelsError) {
-          console.error('❌ Error fetching levels:', levelsError) // DEBUG
+          console.error('❌ Error fetching levels:', levelsError)
         }
 
-        // Fetch saved levels untuk enrollment ini
         const { data: savedLevelsData } = await supabase
           .from('enrollment_levels')
           .select('level_id')
@@ -150,7 +148,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       })
     )
 
-    console.log('✅ ENRICHED ENROLLMENTS:', enriched) // DEBUG
+    console.log('✅ ENRICHED ENROLLMENTS:', enriched)
     setEnrollments(enriched)
     setLoading(false)
   }
@@ -331,7 +329,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                   </div>
                 ) : (
                   <>
-                    {/* DEBUG INFO - REMOVE IN PRODUCTION */}
+                    {/* DEBUG INFO */}
                     <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs">
                       <p className="font-bold text-blue-900">🔍 DEBUG INFO:</p>
                       <p className="text-blue-700">Total levels available: {enr.availableLevels.length}</p>
@@ -364,7 +362,10 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                       </button>
 
                       {enr.isDropdownOpen && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border-2 border-[#E5E3FF] rounded-xl shadow-lg max-h-96 overflow-y-auto">
+                        <div 
+                          className="absolute z-50 w-full mt-1 bg-white border-2 border-[#E5E3FF] rounded-xl shadow-lg overflow-y-auto"
+                          style={{ maxHeight: '500px' }}
+                        >
                           {enr.availableLevels.map((level) => {
                             const isSelected = enr.selectedLevels.includes(level.id)
                             const isSaved = enr.savedLevels.includes(level.id)
