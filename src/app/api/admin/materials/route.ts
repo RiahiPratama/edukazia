@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       console.log('✅ Judul created:', judulId);
     }
 
-    // 2. Create Unit if new (NO CHAPTER_ID REQUIRED!)
+    // 2. Create Unit if new
     if (unitId === 'NEW' && unitName && judulId) {
       console.log('🆕 Creating new Unit:', unitName);
       
@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
         .insert({
           judul_id: judulId,
           level_id: levelId,
-          unit_name: unitName,        // Use unit_name, not name!
-          unit_number: nextUnitNumber, // Required field!
-          chapter_id: null,            // NULL if made nullable!
+          unit_name: unitName,        // Use unit_name!
+          unit_number: nextUnitNumber, // Required!
+          chapter_id: null,            // Nullable now
           order_number: 0,
           is_active: true,
           description: '',
@@ -153,17 +153,28 @@ export async function POST(request: NextRequest) {
       console.log('✅ Unit created:', unitId);
     }
 
-    // 3. Create Lesson if new
+    // 3. Create Lesson if new (FIXED TO MATCH SCHEMA!)
     if (lessonId === 'NEW' && lessonName && unitId) {
       console.log('🆕 Creating new Lesson:', lessonName);
+      
+      // Get max lesson_number for this unit
+      const { data: existingLessons } = await supabase
+        .from('lessons')
+        .select('lesson_number')
+        .eq('unit_id', unitId)
+        .order('lesson_number', { ascending: false })
+        .limit(1);
+      
+      const nextLessonNumber = existingLessons && existingLessons.length > 0 
+        ? existingLessons[0].lesson_number + 1 
+        : 1;
       
       const { data: newLesson, error: lessonError } = await supabase
         .from('lessons')
         .insert({
           unit_id: unitId,
-          name: lessonName,
-          is_active: true,
-          sort_order: 0,
+          lesson_name: lessonName,      // Use lesson_name, not name!
+          lesson_number: nextLessonNumber, // Required!
         })
         .select()
         .single();
