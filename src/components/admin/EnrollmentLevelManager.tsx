@@ -33,8 +33,8 @@ type EnrollmentWithLevels = Enrollment & {
 }
 
 const TARGET_AGE_LABELS: Record<string, string> = {
-  all: 'Semua Usia',
-  kids: 'Anak-anak',
+  all: 'Semua',
+  kids: 'Anak',
   teen: 'Remaja',
   adult: 'Dewasa',
   kids_teen: 'Anak & Remaja',
@@ -92,8 +92,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       .eq('student_id', studentId)
       .eq('status', 'active')
 
-    console.log('📊 ENROLLMENTS DATA:', enrData)
-
     if (!enrData || enrData.length === 0) {
       setEnrollments([])
       setLoading(false)
@@ -112,21 +110,12 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
     const enriched = await Promise.all(
       enrollmentsData.map(async (enr) => {
-        console.log(`🔍 Fetching levels for course: ${enr.course_name} (${enr.course_id})`)
-        
-        const { data: levels, error: levelsError } = await supabase
+        const { data: levels } = await supabase
           .from('levels')
-          .select('id, name, description, target_age, sort_order, is_active')
+          .select('id, name, description, target_age, sort_order')
           .eq('course_id', enr.course_id)
           .eq('is_active', true)
           .order('sort_order')
-
-        console.log(`📚 LEVELS FETCHED for ${enr.course_name}:`, levels)
-        console.log(`   Total levels: ${levels?.length || 0}`)
-        
-        if (levelsError) {
-          console.error('❌ Error fetching levels:', levelsError)
-        }
 
         const { data: savedLevelsData } = await supabase
           .from('enrollment_levels')
@@ -148,7 +137,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
       })
     )
 
-    console.log('✅ ENRICHED ENROLLMENTS:', enriched)
     setEnrollments(enriched)
     setLoading(false)
   }
@@ -329,13 +317,6 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                   </div>
                 ) : (
                   <>
-                    {/* DEBUG INFO */}
-                    <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs">
-                      <p className="font-bold text-blue-900">🔍 DEBUG INFO:</p>
-                      <p className="text-blue-700">Total levels available: {enr.availableLevels.length}</p>
-                      <p className="text-blue-700">Level names: {enr.availableLevels.map(l => l.name).join(', ')}</p>
-                    </div>
-
                     <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">
                       Pilih Level (bisa lebih dari 1)
                     </p>
@@ -347,24 +328,24 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                       <button
                         type="button"
                         onClick={() => toggleDropdown(enr.id)}
-                        className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-[#E5E3FF] rounded-xl text-sm font-semibold text-[#1A1640] hover:border-[#C4BFFF] transition"
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border-2 border-[#E5E3FF] rounded-xl text-sm font-semibold text-[#1A1640] hover:border-[#C4BFFF] transition"
                       >
-                        <span>
+                        <span className="text-xs">
                           {enr.selectedLevels.length === 0
                             ? 'Pilih level...'
                             : `${enr.selectedLevels.length} level dipilih`}
                         </span>
                         {enr.isDropdownOpen ? (
-                          <ChevronUp size={16} className="text-[#7B78A8]" />
+                          <ChevronUp size={14} className="text-[#7B78A8]" />
                         ) : (
-                          <ChevronDown size={16} className="text-[#7B78A8]" />
+                          <ChevronDown size={14} className="text-[#7B78A8]" />
                         )}
                       </button>
 
                       {enr.isDropdownOpen && (
                         <div 
                           className="absolute z-50 w-full mt-1 bg-white border-2 border-[#E5E3FF] rounded-xl shadow-lg overflow-y-auto"
-                          style={{ maxHeight: '500px' }}
+                          style={{ maxHeight: '320px' }}
                         >
                           {enr.availableLevels.map((level) => {
                             const isSelected = enr.selectedLevels.includes(level.id)
@@ -373,7 +354,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                             return (
                               <label
                                 key={level.id}
-                                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-[#E5E3FF] last:border-b-0 ${
+                                className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors border-b border-[#E5E3FF] last:border-b-0 ${
                                   isSelected
                                     ? 'bg-[#E6F4EC] hover:bg-[#D1EBE0]'
                                     : 'hover:bg-[#F7F6FF]'
@@ -383,12 +364,12 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={() => toggleLevel(enr.id, level.id)}
-                                  className="w-4 h-4 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer"
+                                  className="w-3.5 h-3.5 rounded border-gray-300 text-[#27A05A] focus:ring-[#27A05A] focus:ring-offset-0 cursor-pointer flex-shrink-0"
                                 />
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span
-                                      className={`text-sm font-bold ${
+                                      className={`text-xs font-bold ${
                                         isSelected ? 'text-[#1A5C36]' : 'text-[#1A1640]'
                                       }`}
                                     >
@@ -396,7 +377,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                     </span>
                                     {level.target_age && (
                                       <span
-                                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
                                           isSelected
                                             ? 'bg-[#27A05A] text-white'
                                             : 'bg-[#E5E3FF] text-[#5C4FE5]'
@@ -407,14 +388,14 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                       </span>
                                     )}
                                     {isSaved && (
-                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-green-100 text-green-700">
-                                        ✓ Tersimpan
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700">
+                                        ✓
                                       </span>
                                     )}
                                   </div>
                                   {level.description && (
                                     <p
-                                      className={`text-xs mt-0.5 ${
+                                      className={`text-[10px] mt-0.5 ${
                                         isSelected ? 'text-[#1A5C36]' : 'text-[#7B78A8]'
                                       }`}
                                     >
@@ -423,7 +404,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                                   )}
                                 </div>
                                 {isSelected && (
-                                  <Check size={16} className="text-[#27A05A] flex-shrink-0" />
+                                  <Check size={12} className="text-[#27A05A] flex-shrink-0" />
                                 )}
                               </label>
                             )
@@ -433,10 +414,10 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                     </div>
 
                     {enr.savedLevels.length > 0 && (
-                      <div className="px-4 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl mb-3 flex items-center gap-2">
-                        <Check size={14} className="text-[#27A05A]" />
-                        <p className="text-xs font-semibold text-[#1A5C36]">
-                          {enr.savedLevels.length} level aktif di database
+                      <div className="px-3 py-1.5 bg-[#E6F4EC] border border-[#27A05A] rounded-xl mb-3 flex items-center gap-2">
+                        <Check size={12} className="text-[#27A05A]" />
+                        <p className="text-[10px] font-semibold text-[#1A5C36]">
+                          {enr.savedLevels.length} level aktif
                         </p>
                       </div>
                     )}
@@ -444,9 +425,9 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                     <button
                       onClick={() => saveLevels(enr.id)}
                       disabled={enr.saving || !hasChanges}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#5C4FE5] text-white text-sm font-bold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Save size={14} />
+                      <Save size={12} />
                       {enr.saving
                         ? 'Menyimpan...'
                         : hasChanges
@@ -455,17 +436,17 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
                     </button>
 
                     {enr.success && (
-                      <div className="mt-3 px-4 py-2 bg-[#E6F4EC] border border-[#27A05A] rounded-xl flex items-center gap-2">
-                        <Check size={14} className="text-[#27A05A]" />
-                        <p className="text-xs font-semibold text-[#1A5C36]">
+                      <div className="mt-3 px-3 py-1.5 bg-[#E6F4EC] border border-[#27A05A] rounded-xl flex items-center gap-2">
+                        <Check size={12} className="text-[#27A05A]" />
+                        <p className="text-[10px] font-semibold text-[#1A5C36]">
                           Level berhasil disimpan!
                         </p>
                       </div>
                     )}
                     {enr.error && (
-                      <div className="mt-3 px-4 py-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
-                        <AlertCircle size={14} className="text-red-600" />
-                        <p className="text-xs font-semibold text-red-600">{enr.error}</p>
+                      <div className="mt-3 px-3 py-1.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
+                        <AlertCircle size={12} className="text-red-600" />
+                        <p className="text-[10px] font-semibold text-red-600">{enr.error}</p>
                       </div>
                     )}
                   </>
