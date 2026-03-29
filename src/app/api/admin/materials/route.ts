@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     // Authentication check
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // Parse form data
     const formData = await request.formData();
-    
+
     const title = formData.get('title') as string;
     const type = formData.get('type') as string;
     const category = formData.get('category') as string;
@@ -48,9 +48,9 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!title || !category || !levelId) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Missing required fields',
-        details: 'title, category, and level_id are required' 
+        details: 'title, category, and level_id are required'
       }, { status: 400 });
     }
 
@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
       try {
         contentData = JSON.parse(contentDataStr);
       } catch (e) {
-        return NextResponse.json({ 
-          error: 'Invalid content_data JSON' 
+        return NextResponse.json({
+          error: 'Invalid content_data JSON'
         }, { status: 400 });
       }
     }
@@ -69,12 +69,12 @@ export async function POST(request: NextRequest) {
     // ============================================================
     // STEP 1: CREATE HIERARCHY (judul → unit → lesson)
     // ============================================================
-    
+
     // 1. Create or get Judul
     let actualJudulId = judulId;
     if (judulId === 'NEW' && judulName) {
       console.log('🆕 Creating new Judul:', judulName);
-      
+
       const { data: newJudul, error: judulError } = await supabase
         .from('juduls')
         .insert({
@@ -85,22 +85,22 @@ export async function POST(request: NextRequest) {
         })
         .select()
         .single();
-      
+
       if (judulError) {
         console.error('Judul creation error:', judulError);
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Failed to create judul',
-          details: judulError.message 
+          details: judulError.message
         }, { status: 500 });
       }
-      
+
       actualJudulId = newJudul.id;
       console.log('✅ Judul created:', actualJudulId);
     }
 
     if (!actualJudulId) {
-      return NextResponse.json({ 
-        error: 'Judul ID required' 
+      return NextResponse.json({
+        error: 'Judul ID required'
       }, { status: 400 });
     }
 
@@ -108,32 +108,32 @@ export async function POST(request: NextRequest) {
     let actualUnitId = unitId;
     if (unitId === 'NEW' && unitName) {
       console.log('🆕 Creating new Unit:', unitName);
-      
+
       const { data: newUnit, error: unitError } = await supabase
         .from('units')
         .insert({
           judul_id: actualJudulId,
           unit_name: unitName,
-          sort_order: 0,
+          order_number: 0,
         })
         .select()
         .single();
-      
+
       if (unitError) {
         console.error('Unit creation error:', unitError);
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Failed to create unit',
-          details: unitError.message 
+          details: unitError.message
         }, { status: 500 });
       }
-      
+
       actualUnitId = newUnit.id;
       console.log('✅ Unit created:', actualUnitId);
     }
 
     if (!actualUnitId) {
-      return NextResponse.json({ 
-        error: 'Unit ID required' 
+      return NextResponse.json({
+        error: 'Unit ID required'
       }, { status: 400 });
     }
 
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
     let actualLessonId = lessonId;
     if (lessonId === 'NEW' && lessonName) {
       console.log('🆕 Creating new Lesson:', lessonName);
-      
+
       const { data: newLesson, error: lessonError } = await supabase
         .from('lessons')
         .insert({
@@ -151,41 +151,41 @@ export async function POST(request: NextRequest) {
         })
         .select()
         .single();
-      
+
       if (lessonError) {
         console.error('Lesson creation error:', lessonError);
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Failed to create lesson',
-          details: lessonError.message 
+          details: lessonError.message
         }, { status: 500 });
       }
-      
+
       actualLessonId = newLesson.id;
       console.log('✅ Lesson created:', actualLessonId);
     }
 
     if (!actualLessonId) {
-      return NextResponse.json({ 
-        error: 'Lesson ID required' 
+      return NextResponse.json({
+        error: 'Lesson ID required'
       }, { status: 400 });
     }
 
     // ============================================================
     // STEP 2: HANDLE FILE UPLOAD (for bacaan and cefr categories)
     // ============================================================
-    
+
     let componentId = null;
 
     if (file && (category === 'bacaan' || category === 'cefr')) {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
-      
+
       const originalName = file.name;
       const sanitizedName = originalName
         .replace(/[^a-zA-Z0-9.-]/g, '_')
         .replace(/_+/g, '_')
         .toLowerCase();
-      
+
       const ext = sanitizedName.split('.').pop();
       const baseName = sanitizedName.replace(`.${ext}`, '');
       const fileName = `${timestamp}-${random}`;
@@ -212,9 +212,9 @@ export async function POST(request: NextRequest) {
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'Failed to upload file',
-          details: uploadError.message 
+          details: uploadError.message
         }, { status: 500 });
       }
 
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
     // ============================================================
     // STEP 3: CREATE MATERIAL RECORD
     // ============================================================
-    
+
     const { data: newMaterial, error: materialError } = await supabase
       .from('materials')
       .insert({
@@ -255,36 +255,36 @@ export async function POST(request: NextRequest) {
 
     if (materialError) {
       console.error('Material creation error:', materialError);
-      
+
       // If material creation fails, clean up uploaded file
       if (file && (category === 'bacaan' || category === 'cefr')) {
         const bucket = category === 'bacaan' ? 'components' : 'audio';
-        const filePath = category === 'bacaan' 
-          ? (contentData as any).jsx_file_path 
+        const filePath = category === 'bacaan'
+          ? (contentData as any).jsx_file_path
           : (contentData as any).audio_url;
-        
+
         if (filePath) {
           await supabase.storage.from(bucket).remove([filePath]);
           console.log('🗑️ Cleaned up uploaded file after error');
         }
       }
-      
-      return NextResponse.json({ 
+
+      return NextResponse.json({
         error: 'Failed to create material',
-        details: materialError.message 
+        details: materialError.message
       }, { status: 500 });
     }
 
     console.log('✅ Material created:', newMaterial.id);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      material: newMaterial 
+      material: newMaterial
     });
 
   } catch (error) {
     console.error('POST error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
@@ -300,7 +300,7 @@ export async function PATCH(request: NextRequest) {
 
     // Authentication check
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -317,7 +317,7 @@ export async function PATCH(request: NextRequest) {
 
     // Parse form data
     const formData = await request.formData();
-    
+
     const materialId = formData.get('material_id') as string;
     const title = formData.get('title') as string;
     const orderNumber = parseInt(formData.get('order_number') as string);
@@ -359,13 +359,13 @@ export async function PATCH(request: NextRequest) {
     if (file) {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
-      
+
       const originalName = file.name;
       const sanitizedName = originalName
         .replace(/[^a-zA-Z0-9.-]/g, '_')
         .replace(/_+/g, '_')
         .toLowerCase();
-      
+
       const ext = sanitizedName.split('.').pop();
       const baseName = sanitizedName.replace(`.${ext}`, '');
       const fileName = `${baseName}-${timestamp}-${random}.${ext}`;
@@ -383,8 +383,8 @@ export async function PATCH(request: NextRequest) {
 
       if (bucket) {
         // Delete old file if exists
-        const oldPath = category === 'bacaan' 
-          ? existingMaterial.content_data?.jsx_file_path 
+        const oldPath = category === 'bacaan'
+          ? existingMaterial.content_data?.jsx_file_path
           : existingMaterial.content_data?.audio_url;
 
         if (oldPath) {
@@ -398,9 +398,9 @@ export async function PATCH(request: NextRequest) {
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'Failed to upload file',
-            details: uploadError.message 
+            details: uploadError.message
           }, { status: 500 });
         }
 
@@ -423,7 +423,7 @@ export async function PATCH(request: NextRequest) {
       let actualJudulId = judulId;
       if (judulId === 'NEW' && judulName && levelId) {
         console.log('🆕 Creating new Judul:', judulName);
-        
+
         const { data: newJudul, error: judulError } = await supabase
           .from('juduls')
           .insert({
@@ -433,15 +433,15 @@ export async function PATCH(request: NextRequest) {
           })
           .select()
           .single();
-        
+
         if (judulError) {
           console.error('Judul creation error:', judulError);
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'Failed to create judul',
-            details: judulError.message 
+            details: judulError.message
           }, { status: 500 });
         }
-        
+
         actualJudulId = newJudul.id;
         console.log('✅ Judul created:', actualJudulId);
       }
@@ -450,7 +450,7 @@ export async function PATCH(request: NextRequest) {
       let actualUnitId = unitId;
       if (unitId === 'NEW' && unitName && actualJudulId) {
         console.log('🆕 Creating new Unit:', unitName);
-        
+
         const { data: newUnit, error: unitError } = await supabase
           .from('units')
           .insert({
@@ -460,15 +460,15 @@ export async function PATCH(request: NextRequest) {
           })
           .select()
           .single();
-        
+
         if (unitError) {
           console.error('Unit creation error:', unitError);
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'Failed to create unit',
-            details: unitError.message 
+            details: unitError.message
           }, { status: 500 });
         }
-        
+
         actualUnitId = newUnit.id;
         console.log('✅ Unit created:', actualUnitId);
       }
@@ -476,7 +476,7 @@ export async function PATCH(request: NextRequest) {
       // 3. Create Lesson if new
       if (lessonId === 'NEW' && lessonName && actualUnitId) {
         console.log('🆕 Creating new Lesson:', lessonName);
-        
+
         const { data: newLesson, error: lessonError } = await supabase
           .from('lessons')
           .insert({
@@ -486,15 +486,15 @@ export async function PATCH(request: NextRequest) {
           })
           .select()
           .single();
-        
+
         if (lessonError) {
           console.error('Lesson creation error:', lessonError);
-          return NextResponse.json({ 
+          return NextResponse.json({
             error: 'Failed to create lesson',
-            details: lessonError.message 
+            details: lessonError.message
           }, { status: 500 });
         }
-        
+
         finalLessonId = newLesson.id;
         console.log('✅ Lesson created:', finalLessonId);
       } else if (lessonId && lessonId !== 'NEW') {
@@ -520,22 +520,22 @@ export async function PATCH(request: NextRequest) {
 
     if (updateError) {
       console.error('Update error:', updateError);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Failed to update material',
-        details: updateError.message 
+        details: updateError.message
       }, { status: 500 });
     }
 
     console.log('✅ Material updated:', updatedMaterial.id);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      material: updatedMaterial 
+      material: updatedMaterial
     });
 
   } catch (error) {
     console.error('PATCH error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
