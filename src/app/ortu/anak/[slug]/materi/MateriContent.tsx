@@ -281,7 +281,7 @@ export default function MateriContent({ studentName, studentId, juduls }: Props)
                                 {isExpanded && material.component_id && (
                                   <div className="rounded-xl border-2 border-[#C4BFFF] overflow-hidden bg-white">
                                     <iframe
-                                      src={`/ortu/materi/render/${material.component_id}`}
+                                      src={`/materi/render/${material.component_id}`}
                                       className="w-full"
                                       style={{ height: '100vh', minHeight: '600px' }}
                                       title={material.title}
