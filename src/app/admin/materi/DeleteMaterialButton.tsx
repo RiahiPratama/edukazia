@@ -21,6 +21,7 @@ export default function DeleteMaterialButton({ materialId, materialTitle, onDele
     setError(null)
 
     try {
+      // THIS IS THE KEY! Call DELETE API route
       const response = await fetch(`/api/admin/materials/${materialId}`, {
         method: 'DELETE',
       })
@@ -31,19 +32,22 @@ export default function DeleteMaterialButton({ materialId, materialTitle, onDele
         throw new Error(data.error || 'Failed to delete material')
       }
 
-      // Success
+      // Success!
+      console.log('Deletion successful:', data)
       setShowConfirm(false)
       
-      // Callback if provided
       if (onDeleteSuccess) {
         onDeleteSuccess()
       } else {
-        // Default: refresh page
         router.refresh()
       }
 
-      // Optional: Show success toast
-      alert(`Material "${materialTitle}" berhasil dihapus!${data.details.storage_file_deleted ? '\nFile di Storage juga terhapus.' : ''}`)
+      // Show success message
+      const storageMsg = data.details.storage_file_deleted 
+        ? '\nFile di Storage juga terhapus! ✅' 
+        : '\nFile di Storage tidak ditemukan.'
+      
+      alert(`✅ Material "${materialTitle}" berhasil dihapus!${storageMsg}`)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menghapus material')
@@ -70,7 +74,6 @@ export default function DeleteMaterialButton({ materialId, materialTitle, onDele
       {showConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-            {/* Header */}
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
                 <Trash2 size={24} className="text-red-600" />
@@ -85,7 +88,6 @@ export default function DeleteMaterialButton({ materialId, materialTitle, onDele
               </div>
             </div>
 
-            {/* Content */}
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-700">
                 <strong>Material:</strong> {materialTitle}
@@ -95,14 +97,12 @@ export default function DeleteMaterialButton({ materialId, materialTitle, onDele
               </p>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={() => {
