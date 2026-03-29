@@ -456,6 +456,7 @@ export async function PATCH(request: NextRequest) {
           .insert({
             judul_id: actualJudulId,
             unit_name: unitName,
+            order_number: 0,
           })
           .select()
           .single();
