@@ -21,20 +21,10 @@ export default async function MateriPage({ params }: PageProps) {
     notFound()
   }
 
-  // 2. Get active enrollments with course info
+  // 2. Get active enrollments
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select(`
-      id,
-      class_groups!inner(
-        course_id,
-        courses!inner(
-          id,
-          name,
-          color
-        )
-      )
-    `)
+    .select('id, class_group_id')
     .eq('student_id', student.id)
     .eq('status', 'active')
 
@@ -55,7 +45,7 @@ export default async function MateriPage({ params }: PageProps) {
     )
   }
 
-  // 3. Get enrolled levels for this student
+  // 3. Get enrolled levels
   const enrollmentIds = enrollments.map((e: any) => e.id)
   const { data: enrolledLevels } = await supabase
     .from('enrollment_levels')
@@ -81,15 +71,15 @@ export default async function MateriPage({ params }: PageProps) {
     )
   }
 
-  // 4. Get materials for enrolled levels
-  const { data: materials } = await supabase
+  // 4. Get juduls with nested materials
+  const { data: judulsData } = await supabase
     .from('juduls')
     .select(`
       id,
-      title,
+      name,
       description,
-      level_id,
       sort_order,
+      level_id,
       levels!inner(
         id,
         name,
@@ -98,43 +88,65 @@ export default async function MateriPage({ params }: PageProps) {
           name,
           color
         )
-      ),
-      materials(
-        id,
-        title,
-        description,
-        file_url,
-        file_type,
-        created_at
       )
     `)
     .in('level_id', levelIds)
+    .eq('is_active', true)
     .order('sort_order', { ascending: true })
 
-  // 5. Get progress for this student
-  const { data: progressData } = await supabase
-    .from('materi_progress')
-    .select('material_id, completed_at')
-    .eq('student_id', student.id)
+  // 5. Get materials for these juduls
+  const judulIds = (judulsData ?? []).map((j: any) => j.id)
+  
+  let materialsData: any[] = []
+  if (judulIds.length > 0) {
+    const { data } = await supabase
+      .from('materials')
+      .select('id, judul_id, title, lesson_name, category, gdrive_url, component_id, thumbnail_url, lesson_number')
+      .in('judul_id', judulIds)
+      .eq('is_published', true)
+      .order('lesson_number', { ascending: true })
+    
+    materialsData = data ?? []
+  }
+
+  // 6. Get student progress
+  const materialIds = materialsData.map((m: any) => m.id)
+  let progressData: any[] = []
+  
+  if (materialIds.length > 0) {
+    const { data } = await supabase
+      .from('materi_progress')
+      .select('material_id, completed_at')
+      .eq('student_id', student.id)
+      .in('material_id', materialIds)
+    
+    progressData = data ?? []
+  }
 
   const completedMaterialIds = new Set(
-    (progressData ?? []).map((p: any) => p.material_id)
+    progressData.map((p: any) => p.material_id)
   )
 
-  // 6. Transform data for client component
-  const materialsWithProgress = (materials ?? []).map((judul: any) => ({
-    ...judul,
-    materials: (judul.materials ?? []).map((mat: any) => ({
-      ...mat,
-      isCompleted: completedMaterialIds.has(mat.id),
-    })),
-  }))
+  // 7. Nest materials under juduls
+  const judulsWithMaterials = (judulsData ?? []).map((judul: any) => {
+    const judulMaterials = materialsData
+      .filter((m: any) => m.judul_id === judul.id)
+      .map((m: any) => ({
+        ...m,
+        isCompleted: completedMaterialIds.has(m.id),
+      }))
+
+    return {
+      ...judul,
+      materials: judulMaterials,
+    }
+  })
 
   return (
     <MateriContent
       studentName={student.relation_name}
       studentId={student.id}
-      materials={materialsWithProgress}
+      juduls={judulsWithMaterials}
     />
   )
 }

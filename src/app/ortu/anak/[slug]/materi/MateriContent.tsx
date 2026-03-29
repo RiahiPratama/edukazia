@@ -2,24 +2,26 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, FileText, CheckCircle, Circle, Download, ExternalLink } from 'lucide-react'
+import { BookOpen, CheckCircle, Circle, ExternalLink } from 'lucide-react'
 
 type Material = {
   id: string
   title: string
-  description: string | null
-  file_url: string | null
-  file_type: string | null
-  created_at: string
+  lesson_name: string | null
+  category: string | null
+  gdrive_url: string | null
+  component_id: string | null
+  thumbnail_url: string | null
+  lesson_number: number | null
   isCompleted: boolean
 }
 
 type Judul = {
   id: string
-  title: string
+  name: string
   description: string | null
-  level_id: string
   sort_order: number
+  level_id: string
   levels: {
     id: string
     name: string
@@ -35,14 +37,14 @@ type Judul = {
 type Props = {
   studentName: string
   studentId: string
-  materials: Judul[]
+  juduls: Judul[]
 }
 
-export default function MateriContent({ studentName, studentId, materials }: Props) {
+export default function MateriContent({ studentName, studentId, juduls }: Props) {
   const supabase = createClient()
   const [completedMaterials, setCompletedMaterials] = useState<Set<string>>(
     new Set(
-      materials.flatMap(j => j.materials.filter(m => m.isCompleted).map(m => m.id))
+      juduls.flatMap(j => j.materials.filter(m => m.isCompleted).map(m => m.id))
     )
   )
 
@@ -78,21 +80,11 @@ export default function MateriContent({ studentName, studentId, materials }: Pro
     }
   }
 
-  async function handleDownload(fileUrl: string, title: string) {
-    try {
-      const { data } = await supabase.functions.invoke('get-signed-url', {
-        body: { file_url: fileUrl }
-      })
-
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank')
-      }
-    } catch (error) {
-      console.error('Download error:', error)
-    }
+  function handleOpenLink(url: string) {
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  if (materials.length === 0) {
+  if (juduls.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-4xl mx-auto">
@@ -116,7 +108,7 @@ export default function MateriContent({ studentName, studentId, materials }: Pro
   }
 
   // Group by course
-  const groupedByCourse = materials.reduce((acc, judul) => {
+  const groupedByCourse = juduls.reduce((acc, judul) => {
     const courseName = judul.levels.courses.name
     if (!acc[courseName]) {
       acc[courseName] = {
@@ -137,7 +129,7 @@ export default function MateriContent({ studentName, studentId, materials }: Pro
         <p className="text-sm text-[#7B78A8] mb-6">{studentName}</p>
 
         <div className="space-y-6">
-          {Object.entries(groupedByCourse).map(([courseName, { color, juduls }]) => (
+          {Object.entries(groupedByCourse).map(([courseName, { color, juduls: courseJuduls }]) => (
             <div key={courseName}>
               {/* Course Header */}
               <div
@@ -157,7 +149,7 @@ export default function MateriContent({ studentName, studentId, materials }: Pro
 
               {/* Juduls */}
               <div className="space-y-4">
-                {juduls.map((judul) => {
+                {courseJuduls.map((judul) => {
                   const totalMaterials = judul.materials.length
                   const completedCount = judul.materials.filter(m =>
                     completedMaterials.has(m.id)
@@ -173,7 +165,7 @@ export default function MateriContent({ studentName, studentId, materials }: Pro
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-bold text-sm text-[#1A1640]">
-                              {judul.title}
+                              {judul.name}
                             </h3>
                             {judul.description && (
                               <p className="text-xs text-[#7B78A8] mt-0.5">
@@ -233,33 +225,33 @@ export default function MateriContent({ studentName, studentId, materials }: Pro
                                   >
                                     {material.title}
                                   </h4>
-                                  {material.description && (
+                                  {material.lesson_name && (
                                     <p
                                       className={`text-xs mt-0.5 ${
                                         isCompleted ? 'text-green-700' : 'text-[#7B78A8]'
                                       }`}
                                     >
-                                      {material.description}
+                                      {material.lesson_name}
                                     </p>
                                   )}
-                                  {material.file_type && (
-                                    <p className="text-[10px] text-[#7B78A8] mt-1">
-                                      {material.file_type.toUpperCase()}
-                                    </p>
+                                  {material.category && (
+                                    <span className="inline-block text-[10px] px-2 py-0.5 bg-[#E5E3FF] text-[#5C4FE5] rounded-full mt-1 font-semibold">
+                                      {material.category}
+                                    </span>
                                   )}
                                 </div>
 
-                                {material.file_url && (
+                                {material.gdrive_url && (
                                   <button
-                                    onClick={() => handleDownload(material.file_url!, material.title)}
+                                    onClick={() => handleOpenLink(material.gdrive_url!)}
                                     className={`flex-shrink-0 p-2 rounded-lg transition-colors ${
                                       isCompleted
                                         ? 'bg-green-100 hover:bg-green-200 text-green-700'
                                         : 'bg-[#F7F6FF] hover:bg-[#EEEDFE] text-[#5C4FE5]'
                                     }`}
-                                    title="Download"
+                                    title="Buka di Google Drive"
                                   >
-                                    <Download size={16} />
+                                    <ExternalLink size={16} />
                                   </button>
                                 )}
                               </div>
