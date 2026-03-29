@@ -430,7 +430,6 @@ export async function PATCH(request: NextRequest) {
             level_id: levelId,
             name: judulName,
             is_active: true,
-            sort_order: 0,
           })
           .select()
           .single();
@@ -457,7 +456,6 @@ export async function PATCH(request: NextRequest) {
           .insert({
             judul_id: actualJudulId,
             unit_name: unitName,
-            sort_order: 0,
           })
           .select()
           .single();
@@ -483,7 +481,6 @@ export async function PATCH(request: NextRequest) {
           .insert({
             unit_id: actualUnitId,
             lesson_name: lessonName,
-            sort_order: 0,
           })
           .select()
           .single();
