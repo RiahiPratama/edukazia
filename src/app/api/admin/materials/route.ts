@@ -482,6 +482,7 @@ export async function PATCH(request: NextRequest) {
           .insert({
             unit_id: actualUnitId,
             lesson_name: lessonName,
+            lesson_number: 0,
           })
           .select()
           .single();
