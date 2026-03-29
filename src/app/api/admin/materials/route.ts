@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse content data
-    let contentData = {};
+    let contentData: any = {};
     if (contentDataStr) {
       try {
         contentData = JSON.parse(contentDataStr);
@@ -260,8 +260,8 @@ export async function POST(request: NextRequest) {
       if (file && (category === 'bacaan' || category === 'cefr')) {
         const bucket = category === 'bacaan' ? 'components' : 'audio';
         const filePath = category === 'bacaan' 
-          ? contentData.jsx_file_path 
-          : contentData.audio_url;
+          ? (contentData as any).jsx_file_path 
+          : (contentData as any).audio_url;
         
         if (filePath) {
           await supabase.storage.from(bucket).remove([filePath]);
