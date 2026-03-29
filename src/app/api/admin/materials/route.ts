@@ -2,11 +2,293 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
-// POST - CREATE NEW MATERIAL
+// POST - CREATE NEW MATERIAL (ALL 4 CATEGORIES)
 // ============================================================
 export async function POST(request: NextRequest) {
-  // ... KEEP ALL YOUR EXISTING POST CODE HERE ...
-  // (Don't delete your existing POST function!)
+  try {
+    const supabase = await createClient();
+
+    // Authentication check
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
+    }
+
+    // Parse form data
+    const formData = await request.formData();
+    
+    const title = formData.get('title') as string;
+    const type = formData.get('type') as string;
+    const category = formData.get('category') as string;
+    const courseId = formData.get('course_id') as string;
+    const levelId = formData.get('level_id') as string;
+    const judulId = formData.get('judul_id') as string;
+    const judulName = formData.get('judul_name') as string;
+    const unitId = formData.get('unit_id') as string;
+    const unitName = formData.get('unit_name') as string;
+    const lessonId = formData.get('lesson_id') as string;
+    const lessonName = formData.get('lesson_name') as string;
+    const orderNumber = parseInt(formData.get('order_number') as string) || 1;
+    const isPublished = formData.get('is_published') === 'true';
+    const contentDataStr = formData.get('content_data') as string;
+    const file = formData.get('file') as File | null;
+
+    console.log('📦 Creating material:', { title, type, category, levelId });
+
+    // Validate required fields
+    if (!title || !category || !levelId) {
+      return NextResponse.json({ 
+        error: 'Missing required fields',
+        details: 'title, category, and level_id are required' 
+      }, { status: 400 });
+    }
+
+    // Parse content data
+    let contentData = {};
+    if (contentDataStr) {
+      try {
+        contentData = JSON.parse(contentDataStr);
+      } catch (e) {
+        return NextResponse.json({ 
+          error: 'Invalid content_data JSON' 
+        }, { status: 400 });
+      }
+    }
+
+    // ============================================================
+    // STEP 1: CREATE HIERARCHY (judul → unit → lesson)
+    // ============================================================
+    
+    // 1. Create or get Judul
+    let actualJudulId = judulId;
+    if (judulId === 'NEW' && judulName) {
+      console.log('🆕 Creating new Judul:', judulName);
+      
+      const { data: newJudul, error: judulError } = await supabase
+        .from('juduls')
+        .insert({
+          level_id: levelId,
+          name: judulName,
+          is_active: true,
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (judulError) {
+        console.error('Judul creation error:', judulError);
+        return NextResponse.json({ 
+          error: 'Failed to create judul',
+          details: judulError.message 
+        }, { status: 500 });
+      }
+      
+      actualJudulId = newJudul.id;
+      console.log('✅ Judul created:', actualJudulId);
+    }
+
+    if (!actualJudulId) {
+      return NextResponse.json({ 
+        error: 'Judul ID required' 
+      }, { status: 400 });
+    }
+
+    // 2. Create or get Unit
+    let actualUnitId = unitId;
+    if (unitId === 'NEW' && unitName) {
+      console.log('🆕 Creating new Unit:', unitName);
+      
+      const { data: newUnit, error: unitError } = await supabase
+        .from('units')
+        .insert({
+          judul_id: actualJudulId,
+          unit_name: unitName,
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (unitError) {
+        console.error('Unit creation error:', unitError);
+        return NextResponse.json({ 
+          error: 'Failed to create unit',
+          details: unitError.message 
+        }, { status: 500 });
+      }
+      
+      actualUnitId = newUnit.id;
+      console.log('✅ Unit created:', actualUnitId);
+    }
+
+    if (!actualUnitId) {
+      return NextResponse.json({ 
+        error: 'Unit ID required' 
+      }, { status: 400 });
+    }
+
+    // 3. Create or get Lesson
+    let actualLessonId = lessonId;
+    if (lessonId === 'NEW' && lessonName) {
+      console.log('🆕 Creating new Lesson:', lessonName);
+      
+      const { data: newLesson, error: lessonError } = await supabase
+        .from('lessons')
+        .insert({
+          unit_id: actualUnitId,
+          lesson_name: lessonName,
+          sort_order: 0,
+        })
+        .select()
+        .single();
+      
+      if (lessonError) {
+        console.error('Lesson creation error:', lessonError);
+        return NextResponse.json({ 
+          error: 'Failed to create lesson',
+          details: lessonError.message 
+        }, { status: 500 });
+      }
+      
+      actualLessonId = newLesson.id;
+      console.log('✅ Lesson created:', actualLessonId);
+    }
+
+    if (!actualLessonId) {
+      return NextResponse.json({ 
+        error: 'Lesson ID required' 
+      }, { status: 400 });
+    }
+
+    // ============================================================
+    // STEP 2: HANDLE FILE UPLOAD (for bacaan and cefr categories)
+    // ============================================================
+    
+    let componentId = null;
+
+    if (file && (category === 'bacaan' || category === 'cefr')) {
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(7);
+      
+      const originalName = file.name;
+      const sanitizedName = originalName
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(/_+/g, '_')
+        .toLowerCase();
+      
+      const ext = sanitizedName.split('.').pop();
+      const baseName = sanitizedName.replace(`.${ext}`, '');
+      const fileName = `${timestamp}-${random}`;
+
+      let bucket = '';
+      let filePath = '';
+
+      if (category === 'bacaan') {
+        // JSX components
+        bucket = 'components';
+        filePath = `bacaan/${fileName}`;
+        componentId = `${bucket}/${filePath}`;
+      } else if (category === 'cefr') {
+        // Audio files
+        bucket = 'audio';
+        filePath = `cefr/${fileName}.${ext}`;
+      }
+
+      console.log('📤 Uploading file to:', { bucket, filePath });
+
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return NextResponse.json({ 
+          error: 'Failed to upload file',
+          details: uploadError.message 
+        }, { status: 500 });
+      }
+
+      console.log('✅ File uploaded successfully');
+
+      // Add file path to content data
+      if (category === 'bacaan') {
+        contentData = {
+          ...contentData,
+          jsx_file_path: filePath,
+        };
+      } else if (category === 'cefr') {
+        contentData = {
+          ...contentData,
+          audio_url: filePath,
+        };
+      }
+    }
+
+    // ============================================================
+    // STEP 3: CREATE MATERIAL RECORD
+    // ============================================================
+    
+    const { data: newMaterial, error: materialError } = await supabase
+      .from('materials')
+      .insert({
+        title,
+        type: type || category,
+        category,
+        lesson_id: actualLessonId,
+        order_number: orderNumber,
+        is_published: isPublished,
+        content_data: contentData,
+        component_id: componentId,
+      })
+      .select()
+      .single();
+
+    if (materialError) {
+      console.error('Material creation error:', materialError);
+      
+      // If material creation fails, clean up uploaded file
+      if (file && (category === 'bacaan' || category === 'cefr')) {
+        const bucket = category === 'bacaan' ? 'components' : 'audio';
+        const filePath = category === 'bacaan' 
+          ? contentData.jsx_file_path 
+          : contentData.audio_url;
+        
+        if (filePath) {
+          await supabase.storage.from(bucket).remove([filePath]);
+          console.log('🗑️ Cleaned up uploaded file after error');
+        }
+      }
+      
+      return NextResponse.json({ 
+        error: 'Failed to create material',
+        details: materialError.message 
+      }, { status: 500 });
+    }
+
+    console.log('✅ Material created:', newMaterial.id);
+
+    return NextResponse.json({ 
+      success: true,
+      material: newMaterial 
+    });
+
+  } catch (error) {
+    console.error('POST error:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
 }
 
 // ============================================================
