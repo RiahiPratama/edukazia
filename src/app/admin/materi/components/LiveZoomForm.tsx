@@ -26,7 +26,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [selectedLevels, setSelectedLevels] = useState<string[]>([]); // CHANGED: Array of level IDs
+  const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
   const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
@@ -59,6 +59,16 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
     }
   }, [editData]);
 
+  // FIX: Auto-fetch juduls when levels are selected
+  useEffect(() => {
+    if (selectedLevels.length > 0) {
+      fetchJudulsForSelectedLevels();
+    } else {
+      setJuduls([]);
+      setSelectedJudul('');
+    }
+  }, [selectedLevels]);
+
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').eq('is_active', true);
     setCourses(data || []);
@@ -69,8 +79,14 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
     setLevels(data || []);
   };
 
-  const fetchJuduls = async (levelId: string) => {
-    const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId);
+  // FIX: Fetch juduls for ALL selected levels
+  const fetchJudulsForSelectedLevels = async () => {
+    if (selectedLevels.length === 0) return;
+
+    const { data } = await supabase
+      .from('juduls')
+      .select('*')
+      .in('level_id', selectedLevels);
     
     // Deduplicate by name
     const uniqueJuduls = data?.reduce((acc: any[], curr) => {
@@ -93,7 +109,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
     setLessons(data || []);
   };
 
-  // Toggle level selection
   const toggleLevel = (levelId: string) => {
     setSelectedLevels(prev => {
       if (prev.includes(levelId)) {
@@ -104,12 +119,10 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
     });
   };
 
-  // Select all levels
   const selectAllLevels = () => {
     setSelectedLevels(levels.map(l => l.id));
   };
 
-  // Clear all levels
   const clearAllLevels = () => {
     setSelectedLevels([]);
   };
@@ -159,7 +172,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             formData.append('type', 'live_zoom');
             formData.append('category', 'live_zoom');
             formData.append('course_id', selectedCourse);
-            formData.append('level_id', levelId); // Create for THIS level
+            formData.append('level_id', levelId);
             formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
             formData.append('judul_name', newJudulName);
             formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
@@ -180,21 +193,37 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             if (!response.ok) {
               const levelName = levels.find(l => l.id === levelId)?.name || levelId;
               failedLevels.push(levelName);
+              console.error(`Failed for level ${levelName}:`, result);
             } else {
               successCount++;
             }
           } catch (error) {
             const levelName = levels.find(l => l.id === levelId)?.name || levelId;
             failedLevels.push(levelName);
+            console.error(`Error for level ${levelName}:`, error);
           }
         }
 
         if (successCount === selectedLevels.length) {
           alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
-          onSave();
+          // FIX: Don't call onSave() to keep checkbox state
+          // Instead, just reset non-level fields
+          setNewJudulName('');
+          setNewUnitName('');
+          setNewLessonName('');
+          setPlatform('canva');
+          setUrl('');
+          setOrderNumber(1);
+          // Keep selectedLevels and isPublished as is!
         } else if (successCount > 0) {
           alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal untuk: ${failedLevels.join(', ')}`);
-          onSave();
+          // Partial success - reset non-level fields
+          setNewJudulName('');
+          setNewUnitName('');
+          setNewLessonName('');
+          setPlatform('canva');
+          setUrl('');
+          setOrderNumber(1);
         } else {
           alert(`❌ Gagal membuat material untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
         }
@@ -213,7 +242,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
         <>
           {/* Course Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-900 mb-2">
               Mata Pelajaran *
             </label>
             <select
@@ -221,10 +250,10 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
               onChange={(e) => {
                 setSelectedCourse(e.target.value);
                 fetchLevels(e.target.value);
-                setSelectedLevels([]); // Clear selected levels when course changes
+                setSelectedLevels([]);
               }}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+              className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
             >
               <option value="">Pilih Mata Pelajaran</option>
               {courses.map((c) => (
@@ -235,7 +264,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
 
           {/* Multi-Level Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-900 mb-2">
               Level * (Pilih 1 atau lebih)
             </label>
             
@@ -244,40 +273,40 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                 <button
                   type="button"
                   onClick={selectAllLevels}
-                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-900 rounded hover:bg-gray-200 font-medium"
                 >
                   Pilih Semua
                 </button>
                 <button
                   type="button"
                   onClick={clearAllLevels}
-                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-900 rounded hover:bg-gray-200 font-medium"
                 >
                   Hapus Semua
                 </button>
-                <span className="text-xs text-gray-600 self-center ml-auto">
+                <span className="text-xs text-gray-700 self-center ml-auto font-medium">
                   {selectedLevels.length} level dipilih
                 </span>
               </div>
             )}
 
             {!selectedCourse ? (
-              <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600">
+              <div className="p-4 bg-gray-100 border border-gray-400 rounded-lg text-sm text-gray-700 font-medium">
                 Pilih Mata Pelajaran dulu
               </div>
             ) : levels.length === 0 ? (
-              <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600">
+              <div className="p-4 bg-gray-100 border border-gray-400 rounded-lg text-sm text-gray-700 font-medium">
                 Tidak ada level tersedia
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 p-4 border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2 p-4 border border-gray-400 rounded-lg max-h-60 overflow-y-auto bg-white">
                 {levels.map((level) => (
                   <label
                     key={level.id}
                     className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
                       selectedLevels.includes(level.id)
                         ? 'bg-[#5C4FE5] text-white'
-                        : 'bg-gray-50 text-gray-900 hover:bg-gray-100'
+                        : 'bg-gray-50 text-gray-900 hover:bg-gray-100 border border-gray-300'
                     }`}
                   >
                     <input
@@ -289,7 +318,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                     <div className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${
                       selectedLevels.includes(level.id)
                         ? 'border-white bg-white'
-                        : 'border-gray-300'
+                        : 'border-gray-400 bg-white'
                     }`}>
                       {selectedLevels.includes(level.id) && (
                         <Check size={14} className="text-[#5C4FE5]" />
@@ -302,16 +331,16 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             )}
 
             {selectedLevels.length > 0 && (
-              <p className="mt-2 text-xs text-gray-600">
+              <p className="mt-2 text-xs text-gray-700 font-medium">
                 Material akan dibuat untuk {selectedLevels.length} level yang dipilih
               </p>
             )}
           </div>
 
-          {/* Judul - Only show when at least 1 level selected */}
+          {/* Judul */}
           {selectedLevels.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-900 mb-2">
                 Judul *
               </label>
               <select
@@ -323,7 +352,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   }
                 }}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+                className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
               >
                 <option value="">Pilih Judul</option>
                 <option value="NEW">+ Buat Judul Baru</option>
@@ -338,7 +367,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   onChange={(e) => setNewJudulName(e.target.value)}
                   placeholder="Nama Judul Baru"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 placeholder-gray-500"
                 />
               )}
             </div>
@@ -347,7 +376,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           {/* Unit */}
           {selectedJudul && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-900 mb-2">
                 Unit *
               </label>
               <select
@@ -359,7 +388,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   }
                 }}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+                className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
               >
                 <option value="">Pilih Unit</option>
                 <option value="NEW">+ Buat Unit Baru</option>
@@ -374,7 +403,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   onChange={(e) => setNewUnitName(e.target.value)}
                   placeholder="Nama Unit Baru"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 placeholder-gray-500"
                 />
               )}
             </div>
@@ -383,14 +412,14 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           {/* Lesson */}
           {selectedUnit && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-900 mb-2">
                 Lesson (Nama Materi) *
               </label>
               <select
                 value={selectedLesson}
                 onChange={(e) => setSelectedLesson(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+                className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
               >
                 <option value="">Pilih Lesson</option>
                 <option value="NEW">+ Buat Lesson Baru</option>
@@ -405,7 +434,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   onChange={(e) => setNewLessonName(e.target.value)}
                   placeholder="Nama Lesson Baru (akan menjadi judul materi)"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 placeholder-gray-500"
                 />
               )}
             </div>
@@ -423,14 +452,14 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-900 mb-2">
           Platform *
         </label>
         <select
           value={platform}
           onChange={(e) => setPlatform(e.target.value)}
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
         >
           <option value="canva">Canva</option>
           <option value="zoom">Zoom</option>
@@ -439,7 +468,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-900 mb-2">
           URL Link *
         </label>
         <input
@@ -448,12 +477,12 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://..."
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-500"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-900 mb-2">
           Order Number *
         </label>
         <input
@@ -462,7 +491,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           onChange={(e) => setOrderNumber(parseInt(e.target.value))}
           min="1"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
         />
       </div>
 
@@ -472,9 +501,9 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           id="isPublished"
           checked={isPublished}
           onChange={(e) => setIsPublished(e.target.checked)}
-          className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]"
+          className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] border-gray-400"
         />
-        <label htmlFor="isPublished" className="text-sm font-medium text-gray-700">
+        <label htmlFor="isPublished" className="text-sm font-medium text-gray-900">
           Publish (siswa bisa lihat)
         </label>
       </div>
@@ -483,14 +512,14 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          className="flex-1 px-4 py-2 border border-gray-400 text-gray-900 rounded-lg hover:bg-gray-50 font-medium"
         >
           Batal
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50"
+          className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-medium"
         >
           {loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
         </button>
