@@ -8,7 +8,7 @@ type PageProps = {
 
 export default async function RenderComponentPage({ params }: PageProps) {
   const { path } = await params
-  const componentPath = path.join('/')
+  const componentPath = path.join('/') + '.jsx'
   
   const supabase = await createClient()
 
