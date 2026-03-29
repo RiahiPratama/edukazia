@@ -1,64 +1,73 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
-import * as LucideIcons from 'lucide-react'
+import { useEffect, useRef } from 'react'
 
 type Props = {
   jsxContent: string
 }
 
 export default function ComponentRenderer({ jsxContent }: Props) {
-  // Parse JSX and extract component
-  const Component = useMemo(() => {
-    try {
-      // Remove import statements (we'll provide dependencies globally)
-      let code = jsxContent
-        .replace(/import\s+.*?from\s+['"]react['"];?/g, '')
-        .replace(/import\s+.*?from\s+['"]lucide-react['"];?/g, '')
-        .replace(/export\s+default\s+/g, 'return ')
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
-      // Wrap in function that has access to React and icons
-      const componentFactory = new Function(
-        'React',
-        'useState',
-        'BookOpen',
-        'ChevronDown',
-        'ChevronUp',
-        'Globe',
-        'AlertTriangle',
-        code
-      )
+  useEffect(() => {
+    if (!iframeRef.current) return
 
-      // Execute with dependencies
-      return componentFactory(
-        React,
-        useState,
-        LucideIcons.BookOpen,
-        LucideIcons.ChevronDown,
-        LucideIcons.ChevronUp,
-        LucideIcons.Globe,
-        LucideIcons.AlertTriangle
-      )
-    } catch (error) {
-      console.error('Component render error:', error)
-      return null
+    // Extract component name from export default
+    const componentNameMatch = jsxContent.match(/export\s+default\s+(\w+)/)
+    const componentName = componentNameMatch ? componentNameMatch[1] : 'Component'
+
+    // Remove import and export statements, replace Lucide imports with emoji/SVG placeholders
+    const cleanedJsx = jsxContent
+      .replace(/import\s+.*?from\s+['"][^'"]+['"];?\n?/g, '')
+      .replace(/export\s+default\s+\w+;?\n?/g, '')
+      // Replace Lucide icon components with simple div placeholders
+      .replace(/<BookOpen\s*([^>]*)\s*\/>/g, '<span className="inline-block">📖</span>')
+      .replace(/<ChevronDown\s*([^>]*)\s*\/>/g, '<span className="inline-block">▼</span>')
+      .replace(/<ChevronUp\s*([^>]*)\s*\/>/g, '<span className="inline-block">▲</span>')
+      .replace(/<Globe\s*([^>]*)\s*\/>/g, '<span className="inline-block">🌐</span>')
+      .replace(/<AlertTriangle\s*([^>]*)\s*\/>/g, '<span className="inline-block">⚠️</span>')
+
+    // Create HTML document with React
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+    
+    ${cleanedJsx}
+    
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<${componentName} />);
+  </script>
+</body>
+</html>
+    `
+
+    // Write HTML to iframe
+    const iframeDoc = iframeRef.current.contentDocument
+    if (iframeDoc) {
+      iframeDoc.open()
+      iframeDoc.write(htmlContent)
+      iframeDoc.close()
     }
   }, [jsxContent])
 
-  if (!Component) {
-    return (
-      <div className="min-h-screen bg-red-50 p-8 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-lg p-6 max-w-md">
-          <h2 className="text-xl font-bold text-red-600 mb-2">
-            Gagal Memuat Komponen
-          </h2>
-          <p className="text-sm text-gray-600">
-            Terjadi kesalahan saat memuat materi pembelajaran.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  return <Component />
+  return (
+    <iframe
+      ref={iframeRef}
+      className="w-full h-screen border-0"
+      title="Component"
+      sandbox="allow-scripts allow-same-origin"
+    />
+  )
 }
