@@ -204,16 +204,16 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                           {String(idx + 1).padStart(2, '0')}
                         </div>
                         <div className="flex-1 min-w-0 text-left">
-                          <h3 className="font-bold text-[#1A1640] dark:text-[#E6B800] group-hover:dark:text-[#7A6FFF] text-base mb-1 truncate transition-colors">{judul.name}</h3>
+                          <h3 className="font-bold text-[#1A1640] dark:text-[#7A6FFF] dark:group-hover:text-[#E6B800] text-base mb-1 truncate transition-colors">{judul.name}</h3>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5">
-                              <div className="w-full max-w-[120px] h-1.5 bg-[#F7F6FF] rounded-full overflow-hidden">
+                              <div className="w-full max-w-[120px] h-1.5 bg-[#F7F6FF] dark:bg-[#2A2640] rounded-full overflow-hidden">
                                 <div 
                                   className="h-full bg-gradient-to-r from-[#27A05A] to-[#34C76D] rounded-full transition-all"
                                   style={{ width: `${(completedCount / totalCount) * 100}%` }}
                                 ></div>
                               </div>
-                              <span className="text-xs font-semibold text-[#7B78A8]">
+                              <span className="text-xs font-semibold text-[#7B78A8] dark:text-[#7A6FFF] dark:group-hover:text-[#E6B800] transition-colors">
                                 {completedCount}/{totalCount}
                               </span>
                             </div>
@@ -265,7 +265,7 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                                 <p className={`font-semibold truncate transition-colors ${
                                   material.completed 
                                     ? 'text-[#1A5C36] dark:text-[#34C76D]' 
-                                    : 'text-[#E6B800] dark:text-[#E6B800] group-hover:text-[#5C4FE5] dark:group-hover:text-[#7A6FFF]'
+                                    : 'text-[#5C4FE5] dark:text-[#E6B800] group-hover:text-[#E6B800] dark:group-hover:text-[#7A6FFF]'
                                 }`}>
                                   {material.title}
                                 </p>
