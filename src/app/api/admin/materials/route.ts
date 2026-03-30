@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
+// HELPER: Map category to content_type
+// ============================================================
+function getContentType(category: string): string {
+  const mapping: Record<string, string> = {
+    'live_zoom': 'url',
+    'bacaan': 'component',
+    'kosakata': 'url',
+    'cefr': 'audio'
+  };
+  return mapping[category] || 'url';
+}
+
+// ============================================================
 // POST - CREATE NEW MATERIAL (v4.1 COMPATIBLE)
 // ============================================================
 export async function POST(request: NextRequest) {
@@ -200,7 +213,7 @@ export async function POST(request: NextRequest) {
     const contentRecord: any = {
       material_id: material.id,
       content_data: contentData,
-      content_type: category,
+      content_type: getContentType(category),
     };
 
     if (filePath) {
