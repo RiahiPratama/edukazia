@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Check } from 'lucide-react';
+import { Check, AlertCircle } from 'lucide-react';
 
 type Material = {
   id: string;
@@ -10,6 +10,8 @@ type Material = {
   content_data: any;
   order_number: number;
   is_published: boolean;
+  unit_id: string;
+  lesson_id: string;
 };
 
 type LiveZoomFormProps = {
@@ -40,7 +42,15 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
   const [orderNumber, setOrderNumber] = useState(1);
   const [isPublished, setIsPublished] = useState(false);
 
+  // NEW: Edit mode - Unit & Lesson fields
+  const [editUnitName, setEditUnitName] = useState('');
+  const [editUnitPosition, setEditUnitPosition] = useState(1);
+  const [editLessonName, setEditLessonName] = useState('');
+  const [editLessonPosition, setEditLessonPosition] = useState(1);
+  const [editMaterialTitle, setEditMaterialTitle] = useState('');
+
   const [loading, setLoading] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState(false);
 
   const supabase = createClient();
 
@@ -52,12 +62,53 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
 
   useEffect(() => {
     if (editData) {
+      // Pre-fill material fields
       setPlatform(editData.content_data?.platform || 'canva');
       setUrl(editData.content_data?.url || '');
       setOrderNumber(editData.order_number || 1);
       setIsPublished(editData.is_published || false);
+      setEditMaterialTitle(editData.title || '');
+
+      // Fetch unit & lesson data
+      fetchEditModeData();
     }
   }, [editData]);
+
+  // NEW: Fetch unit & lesson data for edit mode
+  const fetchEditModeData = async () => {
+    if (!editData) return;
+
+    setLoadingEditData(true);
+    try {
+      // Fetch unit data
+      const { data: unitData } = await supabase
+        .from('units')
+        .select('unit_name, position')
+        .eq('id', editData.unit_id)
+        .single();
+
+      if (unitData) {
+        setEditUnitName(unitData.unit_name);
+        setEditUnitPosition(unitData.position || 1);
+      }
+
+      // Fetch lesson data
+      const { data: lessonData } = await supabase
+        .from('lessons')
+        .select('lesson_name, position')
+        .eq('id', editData.lesson_id)
+        .single();
+
+      if (lessonData) {
+        setEditLessonName(lessonData.lesson_name);
+        setEditLessonPosition(lessonData.position || 1);
+      }
+    } catch (error) {
+      console.error('Error fetching edit data:', error);
+    } finally {
+      setLoadingEditData(false);
+    }
+  };
 
   // FIX: Auto-fetch juduls when levels are selected
   useEffect(() => {
@@ -133,13 +184,21 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
 
     try {
       if (isEditing) {
-        // EDIT mode - single update
+        // EDIT mode - single update with unit/lesson changes
         const formData = new FormData();
         formData.append('material_id', editData.id);
-        formData.append('title', newLessonName || selectedLesson);
+        formData.append('title', editMaterialTitle);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
         formData.append('content_data', JSON.stringify({ platform, url }));
+
+        // NEW: Add unit & lesson edit data
+        formData.append('unit_id', editData.unit_id);
+        formData.append('lesson_id', editData.lesson_id);
+        formData.append('unit_name', editUnitName);
+        formData.append('unit_position', editUnitPosition.toString());
+        formData.append('lesson_name', editLessonName);
+        formData.append('lesson_position', editLessonPosition.toString());
 
         const response = await fetch('/api/admin/materials', {
           method: 'PATCH',
@@ -236,8 +295,18 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
     }
   };
 
+  if (loadingEditData) {
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin w-8 h-8 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div>
+        <p className="text-gray-600 mt-4">Memuat data...</p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Only show hierarchy fields when creating (not editing) */}
       {!isEditing && (
         <>
           {/* Course Selection */}
@@ -250,7 +319,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
               onChange={(e) => {
                 setSelectedCourse(e.target.value);
                 fetchLevels(e.target.value);
-                setSelectedLevels([]);
               }}
               required
               className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
@@ -268,42 +336,37 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
               Level * (Pilih 1 atau lebih)
             </label>
             
-            {levels.length > 0 && (
-              <div className="flex gap-2 mb-3">
-                <button
-                  type="button"
-                  onClick={selectAllLevels}
-                  className="px-3 py-1 text-xs bg-gray-100 text-gray-900 rounded hover:bg-gray-200 font-medium"
-                >
-                  Pilih Semua
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAllLevels}
-                  className="px-3 py-1 text-xs bg-gray-100 text-gray-900 rounded hover:bg-gray-200 font-medium"
-                >
-                  Hapus Semua
-                </button>
-                <span className="text-xs text-gray-700 self-center ml-auto font-medium">
-                  {selectedLevels.length} level dipilih
-                </span>
-              </div>
-            )}
-
             {!selectedCourse ? (
-              <div className="p-4 bg-gray-100 border border-gray-400 rounded-lg text-sm text-gray-700 font-medium">
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">
                 Pilih Mata Pelajaran dulu
               </div>
             ) : levels.length === 0 ? (
-              <div className="p-4 bg-gray-100 border border-gray-400 rounded-lg text-sm text-gray-700 font-medium">
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">
                 Tidak ada level tersedia
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 p-4 border border-gray-400 rounded-lg max-h-60 overflow-y-auto bg-white">
+              <div className="space-y-3">
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={selectAllLevels}
+                    className="px-3 py-1 text-xs bg-[#5C4FE5] text-white rounded hover:bg-[#4a3ec7] transition-colors"
+                  >
+                    Pilih Semua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAllLevels}
+                    className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+
                 {levels.map((level) => (
                   <label
                     key={level.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
                       selectedLevels.includes(level.id)
                         ? 'bg-[#5C4FE5] text-white'
                         : 'bg-gray-50 text-gray-900 hover:bg-gray-100 border border-gray-300'
@@ -442,73 +505,174 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
         </>
       )}
 
-      {/* Material Content Fields */}
+      {/* ========== EDIT MODE: Unit & Lesson Settings ========== */}
       {isEditing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <p className="text-sm text-blue-800">
-            <strong>Editing:</strong> {editData.title}
-          </p>
-        </div>
+        <>
+          {/* Warning Banner */}
+          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+            <div className="flex gap-3">
+              <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
+              <div className="text-sm text-yellow-800">
+                <p className="font-semibold mb-1">⚠️ Perhatian:</p>
+                <p>Mengubah nama Unit/Lesson akan mempengaruhi <strong>SEMUA materials</strong> yang menggunakan Unit/Lesson ini.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Material Title */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              Material Title *
+            </label>
+            <input
+              type="text"
+              value={editMaterialTitle}
+              onChange={(e) => setEditMaterialTitle(e.target.value)}
+              placeholder="Judul material"
+              required
+              className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+            />
+          </div>
+
+          {/* Unit Settings */}
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              📦 Unit Settings
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Unit Name *
+                </label>
+                <input
+                  type="text"
+                  value={editUnitName}
+                  onChange={(e) => setEditUnitName(e.target.value)}
+                  placeholder="Nama unit"
+                  required
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Unit Position *
+                </label>
+                <input
+                  type="number"
+                  value={editUnitPosition}
+                  onChange={(e) => setEditUnitPosition(parseInt(e.target.value))}
+                  min="0"
+                  required
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Lesson Settings */}
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              📚 Lesson Settings
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Lesson Name *
+                </label>
+                <input
+                  type="text"
+                  value={editLessonName}
+                  onChange={(e) => setEditLessonName(e.target.value)}
+                  placeholder="Nama lesson"
+                  required
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Lesson Position *
+                </label>
+                <input
+                  type="number"
+                  value={editLessonPosition}
+                  onChange={(e) => setEditLessonPosition(parseInt(e.target.value))}
+                  min="0"
+                  required
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Platform *
-        </label>
-        <select
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
-          required
-          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-        >
-          <option value="canva">Canva</option>
-          <option value="zoom">Zoom</option>
-          <option value="google_meet">Google Meet</option>
-        </select>
+      {/* ========== Material Content Fields ========== */}
+      <div className={isEditing ? 'border-t-2 border-gray-200 pt-6' : ''}>
+        {isEditing && (
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            📄 Material Content
+          </h3>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Platform *
+          </label>
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+          >
+            <option value="canva">Canva</option>
+            <option value="zoom">Zoom</option>
+            <option value="google_meet">Google Meet</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            URL Link *
+          </label>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://..."
+            required
+            className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Order Number *
+          </label>
+          <input
+            type="number"
+            value={orderNumber}
+            onChange={(e) => setOrderNumber(parseInt(e.target.value))}
+            min="1"
+            required
+            className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="isPublished"
+            checked={isPublished}
+            onChange={(e) => setIsPublished(e.target.checked)}
+            className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] border-gray-400"
+          />
+          <label htmlFor="isPublished" className="text-sm font-medium text-gray-900">
+            Publish (siswa bisa lihat)
+          </label>
+        </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          URL Link *
-        </label>
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://..."
-          required
-          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Order Number *
-        </label>
-        <input
-          type="number"
-          value={orderNumber}
-          onChange={(e) => setOrderNumber(parseInt(e.target.value))}
-          min="1"
-          required
-          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-        />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="isPublished"
-          checked={isPublished}
-          onChange={(e) => setIsPublished(e.target.checked)}
-          className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] border-gray-400"
-        />
-        <label htmlFor="isPublished" className="text-sm font-medium text-gray-900">
-          Publish (siswa bisa lihat)
-        </label>
-      </div>
-
-      <div className="flex gap-3 pt-4">
+      <div className="flex gap-3 pt-4 border-t-2 border-gray-200">
         <button
           type="button"
           onClick={onCancel}

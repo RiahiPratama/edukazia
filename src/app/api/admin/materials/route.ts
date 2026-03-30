@@ -1,267 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-
-// ============================================================
-// POST - CREATE NEW MATERIAL (v4.1 COMPATIBLE)
-// ============================================================
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-
-    // Authentication check
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
-    }
-
-    // Parse form data
-    const formData = await request.formData();
-
-    const title = formData.get('title') as string;
-    const category = formData.get('category') as string;
-    const levelId = formData.get('level_id') as string;
-    const unitId = formData.get('unit_id') as string;
-    const unitName = formData.get('unit_name') as string;
-    const lessonId = formData.get('lesson_id') as string;
-    const lessonName = formData.get('lesson_name') as string;
-    const position = parseInt(formData.get('order_number') as string) || 1;
-    const isPublished = formData.get('is_published') === 'true';
-    const contentDataStr = formData.get('content_data') as string;
-    const file = formData.get('file') as File | null;
-
-    console.log('📦 Creating material v4.1:', { title, category, levelId });
-
-    // Validate required fields
-    if (!title || !category || !levelId) {
-      return NextResponse.json({
-        error: 'Missing required fields',
-        details: 'title, category, and level_id are required'
-      }, { status: 400 });
-    }
-
-    // Parse content data
-    let contentData: any = {};
-    if (contentDataStr) {
-      try {
-        contentData = JSON.parse(contentDataStr);
-      } catch (e) {
-        return NextResponse.json({
-          error: 'Invalid content_data JSON'
-        }, { status: 400 });
-      }
-    }
-
-    // ============================================================
-    // STEP 1: CREATE HIERARCHY (unit → lesson)
-    // ============================================================
-
-    // 1. Create or get Unit
-    let actualUnitId = unitId;
-    if (unitId === 'NEW' && unitName) {
-      console.log('🆕 Creating new Unit:', unitName);
-
-      const { data: newUnit, error: unitError } = await supabase
-        .from('units')
-        .insert({
-          level_id: levelId,
-          unit_name: unitName,
-          unit_number: 0,
-          position: 0,
-        })
-        .select()
-        .single();
-
-      if (unitError) {
-        console.error('Unit creation error:', unitError);
-        return NextResponse.json({
-          error: 'Failed to create unit',
-          details: unitError.message
-        }, { status: 500 });
-      }
-
-      actualUnitId = newUnit.id;
-      console.log('✅ Unit created:', actualUnitId);
-    }
-
-    if (!actualUnitId) {
-      return NextResponse.json({
-        error: 'Unit ID required'
-      }, { status: 400 });
-    }
-
-    // 2. Create or get Lesson
-    let actualLessonId = lessonId;
-    if (lessonId === 'NEW' && lessonName) {
-      console.log('🆕 Creating new Lesson:', lessonName);
-
-      const { data: newLesson, error: lessonError } = await supabase
-        .from('lessons')
-        .insert({
-          unit_id: actualUnitId,
-          lesson_name: lessonName,
-          position: 0,
-        })
-        .select()
-        .single();
-
-      if (lessonError) {
-        console.error('Lesson creation error:', lessonError);
-        return NextResponse.json({
-          error: 'Failed to create lesson',
-          details: lessonError.message
-        }, { status: 500 });
-      }
-
-      actualLessonId = newLesson.id;
-      console.log('✅ Lesson created:', actualLessonId);
-    }
-
-    if (!actualLessonId) {
-      return NextResponse.json({
-        error: 'Lesson ID required'
-      }, { status: 400 });
-    }
-
-    // ============================================================
-    // STEP 2: HANDLE FILE UPLOAD
-    // ============================================================
-
-    let uploadedFilePath: string | null = null;
-    let storageBucket: string | null = null;
-
-    if (file && (category === 'bacaan' || category === 'cefr')) {
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(7);
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      
-      if (category === 'bacaan') {
-        storageBucket = 'components';
-        uploadedFilePath = `${timestamp}-${random}.jsx`;
-      } else if (category === 'cefr') {
-        storageBucket = 'audio';
-        uploadedFilePath = `${timestamp}-${random}.${ext}`;
-      }
-
-      if (storageBucket && uploadedFilePath) {
-        console.log('📤 Uploading file to:', { storageBucket, uploadedFilePath });
-
-        const { error: uploadError } = await supabase.storage
-          .from(storageBucket)
-          .upload(uploadedFilePath, file);
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          return NextResponse.json({
-            error: 'Failed to upload file',
-            details: uploadError.message
-          }, { status: 500 });
-        }
-
-        console.log('✅ File uploaded successfully');
-      }
-    }
-
-    // ============================================================
-    // STEP 3: CREATE MATERIAL RECORD
-    // ============================================================
-
-    const { data: newMaterial, error: materialError } = await supabase
-      .from('materials')
-      .insert({
-        title,
-        category,
-        lesson_id: actualLessonId,
-        position,
-        is_published: isPublished,
-      })
-      .select()
-      .single();
-
-    if (materialError) {
-      console.error('Material creation error:', materialError);
-      return NextResponse.json({
-        error: 'Failed to create material',
-        details: materialError.message
-      }, { status: 500 });
-    }
-
-    console.log('✅ Material created:', newMaterial.id);
-
-    // ============================================================
-    // STEP 4: CREATE MATERIAL_CONTENTS RECORD
-    // ============================================================
-
-    let contentType: 'url' | 'component' | 'audio' = 'url';
-    let contentUrl: string | null = null;
-    let audioPath: string | null = null;
-    let storagePath: string | null = null;
-
-    if (category === 'live_zoom') {
-      contentType = 'url';
-      contentUrl = contentData.zoom_link || contentData.url || null;
-    } else if (category === 'kosakata') {
-      contentType = 'url';
-      contentUrl = contentData.url || contentData.canva_link || contentData.gdrive_url || null;
-    } else if (category === 'bacaan') {
-      contentType = 'component';
-      storagePath = uploadedFilePath;
-    } else if (category === 'cefr') {
-      contentType = 'audio';
-      audioPath = uploadedFilePath;
-    }
-
-    const { data: materialContent, error: contentError } = await supabase
-      .from('material_contents')
-      .insert({
-        material_id: newMaterial.id,
-        content_type: contentType,
-        content_url: contentUrl,
-        storage_bucket: storageBucket,
-        storage_path: storagePath,
-        audio_bucket: storageBucket,
-        audio_path: audioPath,
-        content_data: contentData,
-      })
-      .select()
-      .single();
-
-    if (contentError) {
-      console.error('Material content creation error:', contentError);
-      await supabase.from('materials').delete().eq('id', newMaterial.id);
-      return NextResponse.json({
-        error: 'Failed to create material content',
-        details: contentError.message
-      }, { status: 500 });
-    }
-
-    console.log('✅ Material content created:', materialContent.id);
-
-    return NextResponse.json({
-      success: true,
-      material: newMaterial,
-      content: materialContent
-    });
-
-  } catch (error) {
-    console.error('POST error:', error);
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
-  }
-}
-
 // ============================================================
 // PATCH - UPDATE EXISTING MATERIAL (v4.1 COMPATIBLE)
 // ============================================================
@@ -296,14 +32,17 @@ export async function PATCH(request: NextRequest) {
     const contentDataStr = formData.get('content_data') as string;
     const file = formData.get('file') as File | null;
 
-    // HIERARCHY CHANGE SUPPORT
-    const levelId = formData.get('level_id') as string;
+    // NEW: Unit & Lesson edit fields
     const unitId = formData.get('unit_id') as string;
     const unitName = formData.get('unit_name') as string;
+    const unitPositionStr = formData.get('unit_position') as string;
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
+    const lessonPositionStr = formData.get('lesson_position') as string;
 
     console.log('📝 Updating material v4.1:', materialId);
+    console.log('📦 Unit update:', { unitId, unitName, unitPosition: unitPositionStr });
+    console.log('📚 Lesson update:', { lessonId, lessonName, lessonPosition: lessonPositionStr });
 
     if (!materialId) {
       return NextResponse.json({ error: 'Material ID required' }, { status: 400 });
@@ -367,65 +106,76 @@ export async function PATCH(request: NextRequest) {
     }
 
     // ============================================================
-    // HANDLE HIERARCHY CHANGES
+    // NEW: UPDATE UNIT & LESSON (if changed)
     // ============================================================
-    let finalLessonId = existingMaterial.lesson_id;
-
-    if (levelId && lessonId) {
-      // 1. Create Unit if new
-      let actualUnitId = unitId;
-      if (unitId === 'NEW' && unitName && levelId) {
-        console.log('🆕 Creating new Unit:', unitName);
-
-        const { data: newUnit, error: unitError } = await supabase
-          .from('units')
-          .insert({
-            level_id: levelId,
-            unit_name: unitName,
-            unit_number: 0,
-            position: 0,
-          })
-          .select()
-          .single();
-
-        if (unitError) {
-          console.error('Unit creation error:', unitError);
-          return NextResponse.json({
-            error: 'Failed to create unit',
-            details: unitError.message
-          }, { status: 500 });
+    
+    // Update Unit name & position
+    if (unitId && (unitName || unitPositionStr)) {
+      const unitUpdateData: any = {};
+      
+      if (unitName) {
+        unitUpdateData.unit_name = unitName;
+      }
+      
+      if (unitPositionStr) {
+        const unitPosition = parseInt(unitPositionStr);
+        if (!isNaN(unitPosition)) {
+          unitUpdateData.position = unitPosition;
         }
-
-        actualUnitId = newUnit.id;
-        console.log('✅ Unit created:', actualUnitId);
       }
 
-      // 2. Create Lesson if new
-      if (lessonId === 'NEW' && lessonName && actualUnitId) {
-        console.log('🆕 Creating new Lesson:', lessonName);
+      if (Object.keys(unitUpdateData).length > 0) {
+        console.log('🔄 Updating unit:', unitId, unitUpdateData);
+        
+        const { error: unitUpdateError } = await supabase
+          .from('units')
+          .update(unitUpdateData)
+          .eq('id', unitId);
 
-        const { data: newLesson, error: lessonError } = await supabase
-          .from('lessons')
-          .insert({
-            unit_id: actualUnitId,
-            lesson_name: lessonName,
-            position: 0,
-          })
-          .select()
-          .single();
-
-        if (lessonError) {
-          console.error('Lesson creation error:', lessonError);
+        if (unitUpdateError) {
+          console.error('Unit update error:', unitUpdateError);
           return NextResponse.json({
-            error: 'Failed to create lesson',
-            details: lessonError.message
+            error: 'Failed to update unit',
+            details: unitUpdateError.message
           }, { status: 500 });
         }
 
-        finalLessonId = newLesson.id;
-        console.log('✅ Lesson created:', finalLessonId);
-      } else if (lessonId && lessonId !== 'NEW') {
-        finalLessonId = lessonId;
+        console.log('✅ Unit updated successfully');
+      }
+    }
+
+    // Update Lesson name & position
+    if (lessonId && (lessonName || lessonPositionStr)) {
+      const lessonUpdateData: any = {};
+      
+      if (lessonName) {
+        lessonUpdateData.lesson_name = lessonName;
+      }
+      
+      if (lessonPositionStr) {
+        const lessonPosition = parseInt(lessonPositionStr);
+        if (!isNaN(lessonPosition)) {
+          lessonUpdateData.position = lessonPosition;
+        }
+      }
+
+      if (Object.keys(lessonUpdateData).length > 0) {
+        console.log('🔄 Updating lesson:', lessonId, lessonUpdateData);
+        
+        const { error: lessonUpdateError } = await supabase
+          .from('lessons')
+          .update(lessonUpdateData)
+          .eq('id', lessonId);
+
+        if (lessonUpdateError) {
+          console.error('Lesson update error:', lessonUpdateError);
+          return NextResponse.json({
+            error: 'Failed to update lesson',
+            details: lessonUpdateError.message
+          }, { status: 500 });
+        }
+
+        console.log('✅ Lesson updated successfully');
       }
     }
 
@@ -434,7 +184,6 @@ export async function PATCH(request: NextRequest) {
     // ============================================================
     const materialUpdateData: any = {
       title,
-      lesson_id: finalLessonId,
       position,
       is_published: isPublished,
       updated_at: new Date().toISOString(),

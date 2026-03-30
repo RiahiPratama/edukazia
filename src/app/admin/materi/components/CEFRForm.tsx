@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, FileAudio, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { AlertCircle, Upload, X, Music } from 'lucide-react';
 
 type Material = {
   id: string;
@@ -10,6 +10,8 @@ type Material = {
   content_data: any;
   order_number: number;
   is_published: boolean;
+  unit_id: string;
+  lesson_id: string;
 };
 
 type CEFRFormProps = {
@@ -35,16 +37,24 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
   const [newUnitName, setNewUnitName] = useState('');
   const [newLessonName, setNewLessonName] = useState('');
 
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [transcript, setTranscript] = useState('');
   const [skillFocus, setSkillFocus] = useState('listening');
+  const [cefrLevel, setCefrLevel] = useState('A1');
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [markup, setMarkup] = useState('');
   const [orderNumber, setOrderNumber] = useState(1);
   const [isPublished, setIsPublished] = useState(false);
 
+  // NEW: Edit mode fields
+  const [editUnitName, setEditUnitName] = useState('');
+  const [editUnitPosition, setEditUnitPosition] = useState(1);
+  const [editLessonName, setEditLessonName] = useState('');
+  const [editLessonPosition, setEditLessonPosition] = useState(1);
+  const [editMaterialTitle, setEditMaterialTitle] = useState('');
+
   const [loading, setLoading] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState(false);
 
   const supabase = createClient();
-
   const isEditing = !!editData;
 
   useEffect(() => {
@@ -53,13 +63,36 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
 
   useEffect(() => {
     if (editData) {
-      // Pre-fill form with edit data
-      setTranscript(editData.content_data?.transcript || '');
       setSkillFocus(editData.content_data?.skill_focus || 'listening');
+      setCefrLevel(editData.content_data?.cefr_level || 'A1');
+      setMarkup(editData.content_data?.markup || '');
       setOrderNumber(editData.order_number || 1);
       setIsPublished(editData.is_published || false);
+      setEditMaterialTitle(editData.title || '');
+      fetchEditModeData();
     }
   }, [editData]);
+
+  const fetchEditModeData = async () => {
+    if (!editData) return;
+    setLoadingEditData(true);
+    try {
+      const { data: unitData } = await supabase.from('units').select('unit_name, position').eq('id', editData.unit_id).single();
+      if (unitData) {
+        setEditUnitName(unitData.unit_name);
+        setEditUnitPosition(unitData.position || 1);
+      }
+      const { data: lessonData } = await supabase.from('lessons').select('lesson_name, position').eq('id', editData.lesson_id).single();
+      if (lessonData) {
+        setEditLessonName(lessonData.lesson_name);
+        setEditLessonPosition(lessonData.position || 1);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoadingEditData(false);
+    }
+  };
 
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').eq('is_active', true);
@@ -73,15 +106,10 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
 
   const fetchJuduls = async (levelId: string) => {
     const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId);
-    
-    // Deduplicate by name
     const uniqueJuduls = data?.reduce((acc: any[], curr) => {
-      if (!acc.find(j => j.name === curr.name)) {
-        acc.push(curr);
-      }
+      if (!acc.find(j => j.name === curr.name)) acc.push(curr);
       return acc;
     }, []) || [];
-    
     setJuduls(uniqueJuduls);
   };
 
@@ -95,30 +123,6 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
     setLessons(data || []);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const validExtensions = ['.mp3', '.wav', '.m4a'];
-      const fileExtension = file.name.slice(file.name.lastIndexOf('.'));
-      
-      if (!validExtensions.includes(fileExtension)) {
-        alert('File harus berformat audio (.mp3, .wav, .m4a)');
-        return;
-      }
-
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File terlalu besar! Maksimal 10MB');
-        return;
-      }
-
-      setAudioFile(file);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setAudioFile(null);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -127,43 +131,28 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
       const formData = new FormData();
 
       if (isEditing) {
-        // UPDATE existing material
         formData.append('material_id', editData.id);
-        formData.append('title', newLessonName || selectedLesson);
+        formData.append('title', editMaterialTitle);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ 
-          transcript,
-          skill_focus: skillFocus
-        }));
+        formData.append('content_data', JSON.stringify({ skill_focus: skillFocus, cefr_level: cefrLevel, markup }));
+        if (audioFile) formData.append('audio_file', audioFile);
 
-        // Add new audio file if selected
-        if (audioFile) {
-          formData.append('file', audioFile);
-        }
+        formData.append('unit_id', editData.unit_id);
+        formData.append('lesson_id', editData.lesson_id);
+        formData.append('unit_name', editUnitName);
+        formData.append('unit_position', editUnitPosition.toString());
+        formData.append('lesson_name', editLessonName);
+        formData.append('lesson_position', editLessonPosition.toString());
 
-        const response = await fetch('/api/admin/materials', {
-          method: 'PATCH',
-          body: formData,
-        });
-
+        const response = await fetch('/api/admin/materials', { method: 'PATCH', body: formData });
         const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to update material');
-        }
-
+        if (!response.ok) throw new Error(result.error || 'Failed to update');
         alert('✅ Material berhasil diupdate!');
+        onSave();
       } else {
-        // CREATE new material
-        if (!audioFile) {
-          alert('File audio harus diupload!');
-          setLoading(false);
-          return;
-        }
-
         formData.append('title', newLessonName || selectedLesson);
-        formData.append('type', 'audio');
+        formData.append('type', 'cefr');
         formData.append('category', 'cefr');
         formData.append('course_id', selectedCourse);
         formData.append('level_id', selectedLevel);
@@ -175,319 +164,192 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
         formData.append('lesson_name', newLessonName);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ 
-          transcript,
-          skill_focus: skillFocus
-        }));
-        formData.append('file', audioFile);
+        formData.append('content_data', JSON.stringify({ skill_focus: skillFocus, cefr_level: cefrLevel, markup }));
+        if (audioFile) formData.append('audio_file', audioFile);
 
-        const response = await fetch('/api/admin/materials', {
-          method: 'POST',
-          body: formData,
-        });
-
+        const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
         const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to create material');
-        }
-
+        if (!response.ok) throw new Error(result.error || 'Failed to create');
         alert('✅ Material CEFR berhasil dibuat!');
+        onSave();
       }
-
-      onSave();
     } catch (error) {
-      console.error('Error:', error);
       alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
+  if (loadingEditData) {
+    return <div className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div><p className="text-gray-600 mt-4">Memuat data...</p></div>;
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Only show hierarchy fields when creating (not editing) */}
       {!isEditing && (
         <>
-          {/* Course Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Mata Pelajaran *
-            </label>
-            <select
-              value={selectedCourse}
-              onChange={(e) => {
-                setSelectedCourse(e.target.value);
-                fetchLevels(e.target.value);
-              }}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-2">Mata Pelajaran *</label>
+            <select value={selectedCourse} onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]">
               <option value="">Pilih Mata Pelajaran</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
-          {/* Level Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Level *
-            </label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => {
-                setSelectedLevel(e.target.value);
-                fetchJuduls(e.target.value);
-              }}
-              required
-              disabled={!selectedCourse}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-2">Level *</label>
+            <select value={selectedLevel} onChange={(e) => { setSelectedLevel(e.target.value); fetchJuduls(e.target.value); }} required disabled={!selectedCourse} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
               <option value="">Pilih Level</option>
-              {levels.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
+              {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
 
-          {/* Judul */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Judul *
-            </label>
-            <select
-              value={selectedJudul}
-              onChange={(e) => {
-                setSelectedJudul(e.target.value);
-                if (e.target.value !== 'NEW') {
-                  fetchUnits(e.target.value);
-                }
-              }}
-              required
-              disabled={!selectedLevel}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-2">Judul *</label>
+            <select value={selectedJudul} onChange={(e) => { setSelectedJudul(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required disabled={!selectedLevel} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
               <option value="">Pilih Judul</option>
               <option value="NEW">+ Buat Judul Baru</option>
-              {juduls.map((j) => (
-                <option key={j.id} value={j.id}>{j.name}</option>
-              ))}
+              {juduls.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
             </select>
-            {selectedJudul === 'NEW' && (
-              <input
-                type="text"
-                value={newJudulName}
-                onChange={(e) => setNewJudulName(e.target.value)}
-                placeholder="Nama Judul Baru"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
+            {selectedJudul === 'NEW' && <input type="text" value={newJudulName} onChange={(e) => setNewJudulName(e.target.value)} placeholder="Nama Judul Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
           </div>
 
-          {/* Unit */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Unit *
-            </label>
-            <select
-              value={selectedUnit}
-              onChange={(e) => {
-                setSelectedUnit(e.target.value);
-                if (e.target.value !== 'NEW') {
-                  fetchLessons(e.target.value);
-                }
-              }}
-              required
-              disabled={!selectedJudul}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-2">Unit *</label>
+            <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required disabled={!selectedJudul} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
               <option value="">Pilih Unit</option>
               <option value="NEW">+ Buat Unit Baru</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>{u.unit_name}</option>
-              ))}
+              {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
             </select>
-            {selectedUnit === 'NEW' && (
-              <input
-                type="text"
-                value={newUnitName}
-                onChange={(e) => setNewUnitName(e.target.value)}
-                placeholder="Nama Unit Baru"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
+            {selectedUnit === 'NEW' && <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
           </div>
 
-          {/* Lesson */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Lesson (Nama Materi) *
-            </label>
-            <select
-              value={selectedLesson}
-              onChange={(e) => setSelectedLesson(e.target.value)}
-              required
-              disabled={!selectedUnit}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-2">Lesson *</label>
+            <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required disabled={!selectedUnit} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
               <option value="">Pilih Lesson</option>
               <option value="NEW">+ Buat Lesson Baru</option>
-              {lessons.map((l) => (
-                <option key={l.id} value={l.id}>{l.lesson_name}</option>
-              ))}
+              {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
             </select>
-            {selectedLesson === 'NEW' && (
-              <input
-                type="text"
-                value={newLessonName}
-                onChange={(e) => setNewLessonName(e.target.value)}
-                placeholder="Nama Lesson Baru (akan menjadi judul materi)"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2"
-              />
-            )}
+            {selectedLesson === 'NEW' && <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
           </div>
         </>
       )}
 
-      {/* Material Content Fields (shown for both create and edit) */}
       {isEditing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <p className="text-sm text-blue-800">
-            <strong>Editing:</strong> {editData.title}
-          </p>
-        </div>
-      )}
-
-      {/* Audio File Upload */}
-      <div className="p-6 bg-gray-50 rounded-lg">
-        <h4 className="text-base font-medium text-gray-900 mb-4">
-          Upload Audio File {isEditing && '(Upload file baru untuk replace)'}
-        </h4>
-
-        {!audioFile ? (
-          <label className="block cursor-pointer">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-[#5C4FE5] hover:bg-gray-100 transition-colors">
-              <Upload size={48} className="mx-auto mb-4 text-gray-400" />
-              <p className="text-sm font-medium text-gray-900 mb-1">
-                Click to upload atau drag and drop
-              </p>
-              <p className="text-xs text-gray-600">
-                File audio .mp3, .wav, .m4a (max 10MB)
-              </p>
+        <>
+          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+            <div className="flex gap-3">
+              <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
+              <div className="text-sm text-yellow-800">
+                <p className="font-semibold mb-1">⚠️ Perhatian:</p>
+                <p>Mengubah nama Unit/Lesson akan mempengaruhi <strong>SEMUA materials</strong> yang menggunakan Unit/Lesson ini.</p>
+              </div>
             </div>
-            <input
-              type="file"
-              accept=".mp3,.wav,.m4a"
-              onChange={handleFileChange}
-              className="hidden"
-              disabled={loading}
-            />
-          </label>
-        ) : (
-          <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FileAudio size={20} className="text-purple-700" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">Material Title *</label>
+            <input type="text" value={editMaterialTitle} onChange={(e) => setEditMaterialTitle(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+          </div>
+
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">📦 Unit Settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Unit Name *</label>
+                <input type="text" value={editUnitName} onChange={(e) => setEditUnitName(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{audioFile.name}</p>
-                <p className="text-xs text-gray-600">
-                  {(audioFile.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Unit Position *</label>
+                <input type="number" value={editUnitPosition} onChange={(e) => setEditUnitPosition(parseInt(e.target.value))} min="0" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleRemoveFile}
-              disabled={loading}
-              className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-            >
-              <X size={18} />
-            </button>
           </div>
-        )}
+
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">📚 Lesson Settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Lesson Name *</label>
+                <input type="text" value={editLessonName} onChange={(e) => setEditLessonName(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Lesson Position *</label>
+                <input type="number" value={editLessonPosition} onChange={(e) => setEditLessonPosition(parseInt(e.target.value))} min="0" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className={isEditing ? 'border-t-2 border-gray-200 pt-6' : ''}>
+        {isEditing && <h3 className="text-lg font-semibold text-gray-900 mb-4">📄 Material Content</h3>}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Skill Focus *</label>
+            <select value={skillFocus} onChange={(e) => setSkillFocus(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]">
+              <option value="listening">Listening</option>
+              <option value="reading">Reading</option>
+              <option value="speaking">Speaking</option>
+              <option value="writing">Writing</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">CEFR Level *</label>
+            <select value={cefrLevel} onChange={(e) => setCefrLevel(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]">
+              <option value="A1">A1 (Beginner)</option>
+              <option value="A2">A2 (Elementary)</option>
+              <option value="B1">B1 (Intermediate)</option>
+              <option value="B2">B2 (Upper Intermediate)</option>
+              <option value="C1">C1 (Advanced)</option>
+              <option value="C2">C2 (Proficiency)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Audio File {!isEditing && '*'}</label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+            {audioFile ? (
+              <div className="flex items-center justify-between bg-green-50 p-3 rounded">
+                <div className="flex items-center gap-2">
+                  <Music className="text-green-600" size={20} />
+                  <span className="text-sm text-green-800 font-medium">{audioFile.name}</span>
+                </div>
+                <button type="button" onClick={() => setAudioFile(null)} className="text-red-600 hover:bg-red-50 p-1 rounded"><X size={18} /></button>
+              </div>
+            ) : (
+              <label className="cursor-pointer">
+                <Upload className="mx-auto text-gray-400 mb-2" size={32} />
+                <p className="text-sm text-gray-600">Click to upload audio file</p>
+                <input type="file" accept="audio/*" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} className="hidden" {...(!isEditing && { required: true })} />
+              </label>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Markup / Text</label>
+          <textarea value={markup} onChange={(e) => setMarkup(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Order Number *</label>
+          <input type="number" value={orderNumber} onChange={(e) => setOrderNumber(parseInt(e.target.value))} min="1" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]" />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input type="checkbox" id="isPublished" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]" />
+          <label htmlFor="isPublished" className="text-sm font-medium text-gray-700">Publish (siswa bisa lihat)</label>
+        </div>
       </div>
 
-      {/* Skill Focus */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Skill Focus *
-        </label>
-        <select
-          value={skillFocus}
-          onChange={(e) => setSkillFocus(e.target.value)}
-          required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
-        >
-          <option value="listening">Listening</option>
-          <option value="speaking">Speaking</option>
-          <option value="pronunciation">Pronunciation</option>
-        </select>
-      </div>
-
-      {/* Transcript */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Transcript *
-        </label>
-        <textarea
-          value={transcript}
-          onChange={(e) => setTranscript(e.target.value)}
-          placeholder="Full transcript of the audio..."
-          rows={6}
-          required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
-          disabled={loading}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Order Number *
-        </label>
-        <input
-          type="number"
-          value={orderNumber}
-          onChange={(e) => setOrderNumber(parseInt(e.target.value))}
-          min="1"
-          required
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
-        />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="isPublished"
-          checked={isPublished}
-          onChange={(e) => setIsPublished(e.target.checked)}
-          className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]"
-        />
-        <label htmlFor="isPublished" className="text-sm font-medium text-gray-700">
-          Publish (siswa bisa lihat)
-        </label>
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-        >
-          Batal
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50"
-        >
-          {loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
-        </button>
+      <div className="flex gap-3 pt-4 border-t-2 border-gray-200">
+        <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Batal</button>
+        <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50">{loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}</button>
       </div>
     </form>
   );

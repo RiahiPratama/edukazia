@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, FileCode, X, Info, Check } from 'lucide-react';
+import { Upload, FileCode, X, Info, Check, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type Material = {
@@ -11,6 +11,7 @@ type Material = {
   order_number: number;
   is_published: boolean;
   lesson_id: string;
+  unit_id: string;
 };
 
 type BacaanFormProps = {
@@ -41,7 +42,15 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const [orderNumber, setOrderNumber] = useState(1);
   const [isPublished, setIsPublished] = useState(false);
 
+  // NEW: Edit mode - Unit & Lesson fields
+  const [editUnitName, setEditUnitName] = useState('');
+  const [editUnitPosition, setEditUnitPosition] = useState(1);
+  const [editLessonName, setEditLessonName] = useState('');
+  const [editLessonPosition, setEditLessonPosition] = useState(1);
+  const [editMaterialTitle, setEditMaterialTitle] = useState('');
+
   const [loading, setLoading] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState(false);
 
   const supabase = createClient();
 
@@ -53,14 +62,48 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
   useEffect(() => {
     if (editData) {
-      fetchLessonHierarchy(editData.lesson_id);
       setDescription(editData.content_data?.description || '');
       setOrderNumber(editData.order_number || 1);
       setIsPublished(editData.is_published || false);
+      setEditMaterialTitle(editData.title || '');
+      fetchEditModeData();
     }
   }, [editData]);
 
-  // FIX: Auto-fetch juduls when levels are selected
+  // NEW: Fetch unit & lesson data for edit mode
+  const fetchEditModeData = async () => {
+    if (!editData) return;
+
+    setLoadingEditData(true);
+    try {
+      const { data: unitData } = await supabase
+        .from('units')
+        .select('unit_name, position')
+        .eq('id', editData.unit_id)
+        .single();
+
+      if (unitData) {
+        setEditUnitName(unitData.unit_name);
+        setEditUnitPosition(unitData.position || 1);
+      }
+
+      const { data: lessonData } = await supabase
+        .from('lessons')
+        .select('lesson_name, position')
+        .eq('id', editData.lesson_id)
+        .single();
+
+      if (lessonData) {
+        setEditLessonName(lessonData.lesson_name);
+        setEditLessonPosition(lessonData.position || 1);
+      }
+    } catch (error) {
+      console.error('Error fetching edit data:', error);
+    } finally {
+      setLoadingEditData(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedLevels.length > 0 && !isEditing) {
       fetchJudulsForSelectedLevels();
@@ -69,31 +112,6 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
       setSelectedJudul('');
     }
   }, [selectedLevels]);
-
-  const fetchLessonHierarchy = async (lessonId: string) => {
-    const { data: lesson } = await supabase
-      .from('lessons')
-      .select('*, units(*,juduls(*,levels(*,courses(*))))')
-      .eq('id', lessonId)
-      .single();
-
-    if (lesson) {
-      const unit = lesson.units;
-      const judul = unit.juduls;
-      const level = judul.levels;
-      const course = level.courses;
-
-      setSelectedCourse(course.id);
-      await fetchLevels(course.id);
-      setSelectedLevels([level.id]);
-      await fetchJudulsForSelectedLevels();
-      setSelectedJudul(judul.id);
-      await fetchUnits(judul.id);
-      setSelectedUnit(unit.id);
-      await fetchLessons(unit.id);
-      setSelectedLesson(lessonId);
-    }
-  };
 
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').eq('is_active', true);
@@ -105,22 +123,13 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
     setLevels(data || []);
   };
 
-  // FIX: Fetch juduls for ALL selected levels
   const fetchJudulsForSelectedLevels = async () => {
     if (selectedLevels.length === 0) return;
-
-    const { data } = await supabase
-      .from('juduls')
-      .select('*')
-      .in('level_id', selectedLevels);
-    
+    const { data } = await supabase.from('juduls').select('*').in('level_id', selectedLevels);
     const uniqueJuduls = data?.reduce((acc: any[], curr) => {
-      if (!acc.find(j => j.name === curr.name)) {
-        acc.push(curr);
-      }
+      if (!acc.find(j => j.name === curr.name)) acc.push(curr);
       return acc;
     }, []) || [];
-    
     setJuduls(uniqueJuduls);
   };
 
@@ -135,50 +144,11 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   };
 
   const toggleLevel = (levelId: string) => {
-    if (isEditing) {
-      setSelectedLevels([levelId]);
-    } else {
-      setSelectedLevels(prev => {
-        if (prev.includes(levelId)) {
-          return prev.filter(id => id !== levelId);
-        } else {
-          return [...prev, levelId];
-        }
-      });
-    }
+    setSelectedLevels(prev => prev.includes(levelId) ? prev.filter(id => id !== levelId) : [...prev, levelId]);
   };
 
-  const selectAllLevels = () => {
-    setSelectedLevels(levels.map(l => l.id));
-  };
-
-  const clearAllLevels = () => {
-    setSelectedLevels([]);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const validExtensions = ['.jsx', '.tsx'];
-      const fileExtension = file.name.slice(file.name.lastIndexOf('.'));
-      
-      if (!validExtensions.includes(fileExtension)) {
-        alert('File harus berformat .jsx atau .tsx');
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File terlalu besar! Maksimal 5MB');
-        return;
-      }
-
-      setJsxFile(file);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setJsxFile(null);
-  };
+  const selectAllLevels = () => setSelectedLevels(levels.map(l => l.id));
+  const clearAllLevels = () => setSelectedLevels([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,49 +158,27 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
       if (isEditing) {
         const formData = new FormData();
         formData.append('material_id', editData.id);
-        formData.append('title', newLessonName || selectedLesson);
+        formData.append('title', editMaterialTitle);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ 
-          type: 'jsx',
-          description 
-        }));
+        formData.append('content_data', JSON.stringify({ description }));
+        if (jsxFile) formData.append('jsx_file', jsxFile);
 
-        formData.append('course_id', selectedCourse);
-        formData.append('level_id', selectedLevels[0]);
-        formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-        formData.append('judul_name', newJudulName);
-        formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
-        formData.append('unit_name', newUnitName);
-        formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
-        formData.append('lesson_name', newLessonName);
+        formData.append('unit_id', editData.unit_id);
+        formData.append('lesson_id', editData.lesson_id);
+        formData.append('unit_name', editUnitName);
+        formData.append('unit_position', editUnitPosition.toString());
+        formData.append('lesson_name', editLessonName);
+        formData.append('lesson_position', editLessonPosition.toString());
 
-        if (jsxFile) {
-          formData.append('file', jsxFile);
-        }
-
-        const response = await fetch('/api/admin/materials', {
-          method: 'PATCH',
-          body: formData,
-        });
-
+        const response = await fetch('/api/admin/materials', { method: 'PATCH', body: formData });
         const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to update material');
-        }
-
+        if (!response.ok) throw new Error(result.error || 'Failed to update');
         alert('✅ Material berhasil diupdate!');
         onSave();
       } else {
         if (selectedLevels.length === 0) {
           alert('Pilih minimal 1 level!');
-          setLoading(false);
-          return;
-        }
-
-        if (!jsxFile) {
-          alert('File JSX harus diupload!');
           setLoading(false);
           return;
         }
@@ -242,7 +190,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
           try {
             const formData = new FormData();
             formData.append('title', newLessonName || selectedLesson);
-            formData.append('type', 'jsx');
+            formData.append('type', 'bacaan');
             formData.append('category', 'bacaan');
             formData.append('course_id', selectedCourse);
             formData.append('level_id', levelId);
@@ -254,383 +202,215 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
             formData.append('lesson_name', newLessonName);
             formData.append('order_number', orderNumber.toString());
             formData.append('is_published', isPublished.toString());
-            formData.append('content_data', JSON.stringify({ 
-              type: 'jsx',
-              description 
-            }));
-            formData.append('file', jsxFile);
+            formData.append('content_data', JSON.stringify({ description }));
+            if (jsxFile) formData.append('jsx_file', jsxFile);
 
-            const response = await fetch('/api/admin/materials', {
-              method: 'POST',
-              body: formData,
-            });
-
+            const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
             const result = await response.json();
 
             if (!response.ok) {
               const levelName = levels.find(l => l.id === levelId)?.name || levelId;
               failedLevels.push(levelName);
-              console.error(`Failed for level ${levelName}:`, result);
             } else {
               successCount++;
             }
           } catch (error) {
             const levelName = levels.find(l => l.id === levelId)?.name || levelId;
             failedLevels.push(levelName);
-            console.error(`Error for level ${levelName}:`, error);
           }
         }
 
         if (successCount === selectedLevels.length) {
           alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
-          // FIX: Don't call onSave() to keep checkbox state
-          setJsxFile(null);
           setNewJudulName('');
           setNewUnitName('');
           setNewLessonName('');
           setDescription('');
+          setJsxFile(null);
           setOrderNumber(1);
-          // Keep selectedLevels and isPublished!
         } else if (successCount > 0) {
-          alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal untuk: ${failedLevels.join(', ')}`);
-          setJsxFile(null);
-          setNewJudulName('');
-          setNewUnitName('');
-          setNewLessonName('');
-          setDescription('');
-          setOrderNumber(1);
+          alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal: ${failedLevels.join(', ')}`);
         } else {
-          alert(`❌ Gagal membuat material untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
+          alert(`❌ Gagal untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
         }
       }
     } catch (error) {
-      console.error('Error:', error);
       alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
+  if (loadingEditData) {
+    return <div className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div><p className="text-gray-600 mt-4">Memuat data...</p></div>;
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {isEditing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            <strong>Editing:</strong> {editData.title}
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            Anda bisa mengubah Level, Judul, Unit, Lesson untuk memindahkan materi
-          </p>
-        </div>
-      )}
-
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Mata Pelajaran *
-        </label>
-        <select
-          value={selectedCourse}
-          onChange={(e) => {
-            setSelectedCourse(e.target.value);
-            fetchLevels(e.target.value);
-            setSelectedLevels([]);
-          }}
-          required
-          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-        >
-          <option value="">Pilih Mata Pelajaran</option>
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Level * {!isEditing && '(Pilih 1 atau lebih)'}
-        </label>
-        
-        {!isEditing && levels.length > 0 && (
-          <div className="flex gap-2 mb-3">
-            <button
-              type="button"
-              onClick={selectAllLevels}
-              className="px-3 py-1 text-xs bg-gray-100 text-gray-900 rounded hover:bg-gray-200 font-medium"
-            >
-              Pilih Semua
-            </button>
-            <button
-              type="button"
-              onClick={clearAllLevels}
-              className="px-3 py-1 text-xs bg-gray-100 text-gray-900 rounded hover:bg-gray-200 font-medium"
-            >
-              Hapus Semua
-            </button>
-            <span className="text-xs text-gray-700 self-center ml-auto font-medium">
-              {selectedLevels.length} level dipilih
-            </span>
+      {!isEditing && (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">Mata Pelajaran *</label>
+            <select value={selectedCourse} onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
+              <option value="">Pilih Mata Pelajaran</option>
+              {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
-        )}
 
-        {!selectedCourse ? (
-          <div className="p-4 bg-gray-100 border border-gray-400 rounded-lg text-sm text-gray-700 font-medium">
-            Pilih Mata Pelajaran dulu
-          </div>
-        ) : levels.length === 0 ? (
-          <div className="p-4 bg-gray-100 border border-gray-400 rounded-lg text-sm text-gray-700 font-medium">
-            Tidak ada level tersedia
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-2 p-4 border border-gray-400 rounded-lg max-h-60 overflow-y-auto bg-white">
-            {levels.map((level) => (
-              <label
-                key={level.id}
-                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                  selectedLevels.includes(level.id)
-                    ? 'bg-[#5C4FE5] text-white'
-                    : 'bg-gray-50 text-gray-900 hover:bg-gray-100 border border-gray-300'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedLevels.includes(level.id)}
-                  onChange={() => toggleLevel(level.id)}
-                  className="hidden"
-                />
-                <div className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${
-                  selectedLevels.includes(level.id)
-                    ? 'border-white bg-white'
-                    : 'border-gray-400 bg-white'
-                }`}>
-                  {selectedLevels.includes(level.id) && (
-                    <Check size={14} className="text-[#5C4FE5]" />
-                  )}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">Level * (Pilih 1 atau lebih)</label>
+            {!selectedCourse ? (
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">Pilih Mata Pelajaran dulu</div>
+            ) : levels.length === 0 ? (
+              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">Tidak ada level tersedia</div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-2 mb-2">
+                  <button type="button" onClick={selectAllLevels} className="px-3 py-1 text-xs bg-[#5C4FE5] text-white rounded hover:bg-[#4a3ec7]">Pilih Semua</button>
+                  <button type="button" onClick={clearAllLevels} className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Clear</button>
                 </div>
-                <span className="text-sm font-medium">{level.name}</span>
-              </label>
-            ))}
+                {levels.map((level) => (
+                  <label key={level.id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${selectedLevels.includes(level.id) ? 'bg-[#5C4FE5] text-white' : 'bg-gray-50 text-gray-900 hover:bg-gray-100 border border-gray-300'}`}>
+                    <input type="checkbox" checked={selectedLevels.includes(level.id)} onChange={() => toggleLevel(level.id)} className="hidden" />
+                    <div className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${selectedLevels.includes(level.id) ? 'border-white bg-white' : 'border-gray-400 bg-white'}`}>
+                      {selectedLevels.includes(level.id) && <Check size={14} className="text-[#5C4FE5]" />}
+                    </div>
+                    <span className="text-sm font-medium">{level.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {selectedLevels.length > 0 && <p className="mt-2 text-xs text-gray-700 font-medium">Material akan dibuat untuk {selectedLevels.length} level</p>}
           </div>
-        )}
 
-        {selectedLevels.length > 0 && !isEditing && (
-          <p className="mt-2 text-xs text-gray-700 font-medium">
-            Material akan dibuat untuk {selectedLevels.length} level yang dipilih
-          </p>
-        )}
-      </div>
-
-      {selectedLevels.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Judul *
-          </label>
-          <select
-            value={selectedJudul}
-            onChange={(e) => {
-              setSelectedJudul(e.target.value);
-              if (e.target.value !== 'NEW') {
-                fetchUnits(e.target.value);
-              }
-            }}
-            required
-            className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-          >
-            <option value="">Pilih Judul</option>
-            <option value="NEW">+ Buat Judul Baru</option>
-            {juduls.map((j) => (
-              <option key={j.id} value={j.id}>{j.name}</option>
-            ))}
-          </select>
-          {selectedJudul === 'NEW' && (
-            <input
-              type="text"
-              value={newJudulName}
-              onChange={(e) => setNewJudulName(e.target.value)}
-              placeholder="Nama Judul Baru"
-              required
-              className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 placeholder-gray-500"
-            />
-          )}
-        </div>
-      )}
-
-      {selectedJudul && (
-        <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Unit *
-          </label>
-          <select
-            value={selectedUnit}
-            onChange={(e) => {
-              setSelectedUnit(e.target.value);
-              if (e.target.value !== 'NEW') {
-                fetchLessons(e.target.value);
-              }
-            }}
-            required
-            className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-          >
-            <option value="">Pilih Unit</option>
-            <option value="NEW">+ Buat Unit Baru</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>{u.unit_name}</option>
-            ))}
-          </select>
-          {selectedUnit === 'NEW' && (
-            <input
-              type="text"
-              value={newUnitName}
-              onChange={(e) => setNewUnitName(e.target.value)}
-              placeholder="Nama Unit Baru"
-              required
-              className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 placeholder-gray-500"
-            />
-          )}
-        </div>
-      )}
-
-      {selectedUnit && (
-        <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Lesson (Nama Materi) *
-          </label>
-          <select
-            value={selectedLesson}
-            onChange={(e) => setSelectedLesson(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-          >
-            <option value="">Pilih Lesson</option>
-            <option value="NEW">+ Buat Lesson Baru</option>
-            {lessons.map((l) => (
-              <option key={l.id} value={l.id}>{l.lesson_name}</option>
-            ))}
-          </select>
-          {selectedLesson === 'NEW' && (
-            <input
-              type="text"
-              value={newLessonName}
-              onChange={(e) => setNewLessonName(e.target.value)}
-              placeholder="Nama Lesson Baru (akan menjadi judul materi)"
-              required
-              className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 placeholder-gray-500"
-            />
-          )}
-        </div>
-      )}
-
-      <div className="p-6 bg-gray-50 rounded-lg border border-gray-300">
-        <h4 className="text-base font-medium text-gray-900 mb-4">
-          Upload JSX Component {isEditing && '(Upload file baru untuk replace)'}
-        </h4>
-
-        {!jsxFile ? (
-          <label className="block cursor-pointer">
-            <div className="border-2 border-dashed border-gray-400 rounded-lg p-8 text-center hover:border-[#5C4FE5] hover:bg-gray-100 transition-colors bg-white">
-              <Upload size={48} className="mx-auto mb-4 text-gray-500" />
-              <p className="text-sm font-medium text-gray-900 mb-1">
-                Click to upload atau drag and drop
-              </p>
-              <p className="text-xs text-gray-600 font-medium">
-                File .jsx atau .tsx (max 5MB)
-              </p>
+          {selectedLevels.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Judul *</label>
+              <select value={selectedJudul} onChange={(e) => { setSelectedJudul(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
+                <option value="">Pilih Judul</option>
+                <option value="NEW">+ Buat Judul Baru</option>
+                {juduls.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+              </select>
+              {selectedJudul === 'NEW' && <input type="text" value={newJudulName} onChange={(e) => setNewJudulName(e.target.value)} placeholder="Nama Judul Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
             </div>
-            <input
-              type="file"
-              accept=".jsx,.tsx"
-              onChange={handleFileChange}
-              className="hidden"
-              disabled={loading}
-            />
-          </label>
-        ) : (
-          <div className="flex items-center justify-between p-3 bg-white border border-gray-300 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <FileCode size={20} className="text-green-700" />
+          )}
+
+          {selectedJudul && (
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Unit *</label>
+              <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
+                <option value="">Pilih Unit</option>
+                <option value="NEW">+ Buat Unit Baru</option>
+                {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
+              </select>
+              {selectedUnit === 'NEW' && <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
+            </div>
+          )}
+
+          {selectedUnit && (
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Lesson *</label>
+              <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
+                <option value="">Pilih Lesson</option>
+                <option value="NEW">+ Buat Lesson Baru</option>
+                {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
+              </select>
+              {selectedLesson === 'NEW' && <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
+            </div>
+          )}
+        </>
+      )}
+
+      {isEditing && (
+        <>
+          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+            <div className="flex gap-3">
+              <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
+              <div className="text-sm text-yellow-800">
+                <p className="font-semibold mb-1">⚠️ Perhatian:</p>
+                <p>Mengubah nama Unit/Lesson akan mempengaruhi <strong>SEMUA materials</strong> yang menggunakan Unit/Lesson ini.</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">Material Title *</label>
+            <input type="text" value={editMaterialTitle} onChange={(e) => setEditMaterialTitle(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+          </div>
+
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">📦 Unit Settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Unit Name *</label>
+                <input type="text" value={editUnitName} onChange={(e) => setEditUnitName(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{jsxFile.name}</p>
-                <p className="text-xs text-gray-700 font-medium">
-                  {(jsxFile.size / 1024).toFixed(1)} KB
-                </p>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Unit Position *</label>
+                <input type="number" value={editUnitPosition} onChange={(e) => setEditUnitPosition(parseInt(e.target.value))} min="0" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleRemoveFile}
-              disabled={loading}
-              className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-            >
-              <X size={18} />
-            </button>
           </div>
-        )}
 
-        <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg mt-4">
-          <Info size={18} className="text-blue-700 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-blue-800 font-medium">
-            <strong>Info:</strong> Component akan di-render dengan styling yang menarik untuk siswa
-          </p>
+          <div className="border-t-2 border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">📚 Lesson Settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Lesson Name *</label>
+                <input type="text" value={editLessonName} onChange={(e) => setEditLessonName(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Lesson Position *</label>
+                <input type="number" value={editLessonPosition} onChange={(e) => setEditLessonPosition(parseInt(e.target.value))} min="0" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className={isEditing ? 'border-t-2 border-gray-200 pt-6' : ''}>
+        {isEditing && <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">📄 Material Content</h3>}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">Description</label>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">JSX Component File {!isEditing && '*'}</label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+            {jsxFile ? (
+              <div className="flex items-center justify-between bg-green-50 p-3 rounded">
+                <div className="flex items-center gap-2">
+                  <FileCode className="text-green-600" size={20} />
+                  <span className="text-sm text-green-800 font-medium">{jsxFile.name}</span>
+                </div>
+                <button type="button" onClick={() => setJsxFile(null)} className="text-red-600 hover:bg-red-50 p-1 rounded"><X size={18} /></button>
+              </div>
+            ) : (
+              <label className="cursor-pointer">
+                <Upload className="mx-auto text-gray-400 mb-2" size={32} />
+                <p className="text-sm text-gray-600">Click to upload JSX file</p>
+                <input type="file" accept=".jsx,.tsx" onChange={(e) => setJsxFile(e.target.files?.[0] || null)} className="hidden" {...(!isEditing && { required: true })} />
+              </label>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">Order Number *</label>
+          <input type="number" value={orderNumber} onChange={(e) => setOrderNumber(parseInt(e.target.value))} min="1" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input type="checkbox" id="isPublished" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]" />
+          <label htmlFor="isPublished" className="text-sm font-medium text-gray-900">Publish (siswa bisa lihat)</label>
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Deskripsi Singkat (Opsional)
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Ringkasan cerita atau topik bacaan..."
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-500"
-          disabled={loading}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Order Number *
-        </label>
-        <input
-          type="number"
-          value={orderNumber}
-          onChange={(e) => setOrderNumber(parseInt(e.target.value))}
-          min="1"
-          required
-          className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-        />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="isPublished"
-          checked={isPublished}
-          onChange={(e) => setIsPublished(e.target.checked)}
-          className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] border-gray-400"
-        />
-        <label htmlFor="isPublished" className="text-sm font-medium text-gray-900">
-          Publish (siswa bisa lihat)
-        </label>
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2 border border-gray-400 text-gray-900 rounded-lg hover:bg-gray-50 font-medium"
-        >
-          Batal
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-medium"
-        >
-          {loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
-        </button>
+      <div className="flex gap-3 pt-4 border-t-2 border-gray-200">
+        <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 border border-gray-400 text-gray-900 rounded-lg hover:bg-gray-50 font-medium">Batal</button>
+        <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-medium">{loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}</button>
       </div>
     </form>
   );
