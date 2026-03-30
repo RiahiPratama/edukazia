@@ -67,113 +67,170 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <div className="bg-[#5C4FE5] text-white p-4 text-center">
-        <h1 className="text-lg font-medium">Materi Pembelajaran</h1>
-        <p className="text-sm opacity-90 mt-1">{studentName}</p>
+    <div className="min-h-screen bg-gradient-to-br from-[#F7F6FF] via-[#FEFBFF] to-[#F7F6FF]">
+      {/* Premium Header */}
+      <div className="bg-gradient-to-r from-[#5C4FE5] via-[#6B5FF5] to-[#7A6FFF] text-white shadow-lg">
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Materi Pembelajaran</h1>
+              <p className="text-sm opacity-90 mt-1 font-medium">{studentName}</p>
+            </div>
+            <div className="hidden md:flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
+              <div className="w-2 h-2 rounded-full bg-[#E6B800] animate-pulse"></div>
+              <span className="text-xs font-medium">Level {levelName}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-[#F7F6FF] border-b-2 border-[#E5E3FF] flex overflow-x-auto">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 min-w-[90px] py-3 px-2 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-white text-[#5C4FE5] border-b-3 border-[#5C4FE5]'
-                : 'text-[#7B78A8] hover:bg-white/50'
-            }`}
-            style={activeTab === tab.id ? { borderBottomWidth: '3px' } : {}}
-          >
-            <span className="text-base mr-1">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
+      {/* Premium Tabs */}
+      <div className="bg-white border-b border-[#E5E3FF] shadow-sm sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-2 px-6 py-4 text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'text-[#5C4FE5]'
+                    : 'text-[#7B78A8] hover:text-[#5C4FE5] hover:bg-[#F7F6FF]'
+                }`}
+              >
+                <span className="text-lg">{tab.icon}</span>
+                <span>{tab.label}</span>
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#5C4FE5] to-[#7A6FFF] rounded-t-full shadow-lg shadow-[#5C4FE5]/30"></div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="p-4 max-w-2xl mx-auto">
-        {/* Ayo Belajar Card */}
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        {/* Premium Ayo Belajar Card */}
         {nextMaterial && (
-          <div className="bg-gradient-to-br from-[#EEEDFE] to-[#F7F6FF] border-2 border-[#5C4FE5] rounded-xl p-4 mb-6">
-            <p className="text-xs text-[#7B78A8] font-medium mb-2">🔥 Ayo Belajar</p>
-            <p className="text-base font-medium text-[#1A1640] mb-2">{nextMaterial.title}</p>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs bg-white text-[#5C4FE5] px-2 py-1 rounded-full font-medium">
-                {levelName}
-              </span>
-              <span className="text-xs text-[#7B78A8]">•</span>
-              <span className="text-xs text-[#7B78A8]">{nextMaterial.unit_name}</span>
+          <div className="bg-gradient-to-br from-[#5C4FE5] via-[#6B5FF5] to-[#7A6FFF] rounded-2xl p-6 mb-8 shadow-2xl shadow-[#5C4FE5]/20 border border-white/20">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-2xl">
+                🔥
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-2">Ayo Belajar</p>
+                <h3 className="text-white text-xl font-bold mb-3 leading-tight">{nextMaterial.title}</h3>
+                <div className="flex items-center gap-2 mb-4 flex-wrap">
+                  <span className="bg-white/20 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full font-semibold border border-white/30">
+                    {levelName}
+                  </span>
+                  <span className="text-white/60">•</span>
+                  <span className="text-white/90 text-xs font-medium">{nextMaterial.unit_name}</span>
+                </div>
+                {(nextMaterial.category === 'live_zoom' || nextMaterial.category === 'kosakata') ? (
+                  <a
+                    href={nextMaterial.gdrive_url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-white text-[#5C4FE5] px-6 py-3 rounded-xl font-bold hover:bg-white/90 hover:shadow-xl transition-all group"
+                  >
+                    <span>Mulai Belajar</span>
+                    <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
+                  </a>
+                ) : (
+                  <Link
+                    href={`/ortu/materi/render/${nextMaterial.component_id}`}
+                    className="inline-flex items-center gap-2 bg-white text-[#5C4FE5] px-6 py-3 rounded-xl font-bold hover:bg-white/90 hover:shadow-xl transition-all group"
+                  >
+                    <span>Mulai Belajar</span>
+                    <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
+                  </Link>
+                )}
+              </div>
             </div>
-            {(nextMaterial.category === 'live_zoom' || nextMaterial.category === 'kosakata') ? (
-              <a
-                href={nextMaterial.gdrive_url || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 bg-[#5C4FE5] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#4A3FD4] transition-colors"
-              >
-                Mulai Belajar
-                <span className="text-lg">→</span>
-              </a>
-            ) : (
-              <Link
-                href={`/ortu/materi/render/${nextMaterial.component_id}`}
-                className="w-full flex items-center justify-center gap-2 bg-[#5C4FE5] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#4A3FD4] transition-colors"
-              >
-                Mulai Belajar
-                <span className="text-lg">→</span>
-              </Link>
-            )}
           </div>
         )}
 
-        {/* Course Section with Units */}
+        {/* Course Section with Premium Units */}
         {filteredJuduls.length === 0 ? (
-          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-gray-600">
+          <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-[#E5E3FF]">
+            <div className="text-6xl mb-4 opacity-50">📚</div>
+            <p className="text-[#7B78A8] text-lg font-medium">
               Belum ada materi {TABS.find(t => t.id === activeTab)?.label} untuk level ini.
             </p>
           </div>
         ) : (
-          <div>
+          <div className="space-y-6">
             {/* Course Header */}
-            <div className="mb-4">
-              <div className="bg-[#EEEDFE] border-l-4 border-[#5C4FE5] py-3 px-4 rounded-lg">
-                <h2 className="text-base font-medium text-[#5C4FE5]">{courseName}</h2>
-                <p className="text-xs text-[#7B78A8] mt-1">Level: {levelName}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-[#1A1640] flex items-center gap-2">
+                  <span className="text-2xl">🎓</span>
+                  {courseName}
+                </h2>
+                <p className="text-sm text-[#7B78A8] mt-1 font-medium">Level: {levelName}</p>
+              </div>
+              <div className="bg-[#F7F6FF] border border-[#E5E3FF] px-4 py-2 rounded-full">
+                <p className="text-xs font-semibold text-[#5C4FE5]">
+                  {filteredJuduls.length} {filteredJuduls.length === 1 ? 'unit' : 'units'}
+                </p>
               </div>
             </div>
 
-            {/* Units List */}
-            <div className="space-y-2">
-              {filteredJuduls.map(judul => {
+            {/* Premium Units List */}
+            <div className="space-y-4">
+              {filteredJuduls.map((judul, idx) => {
                 const isExpanded = expandedUnits.has(judul.id)
                 const completedCount = judul.materials.filter(m => m.completed).length
                 const totalCount = judul.materials.length
 
                 return (
-                  <div key={judul.id} className="border-2 border-[#E5E3FF] rounded-lg overflow-hidden">
+                  <div
+                    key={judul.id}
+                    className="bg-white rounded-2xl shadow-sm border border-[#E5E3FF] overflow-hidden hover:shadow-lg hover:border-[#C4BFFF] transition-all"
+                  >
                     {/* Unit Header */}
                     <button
                       onClick={() => toggleUnit(judul.id)}
-                      className="w-full flex items-center justify-between p-3 bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors"
+                      className="w-full px-6 py-5 flex items-center justify-between hover:bg-[#F7F6FF] transition-colors group"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-[#1A1640]">
-                          {isExpanded ? '▼' : '▶'} {judul.name}
-                        </span>
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-all ${
+                          isExpanded 
+                            ? 'bg-gradient-to-br from-[#5C4FE5] to-[#7A6FFF] text-white shadow-lg shadow-[#5C4FE5]/30' 
+                            : 'bg-[#F7F6FF] text-[#5C4FE5] group-hover:bg-[#EEEDFE]'
+                        }`}>
+                          {String(idx + 1).padStart(2, '0')}
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <h3 className="font-bold text-[#1A1640] text-base mb-1 truncate">{judul.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-full max-w-[120px] h-1.5 bg-[#F7F6FF] rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-[#27A05A] to-[#34C76D] rounded-full transition-all"
+                                  style={{ width: `${(completedCount / totalCount) * 100}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs font-semibold text-[#7B78A8]">
+                                {completedCount}/{totalCount}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-xs text-[#7B78A8] bg-white px-2 py-1 rounded-full">
-                        {completedCount}/{totalCount}
-                      </span>
+                      <div className={`text-[#5C4FE5] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                        </svg>
+                      </div>
                     </button>
 
-                    {/* Materials List */}
+                    {/* Premium Materials List */}
                     {isExpanded && (
-                      <div className="p-3 space-y-2 bg-white">
-                        {judul.materials.map(material => {
+                      <div className="px-6 pb-6 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                        {judul.materials.map((material, matIdx) => {
                           const shouldOpenInNewTab = material.category === 'live_zoom' || material.category === 'kosakata'
                           const materialUrl = shouldOpenInNewTab 
                             ? (material.gdrive_url || '#')
@@ -182,56 +239,58 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                           return (
                             <div
                               key={material.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                              className={`group flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
                                 material.completed
-                                  ? 'bg-[#E6F4EC] border-[#9FE1CB]'
-                                  : 'bg-white border-[#E5E3FF] hover:bg-[#F7F6FF] hover:border-[#5C4FE5]'
+                                  ? 'bg-gradient-to-r from-[#E6F4EC] to-[#F0F8F4] border-[#9FE1CB]'
+                                  : 'bg-white border-[#E5E3FF] hover:bg-gradient-to-r hover:from-[#F7F6FF] hover:to-[#FEFBFF] hover:border-[#5C4FE5] hover:shadow-md'
                               }`}
                             >
                               {/* Completion Status */}
-                              <div
-                                className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center ${
-                                  material.completed
-                                    ? 'bg-[#27A05A] text-white text-[10px] font-medium'
-                                    : 'border-2 border-[#C4BFFF]'
-                                }`}
-                              >
-                                {material.completed && '✓'}
+                              <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold transition-all ${
+                                material.completed
+                                  ? 'bg-gradient-to-br from-[#27A05A] to-[#34C76D] text-white shadow-lg shadow-[#27A05A]/30'
+                                  : 'bg-[#F7F6FF] text-[#C4BFFF] border-2 border-[#E5E3FF] group-hover:border-[#5C4FE5] group-hover:text-[#5C4FE5]'
+                              }`}>
+                                {material.completed ? (
+                                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M13.485 3.515a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L5.778 10.07l6.293-6.293a1 1 0 011.414 0z"/>
+                                  </svg>
+                                ) : (
+                                  <span className="text-xs">{String(matIdx + 1).padStart(2, '0')}</span>
+                                )}
                               </div>
 
                               {/* Material Info */}
                               <div className="flex-1 min-w-0">
-                                <p
-                                  className={`text-sm font-medium truncate ${
-                                    material.completed ? 'text-[#1A5C36]' : 'text-[#1A1640]'
-                                  }`}
-                                >
+                                <p className={`font-semibold truncate transition-colors ${
+                                  material.completed ? 'text-[#1A5C36]' : 'text-[#1A1640] group-hover:text-[#5C4FE5]'
+                                }`}>
                                   {material.title}
                                 </p>
                               </div>
 
-                              {/* Action Button */}
+                              {/* Premium Action Button */}
                               {shouldOpenInNewTab ? (
                                 <a
                                   href={materialUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`px-3 py-1.5 text-xs font-medium rounded ${
+                                  className={`flex-shrink-0 px-5 py-2.5 text-sm font-bold rounded-lg transition-all ${
                                     material.completed
-                                      ? 'bg-white border border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC]'
-                                      : 'bg-[#5C4FE5] text-white hover:bg-[#4A3FD4]'
-                                  } transition-colors`}
+                                      ? 'bg-white border-2 border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC] hover:shadow-md'
+                                      : 'bg-gradient-to-r from-[#5C4FE5] to-[#7A6FFF] text-white hover:shadow-lg hover:shadow-[#5C4FE5]/30 hover:-translate-y-0.5'
+                                  }`}
                                 >
                                   {material.completed ? 'Buka' : 'Mulai'}
                                 </a>
                               ) : (
                                 <Link
                                   href={materialUrl}
-                                  className={`px-3 py-1.5 text-xs font-medium rounded ${
+                                  className={`flex-shrink-0 px-5 py-2.5 text-sm font-bold rounded-lg transition-all ${
                                     material.completed
-                                      ? 'bg-white border border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC]'
-                                      : 'bg-[#5C4FE5] text-white hover:bg-[#4A3FD4]'
-                                  } transition-colors`}
+                                      ? 'bg-white border-2 border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC] hover:shadow-md'
+                                      : 'bg-gradient-to-r from-[#5C4FE5] to-[#7A6FFF] text-white hover:shadow-lg hover:shadow-[#5C4FE5]/30 hover:-translate-y-0.5'
+                                  }`}
                                 >
                                   {material.completed ? 'Buka' : 'Mulai'}
                                 </Link>
