@@ -10,16 +10,10 @@ export default async function MateriPage({ params }: { params: { slug: string } 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) notFound()
 
-  // 1. Get student by slug with profile name
+  // 1. Get student by slug
   const { data: student } = await supabase
     .from('students')
-    .select(`
-      id,
-      profile_id,
-      profiles!inner(
-        full_name
-      )
-    `)
+    .select('id, profile_id')
     .eq('slug', slug)
     .single()
 
@@ -27,7 +21,14 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     notFound()
   }
 
-  // 2. Get student's enrollment with level
+  // 2. Get student's profile name
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', student.profile_id)
+    .single()
+
+  // 3. Get student's enrollment with level
   const { data: enrollment } = await supabase
     .from('enrollments')
     .select('id, level_id, class_group_id')
@@ -49,7 +50,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     )
   }
 
-  // 3. Get level details
+  // 4. Get level details
   const { data: level } = await supabase
     .from('levels')
     .select('id, name, course_id')
@@ -70,14 +71,14 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     )
   }
 
-  // 4. Get course details
+  // 5. Get course details
   const { data: course } = await supabase
     .from('courses')
     .select('id, name')
     .eq('id', level.course_id)
     .single()
 
-  // 5. Get all units for this level
+  // 6. Get all units for this level
   const { data: units } = await supabase
     .from('units')
     .select('id, name, position, level_id')
@@ -98,7 +99,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     )
   }
 
-  // 6. Get all lessons for these units
+  // 7. Get all lessons for these units
   const unitIds = units.map(u => u.id)
   const { data: lessons } = await supabase
     .from('lessons')
@@ -106,7 +107,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     .in('unit_id', unitIds)
     .order('position')
 
-  // 7. Get all materials for these lessons
+  // 8. Get all materials for these lessons
   const lessonIds = lessons?.map(l => l.id) || []
   const { data: materials } = await supabase
     .from('materials')
@@ -114,14 +115,14 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     .in('lesson_id', lessonIds)
     .order('position')
 
-  // 8. Get material contents for all materials
+  // 9. Get material contents for all materials
   const materialIds = materials?.map(m => m.id) || []
   const { data: materialContents } = await supabase
     .from('material_contents')
     .select('material_id, category, content_url, storage_path')
     .in('material_id', materialIds)
 
-  // 9. Get student's material progress
+  // 10. Get student's material progress
   const { data: progress } = await supabase
     .from('student_material_progress')
     .select('material_id, completed_at')
@@ -163,7 +164,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
         juduls={transformedData}
         levelName={level.name}
         courseName={course?.name || ''}
-        studentName={student.profiles.full_name}
+        studentName={profile?.full_name || 'Student'}
         studentId={student.id}
       />
     </div>
