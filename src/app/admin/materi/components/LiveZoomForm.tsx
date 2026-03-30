@@ -23,17 +23,14 @@ type LiveZoomFormProps = {
 export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: LiveZoomFormProps) {
   const [courses, setCourses] = useState<any[]>([]);
   const [levels, setLevels] = useState<any[]>([]);
-  const [juduls, setJuduls] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
-  const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
 
-  const [newJudulName, setNewJudulName] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
   const [newLessonName, setNewLessonName] = useState('');
 
@@ -94,10 +91,10 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
 
   useEffect(() => {
     if (selectedLevels.length > 0) {
-      fetchJudulsForSelectedLevels();
+      fetchUnitsForSelectedLevels();
     } else {
-      setJuduls([]);
-      setSelectedJudul('');
+      setUnits([]);
+      setSelectedUnit('');
     }
   }, [selectedLevels]);
 
@@ -132,19 +129,19 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
     setLevels(data || []);
   };
 
-  const fetchJudulsForSelectedLevels = async () => {
+  const fetchUnitsForSelectedLevels = async () => {
     if (selectedLevels.length === 0) return;
-    const { data } = await supabase.from('juduls').select('*').in('level_id', selectedLevels);
-    const uniqueJuduls = data?.reduce((acc: any[], curr) => {
-      if (!acc.find(j => j.name === curr.name)) acc.push(curr);
+    const { data } = await supabase.from('units').select('*').in('level_id', selectedLevels);
+    
+    // Get unique units by name
+    const uniqueUnits = data?.reduce((acc: any[], curr) => {
+      if (!acc.find(u => u.unit_name === curr.unit_name)) {
+        acc.push(curr);
+      }
       return acc;
     }, []) || [];
-    setJuduls(uniqueJuduls);
-  };
-
-  const fetchUnits = async (judulId: string) => {
-    const { data } = await supabase.from('units').select('*').eq('judul_id', judulId);
-    setUnits(data || []);
+    
+    setUnits(uniqueUnits);
   };
 
   const fetchLessons = async (unitId: string) => {
@@ -191,51 +188,16 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           return;
         }
 
-        // ✅ FIX BUG #1: Create JUDUL first if NEW
-        let actualJudulId = selectedJudul;
-        
-        if (selectedJudul === 'NEW' && newJudulName) {
-          console.log('🆕 Creating Judul FIRST for all selected levels...');
-          
-          // Create judul for EACH selected level (juduls are level-specific)
-          const judulIds: string[] = [];
-          
-          for (const levelId of selectedLevels) {
-            const { data: newJudul, error: judulError } = await supabase
-              .from('juduls')
-              .insert({
-                level_id: levelId,
-                name: newJudulName,
-              })
-              .select()
-              .single();
-
-            if (judulError) {
-              console.error('Judul creation error:', judulError);
-              alert(`❌ Gagal membuat judul: ${judulError.message}`);
-              setLoading(false);
-              return;
-            }
-
-            judulIds.push(newJudul.id);
-            console.log(`✅ Judul created for level ${levelId}:`, newJudul.id);
-          }
-          
-          // Use first judul ID as reference for unit creation
-          actualJudulId = judulIds[0];
-        }
-
-        // ✅ FIX BUG #2: Create UNIT once with proper judul_id
+        // ✅ Create UNIT once (for first selected level)
         let actualUnitId = selectedUnit;
         
         if (selectedUnit === 'NEW' && newUnitName) {
-          console.log('🆕 Creating Unit ONCE with judul_id:', actualJudulId);
+          console.log('🆕 Creating Unit ONCE:', newUnitName);
           
           const { data: newUnit, error: unitError } = await supabase
             .from('units')
             .insert({
-              level_id: selectedLevels[0],
-              judul_id: actualJudulId, // ✅ Use actual judul ID, not null!
+              level_id: selectedLevels[0], // Use first level
               unit_name: newUnitName,
               unit_number: 0,
               position: 0,
@@ -254,7 +216,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           console.log('✅ Unit created with ID:', actualUnitId);
         }
 
-        // Create LESSON once
+        // ✅ Create LESSON once
         let actualLessonId = selectedLesson;
         
         if (selectedLesson === 'NEW' && newLessonName && actualUnitId) {
@@ -282,13 +244,12 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           console.log('✅ Lesson created with ID:', actualLessonId);
         }
 
-        // Create materials for all levels
+        // ✅ Create materials for all levels using SAME unit/lesson
         let successCount = 0;
         let failedLevels: string[] = [];
 
         for (const levelId of selectedLevels) {
           try {
-            // ✅ Material title = Lesson name only (level is filtered separately)
             const materialTitle = newLessonName || selectedLesson;
             
             const formData = new FormData();
@@ -297,8 +258,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             formData.append('category', 'live_zoom');
             formData.append('course_id', selectedCourse);
             formData.append('level_id', levelId);
-            formData.append('judul_id', actualJudulId);
-            formData.append('judul_name', '');
             formData.append('unit_id', actualUnitId);
             formData.append('unit_name', '');
             formData.append('lesson_id', actualLessonId);
@@ -441,26 +400,14 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           {selectedLevels.length > 0 && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Judul *</label>
-                <select value={selectedJudul} onChange={(e) => { setSelectedJudul(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
-                  <option value="">Pilih Judul</option>
-                  <option value="NEW">+ Buat Judul Baru</option>
-                  {juduls.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
+                <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
+                  <option value="">Pilih Unit</option>
+                  <option value="NEW">+ Buat Unit Baru</option>
+                  {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
                 </select>
-                {selectedJudul === 'NEW' && <input type="text" value={newJudulName} onChange={(e) => setNewJudulName(e.target.value)} placeholder="Nama Judul Baru" required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium" />}
+                {selectedUnit === 'NEW' && <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium" />}
               </div>
-
-              {selectedJudul && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
-                  <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
-                    <option value="">Pilih Unit</option>
-                    <option value="NEW">+ Buat Unit Baru</option>
-                    {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
-                  </select>
-                  {selectedUnit === 'NEW' && <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium" />}
-                </div>
-              )}
 
               {selectedUnit && (
                 <div>
