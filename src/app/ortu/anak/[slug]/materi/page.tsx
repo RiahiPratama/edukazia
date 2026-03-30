@@ -52,7 +52,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
   // 3. Get level details
   const { data: level } = await supabase
     .from('levels')
-    .select('id, name, course_id, courses(id, name)')
+    .select('id, name, course_id')
     .eq('id', enrollment.level_id)
     .single()
 
@@ -70,7 +70,14 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     )
   }
 
-  // 4. Get all units for this level
+  // 4. Get course details
+  const { data: course } = await supabase
+    .from('courses')
+    .select('id, name')
+    .eq('id', level.course_id)
+    .single()
+
+  // 5. Get all units for this level
   const { data: units } = await supabase
     .from('units')
     .select('id, name, position, level_id')
@@ -91,7 +98,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     )
   }
 
-  // 5. Get all lessons for these units
+  // 6. Get all lessons for these units
   const unitIds = units.map(u => u.id)
   const { data: lessons } = await supabase
     .from('lessons')
@@ -99,7 +106,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     .in('unit_id', unitIds)
     .order('position')
 
-  // 6. Get all materials for these lessons
+  // 7. Get all materials for these lessons
   const lessonIds = lessons?.map(l => l.id) || []
   const { data: materials } = await supabase
     .from('materials')
@@ -107,14 +114,14 @@ export default async function MateriPage({ params }: { params: { slug: string } 
     .in('lesson_id', lessonIds)
     .order('position')
 
-  // 7. Get material contents for all materials
+  // 8. Get material contents for all materials
   const materialIds = materials?.map(m => m.id) || []
   const { data: materialContents } = await supabase
     .from('material_contents')
     .select('material_id, category, content_url, storage_path')
     .in('material_id', materialIds)
 
-  // 8. Get student's material progress
+  // 9. Get student's material progress
   const { data: progress } = await supabase
     .from('student_material_progress')
     .select('material_id, completed_at')
@@ -155,7 +162,7 @@ export default async function MateriPage({ params }: { params: { slug: string } 
       <MateriContent
         juduls={transformedData}
         levelName={level.name}
-        courseName={level.courses?.name || ''}
+        courseName={course?.name || ''}
         studentName={student.profiles.full_name}
         studentId={student.id}
       />
