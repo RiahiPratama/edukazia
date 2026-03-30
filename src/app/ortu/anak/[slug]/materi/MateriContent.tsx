@@ -66,17 +66,6 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
     })
   }
 
-  const getMaterialUrl = (material: Material) => {
-    if (material.category === 'live_zoom' || material.category === 'cefr') {
-      return `/ortu/materi/render/${material.component_id}`
-    } else if (material.category === 'bacaan') {
-      return `/ortu/materi/render/${material.component_id}`
-    } else if (material.category === 'kosakata') {
-      return material.gdrive_url || '#'
-    }
-    return '#'
-  }
-
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -172,50 +161,72 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                     {/* Materials List */}
                     {isExpanded && (
                       <div className="p-3 space-y-2 bg-white">
-                        {judul.materials.map(material => (
-                          <div
-                            key={material.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                              material.completed
-                                ? 'bg-[#E6F4EC] border-[#9FE1CB]'
-                                : 'bg-white border-[#E5E3FF] hover:bg-[#F7F6FF] hover:border-[#5C4FE5]'
-                            }`}
-                          >
-                            {/* Completion Status */}
+                        {judul.materials.map(material => {
+                          const shouldOpenInNewTab = material.category === 'live_zoom' || material.category === 'kosakata'
+                          const materialUrl = shouldOpenInNewTab 
+                            ? (material.gdrive_url || '#')
+                            : `/ortu/materi/render/${material.component_id}`
+
+                          return (
                             <div
-                              className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center ${
+                              key={material.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
                                 material.completed
-                                  ? 'bg-[#27A05A] text-white text-[10px] font-medium'
-                                  : 'border-2 border-[#C4BFFF]'
+                                  ? 'bg-[#E6F4EC] border-[#9FE1CB]'
+                                  : 'bg-white border-[#E5E3FF] hover:bg-[#F7F6FF] hover:border-[#5C4FE5]'
                               }`}
                             >
-                              {material.completed && '✓'}
-                            </div>
-
-                            {/* Material Info */}
-                            <div className="flex-1 min-w-0">
-                              <p
-                                className={`text-sm font-medium truncate ${
-                                  material.completed ? 'text-[#1A5C36]' : 'text-[#1A1640]'
+                              {/* Completion Status */}
+                              <div
+                                className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center ${
+                                  material.completed
+                                    ? 'bg-[#27A05A] text-white text-[10px] font-medium'
+                                    : 'border-2 border-[#C4BFFF]'
                                 }`}
                               >
-                                {material.title}
-                              </p>
-                            </div>
+                                {material.completed && '✓'}
+                              </div>
 
-                            {/* Action Button */}
-                            <Link
-                              href={getMaterialUrl(material)}
-                              className={`px-3 py-1.5 text-xs font-medium rounded ${
-                                material.completed
-                                  ? 'bg-white border border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC]'
-                                  : 'bg-[#5C4FE5] text-white hover:bg-[#4A3FD4]'
-                              } transition-colors`}
-                            >
-                              {material.completed ? 'Buka' : 'Mulai'}
-                            </Link>
-                          </div>
-                        ))}
+                              {/* Material Info */}
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className={`text-sm font-medium truncate ${
+                                    material.completed ? 'text-[#1A5C36]' : 'text-[#1A1640]'
+                                  }`}
+                                >
+                                  {material.title}
+                                </p>
+                              </div>
+
+                              {/* Action Button */}
+                              {shouldOpenInNewTab ? (
+                                <a
+                                  href={materialUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`px-3 py-1.5 text-xs font-medium rounded ${
+                                    material.completed
+                                      ? 'bg-white border border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC]'
+                                      : 'bg-[#5C4FE5] text-white hover:bg-[#4A3FD4]'
+                                  } transition-colors`}
+                                >
+                                  {material.completed ? 'Buka' : 'Mulai'}
+                                </a>
+                              ) : (
+                                <Link
+                                  href={materialUrl}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded ${
+                                    material.completed
+                                      ? 'bg-white border border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC]'
+                                      : 'bg-[#5C4FE5] text-white hover:bg-[#4A3FD4]'
+                                  } transition-colors`}
+                                >
+                                  {material.completed ? 'Buka' : 'Mulai'}
+                                </Link>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
