@@ -21,10 +21,10 @@ export default async function MateriPage({ params }: PageProps) {
     notFound()
   }
 
-  // 2. Get active enrollments
+  // 2. Get active enrollments with level_id
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select('id, class_group_id')
+    .select('id, class_group_id, level_id')
     .eq('student_id', student.id)
     .eq('status', 'active')
 
@@ -45,14 +45,10 @@ export default async function MateriPage({ params }: PageProps) {
     )
   }
 
-  // 3. Get enrolled levels
-  const enrollmentIds = enrollments.map((e: any) => e.id)
-  const { data: enrolledLevels } = await supabase
-    .from('enrollment_levels')
-    .select('level_id')
-    .in('enrollment_id', enrollmentIds)
-
-  const levelIds = (enrolledLevels ?? []).map((el: any) => el.level_id)
+  // 3. Get level IDs from enrollments (NEW: using enrollments.level_id!)
+  const levelIds = enrollments
+    .map((e: any) => e.level_id)
+    .filter((id: string | null) => id !== null)
 
   if (levelIds.length === 0) {
     return (
@@ -71,14 +67,14 @@ export default async function MateriPage({ params }: PageProps) {
     )
   }
 
-  // 4. Get juduls with nested materials
-  const { data: judulsData } = await supabase
-    .from('juduls')
+  // 4. Get units for these levels (NEW: units now link directly to levels!)
+  const { data: unitsData } = await supabase
+    .from('units')
     .select(`
       id,
-      name,
+      unit_name,
       description,
-      sort_order,
+      position,
       level_id,
       levels!inner(
         id,
@@ -92,24 +88,64 @@ export default async function MateriPage({ params }: PageProps) {
     `)
     .in('level_id', levelIds)
     .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+    .order('position', { ascending: true })
 
-  // 5. Get materials for these juduls
-  const judulIds = (judulsData ?? []).map((j: any) => j.id)
+  if (!unitsData || unitsData.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl border border-[#E5E3FF] p-8 text-center">
+            <h1 className="text-xl font-black text-[#1A1640] mb-2">
+              Belum Ada Materi
+            </h1>
+            <p className="text-sm text-[#7B78A8]">
+              Materi pembelajaran untuk level yang kamu ikuti belum tersedia.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 5. Get lessons for these units
+  const unitIds = unitsData.map((u: any) => u.id)
+  const { data: lessonsData } = await supabase
+    .from('lessons')
+    .select('id, lesson_name, unit_id, position')
+    .in('unit_id', unitIds)
+    .order('position', { ascending: true })
+
+  // 6. Get materials for these lessons
+  const lessonIds = (lessonsData ?? []).map((l: any) => l.id)
   
   let materialsData: any[] = []
-  if (judulIds.length > 0) {
+  if (lessonIds.length > 0) {
     const { data } = await supabase
       .from('materials')
-      .select('id, judul_id, title, lesson_name, category, gdrive_url, component_id, thumbnail_url, lesson_number')
-      .in('judul_id', judulIds)
+      .select(`
+        id,
+        lesson_id,
+        title,
+        category,
+        position,
+        is_published,
+        material_contents(
+          content_type,
+          content_url,
+          storage_bucket,
+          storage_path,
+          audio_bucket,
+          audio_path
+        )
+      `)
+      .in('lesson_id', lessonIds)
       .eq('is_published', true)
-      .order('lesson_number', { ascending: true })
+      .order('position', { ascending: true })
     
     materialsData = data ?? []
   }
 
-  // 6. Get student progress
+  // 7. Get student progress
   const materialIds = materialsData.map((m: any) => m.id)
   let progressData: any[] = []
   
@@ -127,26 +163,69 @@ export default async function MateriPage({ params }: PageProps) {
     progressData.map((p: any) => p.material_id)
   )
 
-  // 7. Nest materials under juduls
-  const judulsWithMaterials = (judulsData ?? []).map((judul: any) => {
-    const judulMaterials = materialsData
-      .filter((m: any) => m.judul_id === judul.id)
-      .map((m: any) => ({
-        ...m,
-        isCompleted: completedMaterialIds.has(m.id),
-      }))
+  // 8. Nest materials under lessons, lessons under units
+  const unitsWithContent = unitsData.map((unit: any) => {
+    const unitLessons = (lessonsData ?? [])
+      .filter((l: any) => l.unit_id === unit.id)
+      .map((lesson: any) => {
+        const lessonMaterials = materialsData
+          .filter((m: any) => m.lesson_id === lesson.id)
+          .map((m: any) => {
+            // Get content data from material_contents
+            const content = m.material_contents?.[0]
+            let contentUrl = null
+            
+            if (content) {
+              if (content.content_type === 'url') {
+                contentUrl = content.content_url
+              } else if (content.content_type === 'component') {
+                contentUrl = `components/${content.storage_path}`
+              } else if (content.content_type === 'audio') {
+                contentUrl = `audio/${content.audio_path}`
+              }
+            }
+
+            return {
+              id: m.id,
+              title: m.title,
+              category: m.category,
+              position: m.position,
+              contentUrl,
+              isCompleted: completedMaterialIds.has(m.id),
+            }
+          })
+
+        return {
+          id: lesson.id,
+          lesson_name: lesson.lesson_name,
+          position: lesson.position,
+          materials: lessonMaterials,
+        }
+      })
 
     return {
-      ...judul,
-      materials: judulMaterials,
+      id: unit.id,
+      name: unit.unit_name,
+      description: unit.description,
+      position: unit.position,
+      level_id: unit.level_id,
+      level_name: unit.levels.name,
+      course_name: unit.levels.courses.name,
+      course_color: unit.levels.courses.color,
+      lessons: unitLessons,
     }
   })
+
+  // 9. Filter out units with no materials
+  const unitsWithMaterials = unitsWithContent.filter(
+    (unit: any) => unit.lessons.some((lesson: any) => lesson.materials.length > 0)
+  )
 
   return (
     <MateriContent
       studentName={student.relation_name}
       studentId={student.id}
-      juduls={judulsWithMaterials}
+      juduls={unitsWithMaterials}  // Pass units as "juduls" for backward compatibility with MateriContent
     />
   )
 }
