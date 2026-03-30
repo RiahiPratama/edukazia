@@ -263,7 +263,9 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                               {/* Material Info */}
                               <div className="flex-1 min-w-0">
                                 <p className={`font-semibold truncate transition-colors ${
-                                  material.completed ? 'text-[#1A5C36]' : 'text-[#1A1640] group-hover:text-[#5C4FE5]'
+                                  material.completed 
+                                    ? 'text-[#1A5C36] dark:text-[#34C76D]' 
+                                    : 'text-[#1A1640] dark:text-white group-hover:text-[#5C4FE5] dark:group-hover:text-[#7A6FFF]'
                                 }`}>
                                   {material.title}
                                 </p>

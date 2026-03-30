@@ -118,7 +118,7 @@ export default async function MateriPage({
   const lessonIds = lessons?.map(l => l.id) || []
   const { data: materials } = await supabase
     .from('materials')
-    .select('id, title, position, lesson_id')
+    .select('id, title, position, lesson_id, category, canva_urls, content_data, template_id')
     .in('lesson_id', lessonIds)
     .order('position')
 
@@ -144,12 +144,28 @@ export default async function MateriPage({
         const content = materialContents?.find(c => c.material_id === material.id)
         const isCompleted = progress?.some(p => p.material_id === material.id)
         
+        // Extract URL based on category
+        let materialUrl = null
+        let componentId = null
+        
+        if (material.category === 'live_zoom' && material.canva_urls) {
+          // Extract first URL from canva_urls JSONB array
+          const urls = Array.isArray(material.canva_urls) ? material.canva_urls : []
+          materialUrl = urls[0] || null
+        } else if (material.category === 'kosakata') {
+          // For kosakata, use content_url from material_contents
+          materialUrl = content?.content_url || null
+        } else if (material.category === 'bacaan' || material.category === 'cefr') {
+          // For bacaan/cefr, use template_id or storage_path for component rendering
+          componentId = material.template_id || content?.storage_path || null
+        }
+        
         return {
           id: material.id,
           title: material.title,
-          category: content?.category || 'live_zoom',
-          gdrive_url: content?.content_url || null,
-          component_id: content?.storage_path || null,
+          category: material.category || 'live_zoom',
+          gdrive_url: materialUrl,
+          component_id: componentId,
           completed: isCompleted || false,
           lesson_title: lesson.lesson_name,
           unit_name: unit.unit_name
