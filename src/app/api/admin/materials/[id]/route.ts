@@ -91,7 +91,6 @@ export async function DELETE(
   })
 }
 
-// Optional: Add GET for material details
 export async function GET(
   request: NextRequest,
   { params }: RouteParams
@@ -120,4 +119,79 @@ export async function GET(
   }
 
   return NextResponse.json({ material })
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: RouteParams
+) {
+  const { id } = await params
+  const supabase = await createClient()
+
+  // 1. Check admin authentication
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 2. Verify admin role
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 })
+  }
+
+  // 3. Parse request body
+  const body = await request.json()
+  const { 
+    title,
+    category,
+    lesson_id,
+    position,
+    canva_urls,
+    template_id,
+    content_data
+  } = body
+
+  // 4. Build update object - only include provided fields
+  const updateData: any = {}
+  
+  if (title !== undefined) updateData.title = title
+  if (category !== undefined) updateData.category = category
+  if (lesson_id !== undefined) updateData.lesson_id = lesson_id
+  if (position !== undefined) updateData.position = position
+  if (canva_urls !== undefined) updateData.canva_urls = canva_urls
+  if (template_id !== undefined) updateData.template_id = template_id
+  if (content_data !== undefined) updateData.content_data = content_data
+  
+  // Always update timestamp
+  updateData.updated_at = new Date().toISOString()
+
+  // 5. Update material
+  const { data: updatedMaterial, error: updateError } = await supabase
+    .from('materials')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (updateError) {
+    console.error('Material update error:', updateError)
+    return NextResponse.json(
+      { error: 'Failed to update material', details: updateError.message },
+      { status: 500 }
+    )
+  }
+
+  // 6. Return success response
+  return NextResponse.json({
+    success: true,
+    message: 'Material updated successfully',
+    material: updatedMaterial
+  })
 }
