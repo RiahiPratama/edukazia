@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type Material = {
@@ -24,12 +24,6 @@ type Judul = { id: string; name: string; };
 type Unit = { id: string; unit_name: string; };
 type Lesson = { id: string; lesson_name: string; };
 
-type GroupedMaterials = {
-  lessonId: string;
-  lessonName: string;
-  materials: Material[];
-};
-
 type MaterialListProps = {
   category: 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
   onEdit?: (material: Material) => void;
@@ -41,6 +35,10 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // NEW: Store unit and lesson data fetched from DB
+  const [unitsMap, setUnitsMap] = useState<Map<string, string>>(new Map());
+  const [lessonsMap, setLessonsMap] = useState<Map<string, string>>(new Map());
+
   // Filter states
   const [levels, setLevels] = useState<Level[]>([]);
   const [juduls, setJuduls] = useState<Judul[]>([]);
@@ -51,6 +49,8 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [selectedJudul, setSelectedJudul] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
+
+  const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
 
   const supabase = createClient();
 
@@ -104,11 +104,46 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       if (fetchError) throw fetchError;
 
       setMaterials(data || []);
+
+      // NEW: Fetch unit and lesson names for all materials
+      if (data && data.length > 0) {
+        await fetchUnitAndLessonNames(data);
+      }
     } catch (err) {
       console.error('Error fetching materials:', err);
       setError('Gagal memuat daftar materi');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NEW: Fetch unit and lesson names from DB
+  const fetchUnitAndLessonNames = async (materials: Material[]) => {
+    const unitIds = [...new Set(materials.map(m => m.unit_id).filter(Boolean))];
+    const lessonIds = [...new Set(materials.map(m => m.lesson_id).filter(Boolean))];
+
+    // Fetch units
+    if (unitIds.length > 0) {
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select('id, unit_name')
+        .in('id', unitIds);
+
+      const newUnitsMap = new Map<string, string>();
+      unitsData?.forEach(u => newUnitsMap.set(u.id, u.unit_name));
+      setUnitsMap(newUnitsMap);
+    }
+
+    // Fetch lessons
+    if (lessonIds.length > 0) {
+      const { data: lessonsData } = await supabase
+        .from('lessons')
+        .select('id, lesson_name')
+        .in('id', lessonIds);
+
+      const newLessonsMap = new Map<string, string>();
+      lessonsData?.forEach(l => newLessonsMap.set(l.id, l.lesson_name));
+      setLessonsMap(newLessonsMap);
     }
   };
 
@@ -122,14 +157,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   };
 
   const fetchJuduls = async (levelId: string) => {
-    // Use DISTINCT to avoid duplicates
     const { data } = await supabase
       .from('juduls')
       .select('id, name')
       .eq('level_id', levelId)
       .order('name');
     
-    // Manually remove duplicates by name
     const uniqueJuduls = data?.reduce((acc: Judul[], curr) => {
       if (!acc.find(j => j.name === curr.name)) {
         acc.push(curr);
@@ -176,27 +209,70 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setFilteredMaterials(filtered);
   };
 
-  const groupByLesson = (): GroupedMaterials[] => {
-    const groups: { [key: string]: GroupedMaterials } = {};
+  // NEW: Group by Unit → Lesson hierarchy
+  const groupByUnitAndLesson = () => {
+    const unitGroups: {
+      [unitId: string]: {
+        unitId: string;
+        unitName: string;
+        lessons: {
+          [lessonId: string]: {
+            lessonId: string;
+            lessonName: string;
+            materials: Material[];
+          }
+        }
+      }
+    } = {};
 
     filteredMaterials.forEach(material => {
+      const unitId = material.unit_id || 'no-unit';
       const lessonId = material.lesson_id || 'no-lesson';
-      
-      if (!groups[lessonId]) {
-        const lesson = lessons.find(l => l.id === lessonId);
-        groups[lessonId] = {
+
+      // Create unit group if not exists
+      if (!unitGroups[unitId]) {
+        unitGroups[unitId] = {
+          unitId,
+          unitName: unitsMap.get(unitId) || 'Unit Tidak Diketahui',
+          lessons: {}
+        };
+      }
+
+      // Create lesson group within unit if not exists
+      if (!unitGroups[unitId].lessons[lessonId]) {
+        unitGroups[unitId].lessons[lessonId] = {
           lessonId,
-          lessonName: lesson?.lesson_name || material.title,
+          lessonName: lessonsMap.get(lessonId) || material.title || 'Lesson Tidak Diketahui',
           materials: []
         };
       }
 
-      groups[lessonId].materials.push(material);
+      // Add material to lesson group
+      unitGroups[unitId].lessons[lessonId].materials.push(material);
     });
 
-    return Object.values(groups).sort((a, b) => 
-      a.lessonName.localeCompare(b.lessonName)
-    );
+    // Convert to array and sort
+    return Object.values(unitGroups)
+      .map(unitGroup => ({
+        ...unitGroup,
+        lessons: Object.values(unitGroup.lessons).sort((a, b) => 
+          a.lessonName.localeCompare(b.lessonName)
+        ),
+        totalMaterials: Object.values(unitGroup.lessons).reduce((sum, lesson) => sum + lesson.materials.length, 0)
+      }))
+      .sort((a, b) => a.unitName.localeCompare(b.unitName));
+  };
+
+  const toggleUnit = (unitId: string) => {
+    setExpandedUnits(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(unitId)) {
+        newSet.delete(unitId);
+      } else {
+        newSet.add(unitId);
+      }
+      return newSet;
+    });
   };
 
   const handleDelete = async (id: string) => {
@@ -310,7 +386,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     );
   }
 
-  const groupedMaterials = groupByLesson();
+  const groupedData = groupByUnitAndLesson();
 
   return (
     <div className="space-y-6">
@@ -395,8 +471,8 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         </h3>
       </div>
 
-      {/* Grouped Materials */}
-      {groupedMaterials.length === 0 ? (
+      {/* Hierarchical Grouped Materials */}
+      {groupedData.length === 0 ? (
         <div className="p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
             {getCategoryIcon()}
@@ -409,79 +485,107 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {groupedMaterials.map(group => (
-            <div key={group.lessonId} className="border border-gray-200 rounded-lg overflow-hidden">
-              {/* Group Header */}
-              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                <div className="flex items-center gap-2">
-                  <ChevronDown size={16} className="text-gray-500" />
-                  <span className="font-medium text-gray-900">{group.lessonName}</span>
-                  <span className="text-sm text-gray-500">({group.materials.length} materi)</span>
-                </div>
-              </div>
-
-              {/* Materials in this lesson */}
-              <div className="divide-y divide-gray-100">
-                {group.materials.map(material => (
-                  <div
-                    key={material.id}
-                    className="p-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {getCategoryIcon()}
-                          <h4 className="font-medium text-gray-900">{material.title}</h4>
-                          {!material.is_published && (
-                            <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                              Draft
-                            </span>
-                          )}
-                          {material.is_published && (
-                            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">
-                              Published
-                            </span>
-                          )}
-                        </div>
-
-                        {getContentPreview(material)}
-
-                        <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                          <span>Order: #{material.order_number}</span>
-                          <span>•</span>
-                          <span>{new Date(material.created_at).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        {onEdit && (
-                          <button
-                            onClick={() => onEdit(material)}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit size={18} />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDelete(material.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Hapus"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+        <div className="space-y-3">
+          {groupedData.map(unitGroup => {
+            const isExpanded = expandedUnits.has(unitGroup.unitId);
+            
+            return (
+              <div key={unitGroup.unitId} className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                {/* Unit Header */}
+                <button
+                  onClick={() => toggleUnit(unitGroup.unitId)}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-[#5C4FE5]/5 to-purple-50 border-b-2 border-gray-200 hover:from-[#5C4FE5]/10 hover:to-purple-100 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? <ChevronDown size={20} className="text-[#5C4FE5]" /> : <ChevronRight size={20} className="text-gray-500" />}
+                      <span className="font-bold text-gray-900 text-lg">📦 {unitGroup.unitName}</span>
+                      <span className="text-sm font-medium text-[#5C4FE5] bg-white px-2 py-0.5 rounded-full">
+                        {unitGroup.totalMaterials} materi
+                      </span>
                     </div>
                   </div>
-                ))}
+                </button>
+
+                {/* Lessons under this Unit */}
+                {isExpanded && (
+                  <div className="divide-y divide-gray-100">
+                    {unitGroup.lessons.map(lessonGroup => (
+                      <div key={lessonGroup.lessonId} className="bg-white">
+                        {/* Lesson Header */}
+                        <div className="px-6 py-3 bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900">📄 {lessonGroup.lessonName}</span>
+                            <span className="text-xs text-gray-500">({lessonGroup.materials.length} materi)</span>
+                          </div>
+                        </div>
+
+                        {/* Materials in this lesson */}
+                        <div className="divide-y divide-gray-100">
+                          {lessonGroup.materials.map(material => (
+                            <div
+                              key={material.id}
+                              className="px-6 py-4 hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {getCategoryIcon()}
+                                    <h4 className="font-medium text-gray-900">{material.title}</h4>
+                                    {!material.is_published && (
+                                      <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                        Draft
+                                      </span>
+                                    )}
+                                    {material.is_published && (
+                                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">
+                                        Published
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {getContentPreview(material)}
+
+                                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                                    <span>Order: #{material.order_number}</span>
+                                    <span>•</span>
+                                    <span>{new Date(material.created_at).toLocaleDateString('id-ID', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 ml-4">
+                                  {onEdit && (
+                                    <button
+                                      onClick={() => onEdit(material)}
+                                      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                      title="Edit"
+                                    >
+                                      <Edit size={18} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDelete(material.id)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Hapus"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
