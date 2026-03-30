@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         .insert({
           level_id: levelId,  // ✅ Direct link to level (no more judul_id!)
           unit_name: unitName,
+          unit_number: 0,  // ✅ Required NOT NULL field
           position: 0,  // ✅ position instead of order_number
         })
         .select()
@@ -385,6 +386,7 @@ export async function PATCH(request: NextRequest) {
           .insert({
             level_id: levelId,
             unit_name: unitName,
+            unit_number: 0,  // ✅ Required NOT NULL field
             position: 0,
           })
           .select()
