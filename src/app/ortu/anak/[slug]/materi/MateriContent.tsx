@@ -107,13 +107,25 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
               <span className="text-xs text-[#7B78A8]">•</span>
               <span className="text-xs text-[#7B78A8]">{nextMaterial.unit_name}</span>
             </div>
-            <Link
-              href={getMaterialUrl(nextMaterial)}
-              className="w-full flex items-center justify-center gap-2 bg-[#5C4FE5] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#4A3FD4] transition-colors"
-            >
-              Mulai Belajar
-              <span className="text-lg">→</span>
-            </Link>
+            {(nextMaterial.category === 'live_zoom' || nextMaterial.category === 'kosakata') ? (
+              <a
+                href={nextMaterial.gdrive_url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 bg-[#5C4FE5] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#4A3FD4] transition-colors"
+              >
+                Mulai Belajar
+                <span className="text-lg">→</span>
+              </a>
+            ) : (
+              <Link
+                href={`/ortu/materi/render/${nextMaterial.component_id}`}
+                className="w-full flex items-center justify-center gap-2 bg-[#5C4FE5] text-white py-2.5 px-4 rounded-lg font-medium hover:bg-[#4A3FD4] transition-colors"
+              >
+                Mulai Belajar
+                <span className="text-lg">→</span>
+              </Link>
+            )}
           </div>
         )}
 
