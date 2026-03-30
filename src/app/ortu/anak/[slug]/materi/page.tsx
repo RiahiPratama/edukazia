@@ -1,179 +1,151 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import MateriContent from './MateriContent'
 
 export default async function MateriPage({ 
   params 
 }: { 
   params: Promise<{ slug: string }> 
 }) {
-  // Next.js 15: params is now a Promise
   const { slug } = await params
   const supabase = await createClient()
 
-  // Get authenticated user
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) notFound()
 
-  // 1. Get student by slug
+  // Get student
   const { data: students } = await supabase
     .from('students')
     .select('id, profile_id')
     .eq('slug', slug)
 
-  if (!students || students.length === 0) {
-    notFound()
-  }
-
+  if (!students || students.length === 0) notFound()
   const student = students[0]
 
-  // 2. Get student's profile name
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', student.profile_id)
-    .single()
-
-  // 3. Get student's enrollment with level
+  // Get enrollment
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select('id, level_id, class_group_id')
+    .select('id, level_id')
     .eq('student_id', student.id)
     .eq('status', 'active')
 
-  if (!enrollments || enrollments.length === 0 || !enrollments[0].level_id) {
-    return (
-      <div className="min-h-screen bg-[#F7F6FF] p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600">
-              Hubungi admin untuk mengatur level pembelajaran kamu.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const enrollment = enrollments?.[0]
 
-  const enrollment = enrollments[0]
-
-  // 4. Get level details
+  // Get level
   const { data: level } = await supabase
     .from('levels')
-    .select('id, name, course_id')
-    .eq('id', enrollment.level_id)
-    .single()
-
-  if (!level) {
-    return (
-      <div className="min-h-screen bg-[#F7F6FF] p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600">
-              Level pembelajaran tidak ditemukan.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // 5. Get course details
-  const { data: course } = await supabase
-    .from('courses')
     .select('id, name')
-    .eq('id', level.course_id)
+    .eq('id', enrollment?.level_id)
     .single()
 
-  // 6. Get all units for this level
-  const { data: units } = await supabase
+  // ============================================
+  // THE CRITICAL QUERY - Let's see what it returns
+  // ============================================
+  const { data: units, error: unitsError } = await supabase
     .from('units')
-    .select('id, name, position, level_id')
-    .eq('level_id', level.id)
+    .select('id, unit_name, position, level_id')
+    .eq('level_id', level?.id)
     .order('position')
-
-  if (!units || units.length === 0) {
-    return (
-      <div className="min-h-screen bg-[#F7F6FF] p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600">
-              Materi pembelajaran untuk level {level.name} belum tersedia.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // 7. Get all lessons for these units
-  const unitIds = units.map(u => u.id)
-  const { data: lessons } = await supabase
-    .from('lessons')
-    .select('id, title, position, unit_id')
-    .in('unit_id', unitIds)
-    .order('position')
-
-  // 8. Get all materials for these lessons
-  const lessonIds = lessons?.map(l => l.id) || []
-  const { data: materials } = await supabase
-    .from('materials')
-    .select('id, title, position, lesson_id')
-    .in('lesson_id', lessonIds)
-    .order('position')
-
-  // 9. Get material contents for all materials
-  const materialIds = materials?.map(m => m.id) || []
-  const { data: materialContents } = await supabase
-    .from('material_contents')
-    .select('material_id, category, content_url, storage_path')
-    .in('material_id', materialIds)
-
-  // 10. Get student's material progress
-  const { data: progress } = await supabase
-    .from('student_material_progress')
-    .select('material_id, completed_at')
-    .eq('student_id', student.id)
-
-  // Transform data into the structure needed by MateriContent component
-  const transformedData = units.map(unit => {
-    const unitLessons = lessons?.filter(l => l.unit_id === unit.id) || []
-    const unitMaterials = unitLessons.flatMap(lesson => {
-      const lessonMaterials = materials?.filter(m => m.lesson_id === lesson.id) || []
-      return lessonMaterials.map(material => {
-        const content = materialContents?.find(c => c.material_id === material.id)
-        const isCompleted = progress?.some(p => p.material_id === material.id)
-        
-        return {
-          id: material.id,
-          title: material.title,
-          category: content?.category || 'live_zoom',
-          gdrive_url: content?.content_url || null,
-          component_id: content?.storage_path || null,
-          completed: isCompleted || false,
-          lesson_title: lesson.title,
-          unit_name: unit.name
-        }
-      })
-    })
-
-    return {
-      id: unit.id,
-      name: unit.name,
-      sort_order: unit.position,
-      materials: unitMaterials
-    }
-  })
 
   return (
-    <div className="min-h-screen bg-[#F7F6FF]">
-      <MateriContent
-        juduls={transformedData}
-        levelName={level.name}
-        courseName={course?.name || ''}
-        studentName={profile?.full_name || 'Student'}
-        studentId={student.id}
-      />
+    <div className="min-h-screen bg-[#F7F6FF] p-4">
+      <div className="max-w-4xl mx-auto space-y-4">
+        
+        {/* Level Info */}
+        <div className="bg-white rounded-lg p-4 border-2 border-blue-500">
+          <h2 className="font-bold text-lg">📍 Level Info</h2>
+          <p><strong>Level ID from enrollment:</strong></p>
+          <p className="font-mono text-xs bg-gray-100 p-2 rounded">{enrollment?.level_id}</p>
+          <p className="mt-2"><strong>Level Name:</strong> {level?.name}</p>
+        </div>
+
+        {/* Units Query Result */}
+        <div className={`rounded-lg p-4 border-2 ${units && units.length > 0 ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`}>
+          <h2 className="font-bold text-lg">🔍 Units Query Result</h2>
+          
+          <div className="mt-2">
+            <p><strong>Query:</strong></p>
+            <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto">
+{`supabase
+  .from('units')
+  .select('id, unit_name, position, level_id')
+  .eq('level_id', '${level?.id}')
+  .order('position')`}
+            </pre>
+          </div>
+
+          <div className="mt-4">
+            <p><strong>Error:</strong> {unitsError ? unitsError.message : 'None'}</p>
+            <p><strong>Data returned:</strong> {units ? units.length : 0} rows</p>
+          </div>
+
+          {units && units.length > 0 ? (
+            <div className="mt-4">
+              <p className="font-bold text-green-600">✅ Units Found!</p>
+              <pre className="bg-white p-4 rounded mt-2 overflow-auto text-xs">
+                {JSON.stringify(units, null, 2)}
+              </pre>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <p className="font-bold text-red-600">❌ No Units Returned!</p>
+              <p className="mt-2">But we KNOW units exist from SQL query!</p>
+            </div>
+          )}
+        </div>
+
+        {/* Expected vs Actual */}
+        <div className="bg-yellow-50 rounded-lg p-4 border-2 border-yellow-500">
+          <h2 className="font-bold text-lg">🎯 Expected vs Actual</h2>
+          
+          <div className="mt-2">
+            <p><strong>Expected Unit (from SQL):</strong></p>
+            <pre className="bg-white p-2 rounded text-xs mt-1">
+{`{
+  "id": "efa80c45-2e64-4b75-a867-4fdae8fe6225",
+  "unit_name": "03 Planets and space",
+  "position": 0,
+  "level_id": "173355d6-e5e6-4732-9706-643c1908b5c5"
+}`}
+            </pre>
+          </div>
+
+          <div className="mt-4">
+            <p><strong>Actual Query Result:</strong></p>
+            <p>{units && units.length > 0 ? '✅ MATCH!' : '❌ NOT FOUND'}</p>
+          </div>
+
+          {(!units || units.length === 0) && (
+            <div className="mt-4 p-3 bg-red-100 rounded">
+              <p className="font-bold text-red-800">🔴 POSSIBLE CAUSES:</p>
+              <ul className="list-disc ml-6 mt-2 text-sm">
+                <li>RLS policy blocking the query</li>
+                <li>level_id mismatch</li>
+                <li>Old build cache on Vercel</li>
+                <li>is_active = false filtering somewhere</li>
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* RLS Check */}
+        <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-500">
+          <h2 className="font-bold text-lg">🔒 Check RLS Policies</h2>
+          <p className="text-sm mt-2">Run this in Supabase SQL Editor:</p>
+          <pre className="bg-white p-2 rounded text-xs mt-2 overflow-auto">
+{`SELECT 
+  schemaname, 
+  tablename, 
+  policyname, 
+  permissive, 
+  roles, 
+  cmd, 
+  qual
+FROM pg_policies
+WHERE tablename = 'units';`}
+          </pre>
+        </div>
+
+      </div>
     </div>
   )
 }
