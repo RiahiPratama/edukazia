@@ -2,19 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
-// HELPER: Map category to content_type
-// ============================================================
-function getContentType(category: string): string {
-  const mapping: Record<string, string> = {
-    'live_zoom': 'url',
-    'bacaan': 'component',
-    'kosakata': 'url',
-    'cefr': 'audio'
-  };
-  return mapping[category] || 'url';
-}
-
-// ============================================================
 // POST - CREATE NEW MATERIAL (v4.1 COMPATIBLE)
 // ============================================================
 export async function POST(request: NextRequest) {
@@ -147,28 +134,31 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================================
-    // STEP 2: HANDLE FILE UPLOADS
+    // STEP 2: HANDLE FILE UPLOAD
     // ============================================================
-    let filePath: string | null = null;
-    let bucket: string | null = null;
 
-    if (file) {
+    let uploadedFilePath: string | null = null;
+    let storageBucket: string | null = null;
+
+    if (file && (category === 'bacaan' || category === 'cefr')) {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
-
+      
       if (category === 'bacaan') {
-        bucket = 'components';
-        filePath = `${timestamp}-${random}.jsx`;
+        storageBucket = 'components';
+        uploadedFilePath = `${timestamp}-${random}.jsx`;
       } else if (category === 'cefr') {
-        bucket = 'audio';
-        filePath = `${timestamp}-${random}.${ext}`;
+        storageBucket = 'audio';
+        uploadedFilePath = `${timestamp}-${random}.${ext}`;
       }
 
-      if (bucket && filePath) {
+      if (storageBucket && uploadedFilePath) {
+        console.log('📤 Uploading file to:', { storageBucket, uploadedFilePath });
+
         const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file);
+          .from(storageBucket)
+          .upload(uploadedFilePath, file);
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
@@ -177,24 +167,23 @@ export async function POST(request: NextRequest) {
             details: uploadError.message
           }, { status: 500 });
         }
+
+        console.log('✅ File uploaded successfully');
       }
     }
 
     // ============================================================
-    // STEP 3: CREATE MATERIAL
+    // STEP 3: CREATE MATERIAL RECORD
     // ============================================================
-    const { data: material, error: materialError } = await supabase
+
+    const { data: newMaterial, error: materialError } = await supabase
       .from('materials')
       .insert({
         title,
         category,
-        type: category,
-        level_id: levelId,
-        unit_id: actualUnitId,
         lesson_id: actualLessonId,
         position,
         is_published: isPublished,
-        canva_urls: category === 'live_zoom' && contentData?.url ? [contentData.url] : null,
       })
       .select()
       .single();
@@ -207,48 +196,61 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // ============================================================
-    // STEP 4: CREATE MATERIAL_CONTENT
-    // ============================================================
-    const contentRecord: any = {
-      material_id: material.id,
-      content_data: contentData,
-      content_type: getContentType(category),
-    };
+    console.log('✅ Material created:', newMaterial.id);
 
-    if (filePath) {
-      if (category === 'bacaan') {
-        contentRecord.storage_path = filePath;
-        contentRecord.storage_bucket = bucket;
-      } else if (category === 'cefr') {
-        contentRecord.audio_path = filePath;
-        contentRecord.audio_bucket = bucket;
-      }
+    // ============================================================
+    // STEP 4: CREATE MATERIAL_CONTENTS RECORD
+    // ============================================================
+
+    let contentType: 'url' | 'component' | 'audio' = 'url';
+    let contentUrl: string | null = null;
+    let audioPath: string | null = null;
+    let storagePath: string | null = null;
+
+    if (category === 'live_zoom') {
+      contentType = 'url';
+      contentUrl = contentData.zoom_link || contentData.url || null;
+    } else if (category === 'kosakata') {
+      contentType = 'url';
+      contentUrl = contentData.url || contentData.canva_link || contentData.gdrive_url || null;
+    } else if (category === 'bacaan') {
+      contentType = 'component';
+      storagePath = uploadedFilePath;
+    } else if (category === 'cefr') {
+      contentType = 'audio';
+      audioPath = uploadedFilePath;
     }
 
-    if (contentData.url || contentData.zoom_link || contentData.canva_link) {
-      contentRecord.content_url = contentData.url || contentData.zoom_link || contentData.canva_link;
-    }
-
-    const { error: contentError } = await supabase
+    const { data: materialContent, error: contentError } = await supabase
       .from('material_contents')
-      .insert(contentRecord);
+      .insert({
+        material_id: newMaterial.id,
+        content_type: contentType,
+        content_url: contentUrl,
+        storage_bucket: storageBucket,
+        storage_path: storagePath,
+        audio_bucket: storageBucket,
+        audio_path: audioPath,
+        content_data: contentData,
+      })
+      .select()
+      .single();
 
     if (contentError) {
-      console.error('Content creation error:', contentError);
-      // Rollback material creation
-      await supabase.from('materials').delete().eq('id', material.id);
+      console.error('Material content creation error:', contentError);
+      await supabase.from('materials').delete().eq('id', newMaterial.id);
       return NextResponse.json({
         error: 'Failed to create material content',
         details: contentError.message
       }, { status: 500 });
     }
 
-    console.log('✅ Material created:', material.id);
+    console.log('✅ Material content created:', materialContent.id);
 
     return NextResponse.json({
       success: true,
-      material
+      material: newMaterial,
+      content: materialContent
     });
 
   } catch (error) {
@@ -261,7 +263,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================
-// PATCH - UPDATE EXISTING MATERIAL (v4.1 COMPATIBLE)
+// PATCH - UPDATE EXISTING MATERIAL (CHAPTER-AWARE)
 // ============================================================
 export async function PATCH(request: NextRequest) {
   try {
@@ -288,24 +290,25 @@ export async function PATCH(request: NextRequest) {
     const formData = await request.formData();
 
     const materialId = formData.get('material_id') as string;
-    const title = formData.get('title') as string;
     const position = parseInt(formData.get('order_number') as string);
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
-    const file = formData.get('file') as File | null;
 
-    // HIERARCHY CHANGE SUPPORT
-    const levelId = formData.get('level_id') as string;
+    // CHAPTER SETTINGS
+    const chapterId = formData.get('chapter_id') as string;
+    const chapterTitle = formData.get('chapter_title') as string;
+
+    // UNIT SETTINGS
     const unitId = formData.get('unit_id') as string;
     const unitName = formData.get('unit_name') as string;
-    const unitPositionStr = formData.get('unit_position') as string;
+    const unitPosition = formData.get('unit_position') as string;
+
+    // LESSON SETTINGS
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
-    const lessonPositionStr = formData.get('lesson_position') as string;
+    const lessonPosition = formData.get('lesson_position') as string;
 
-    console.log('📝 Updating material v4.1:', materialId);
-    console.log('📦 Unit update:', { unitId, unitName, unitPosition: unitPositionStr });
-    console.log('📚 Lesson update:', { lessonId, lessonName, lessonPosition: lessonPositionStr });
+    console.log('📝 Updating material:', { materialId, chapterId, unitId, lessonId });
 
     if (!materialId) {
       return NextResponse.json({ error: 'Material ID required' }, { status: 400 });
@@ -325,198 +328,98 @@ export async function PATCH(request: NextRequest) {
     let contentData = contentDataStr ? JSON.parse(contentDataStr) : {};
     const category = existingMaterial.category;
 
-    // Handle file upload if new file provided
-    let newFilePath: string | null = null;
-    let newBucket: string | null = null;
+    // ============================================================
+    // UPDATE CHAPTER (if chapter_id exists)
+    // ============================================================
+    if (chapterId && chapterTitle) {
+      console.log('📚 Updating chapter:', chapterId, '→', chapterTitle);
+      
+      const { error: chapterError } = await supabase
+        .from('chapters')
+        .update({ chapter_title: chapterTitle })
+        .eq('id', chapterId);
 
-    if (file) {
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(7);
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-
-      if (category === 'bacaan') {
-        newBucket = 'components';
-        newFilePath = `${timestamp}-${random}.jsx`;
-      } else if (category === 'cefr') {
-        newBucket = 'audio';
-        newFilePath = `${timestamp}-${random}.${ext}`;
+      if (chapterError) {
+        console.error('Chapter update error:', chapterError);
+        return NextResponse.json({
+          error: 'Failed to update chapter',
+          details: chapterError.message
+        }, { status: 500 });
       }
 
-      if (newBucket && newFilePath) {
-        // Delete old file if exists
-        const oldContent = existingMaterial.material_contents?.[0];
-        if (oldContent) {
-          const oldPath = category === 'bacaan' ? oldContent.storage_path : oldContent.audio_path;
-          const oldBucket = category === 'bacaan' ? oldContent.storage_bucket : oldContent.audio_bucket;
-          if (oldPath && oldBucket) {
-            await supabase.storage.from(oldBucket).remove([oldPath]);
-          }
-        }
-
-        // Upload new file
-        const { error: uploadError } = await supabase.storage
-          .from(newBucket)
-          .upload(newFilePath, file);
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          return NextResponse.json({
-            error: 'Failed to upload file',
-            details: uploadError.message
-          }, { status: 500 });
-        }
-      }
+      console.log('✅ Chapter updated');
     }
 
     // ============================================================
-    // NEW: UPDATE UNIT & LESSON (if changed)
+    // UPDATE UNIT
     // ============================================================
-    
-    // Update Unit name & position
-    if (unitId && (unitName || unitPositionStr)) {
-      const unitUpdateData: any = {};
-      
-      if (unitName) {
-        unitUpdateData.unit_name = unitName;
-      }
-      
-      if (unitPositionStr) {
-        const unitPosition = parseInt(unitPositionStr);
-        if (!isNaN(unitPosition)) {
-          unitUpdateData.position = unitPosition;
-        }
+    if (unitId && unitName) {
+      console.log('📦 Updating unit:', unitId, '→', { unitName, position: unitPosition });
+
+      const unitUpdateData: any = {
+        unit_name: unitName,
+      };
+
+      if (unitPosition !== undefined && unitPosition !== null) {
+        unitUpdateData.position = parseInt(unitPosition);
       }
 
-      if (Object.keys(unitUpdateData).length > 0) {
-        console.log('🔄 Updating unit:', unitId, unitUpdateData);
-        
-        const { error: unitUpdateError } = await supabase
-          .from('units')
-          .update(unitUpdateData)
-          .eq('id', unitId);
+      const { error: unitError } = await supabase
+        .from('units')
+        .update(unitUpdateData)
+        .eq('id', unitId);
 
-        if (unitUpdateError) {
-          console.error('Unit update error:', unitUpdateError);
-          return NextResponse.json({
-            error: 'Failed to update unit',
-            details: unitUpdateError.message
-          }, { status: 500 });
-        }
-
-        console.log('✅ Unit updated successfully');
-      }
-    }
-
-    // Update Lesson name & position
-    if (lessonId && (lessonName || lessonPositionStr)) {
-      const lessonUpdateData: any = {};
-      
-      if (lessonName) {
-        lessonUpdateData.lesson_name = lessonName;
-      }
-      
-      if (lessonPositionStr) {
-        const lessonPosition = parseInt(lessonPositionStr);
-        if (!isNaN(lessonPosition)) {
-          lessonUpdateData.position = lessonPosition;
-        }
+      if (unitError) {
+        console.error('Unit update error:', unitError);
+        return NextResponse.json({
+          error: 'Failed to update unit',
+          details: unitError.message
+        }, { status: 500 });
       }
 
-      if (Object.keys(lessonUpdateData).length > 0) {
-        console.log('🔄 Updating lesson:', lessonId, lessonUpdateData);
-        
-        const { error: lessonUpdateError } = await supabase
-          .from('lessons')
-          .update(lessonUpdateData)
-          .eq('id', lessonId);
-
-        if (lessonUpdateError) {
-          console.error('Lesson update error:', lessonUpdateError);
-          return NextResponse.json({
-            error: 'Failed to update lesson',
-            details: lessonUpdateError.message
-          }, { status: 500 });
-        }
-
-        console.log('✅ Lesson updated successfully');
-      }
+      console.log('✅ Unit updated');
     }
 
     // ============================================================
-    // HANDLE HIERARCHY CHANGES (Moving to different unit/lesson)
+    // UPDATE LESSON
     // ============================================================
-    let finalLessonId = existingMaterial.lesson_id;
+    if (lessonId && lessonName) {
+      console.log('📄 Updating lesson:', lessonId, '→', { lessonName, position: lessonPosition });
 
-    if (levelId && lessonId) {
-      // 1. Create Unit if new
-      let actualUnitId = unitId;
-      if (unitId === 'NEW' && unitName && levelId) {
-        console.log('🆕 Creating new Unit:', unitName);
+      const lessonUpdateData: any = {
+        lesson_name: lessonName,
+      };
 
-        const { data: newUnit, error: unitError } = await supabase
-          .from('units')
-          .insert({
-            level_id: levelId,
-            unit_name: unitName,
-            unit_number: 0,
-            position: 0,
-          })
-          .select()
-          .single();
-
-        if (unitError) {
-          console.error('Unit creation error:', unitError);
-          return NextResponse.json({
-            error: 'Failed to create unit',
-            details: unitError.message
-          }, { status: 500 });
-        }
-
-        actualUnitId = newUnit.id;
-        console.log('✅ Unit created:', actualUnitId);
+      if (lessonPosition !== undefined && lessonPosition !== null) {
+        lessonUpdateData.position = parseInt(lessonPosition);
       }
 
-      // 2. Create Lesson if new
-      if (lessonId === 'NEW' && lessonName && actualUnitId) {
-        console.log('🆕 Creating new Lesson:', lessonName);
+      const { error: lessonError } = await supabase
+        .from('lessons')
+        .update(lessonUpdateData)
+        .eq('id', lessonId);
 
-        const { data: newLesson, error: lessonError } = await supabase
-          .from('lessons')
-          .insert({
-            unit_id: actualUnitId,
-            lesson_name: lessonName,
-            position: 0,
-          })
-          .select()
-          .single();
-
-        if (lessonError) {
-          console.error('Lesson creation error:', lessonError);
-          return NextResponse.json({
-            error: 'Failed to create lesson',
-            details: lessonError.message
-          }, { status: 500 });
-        }
-
-        finalLessonId = newLesson.id;
-        console.log('✅ Lesson created:', finalLessonId);
-      } else if (lessonId && lessonId !== 'NEW') {
-        finalLessonId = lessonId;
+      if (lessonError) {
+        console.error('Lesson update error:', lessonError);
+        return NextResponse.json({
+          error: 'Failed to update lesson',
+          details: lessonError.message
+        }, { status: 500 });
       }
+
+      console.log('✅ Lesson updated');
     }
 
     // ============================================================
-    // UPDATE MATERIAL - WITH CANVA_URLS FIX
+    // UPDATE MATERIAL
     // ============================================================
     const materialUpdateData: any = {
-      title,
-      lesson_id: finalLessonId,
       position,
       is_published: isPublished,
       updated_at: new Date().toISOString(),
     };
 
-    // CRITICAL FIX: Save canva_urls to materials table for live_zoom
+    // Save canva_urls for live_zoom
     if (category === 'live_zoom' && contentData) {
       const canvaUrl = contentData.url || contentData.zoom_link || contentData.canva_link;
       if (canvaUrl) {
@@ -540,30 +443,19 @@ export async function PATCH(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Update material_contents if needed
-    if (newFilePath || contentDataStr) {
+    // Update material_contents
+    if (contentDataStr) {
       const existingContent = existingMaterial.material_contents?.[0];
       
       const contentUpdate: any = {
         content_data: contentData,
       };
 
-      if (newFilePath) {
-        if (category === 'bacaan') {
-          contentUpdate.storage_path = newFilePath;
-          contentUpdate.storage_bucket = newBucket;
-        } else if (category === 'cefr') {
-          contentUpdate.audio_path = newFilePath;
-          contentUpdate.audio_bucket = newBucket;
-        }
-      }
-
       if (contentData.url || contentData.zoom_link || contentData.canva_link) {
         contentUpdate.content_url = contentData.url || contentData.zoom_link || contentData.canva_link;
       }
 
       if (existingContent) {
-        // Update existing content
         await supabase
           .from('material_contents')
           .update(contentUpdate)
