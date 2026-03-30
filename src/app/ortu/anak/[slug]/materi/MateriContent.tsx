@@ -266,8 +266,14 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                                   material.completed 
                                     ? 'text-[#1A5C36] dark:text-[#34C76D]' 
                                     : 'text-[#5C4FE5] dark:text-[#E6B800] group-hover:text-[#E6B800] dark:group-hover:text-[#7A6FFF]'
-                                }`}>
-                                  {material.title}
+                                }`}
+                                style={{ 
+                                  opacity: 1, 
+                                  display: 'block',
+                                  visibility: 'visible',
+                                  minHeight: '1.5rem'
+                                }}>
+                                  {material.title || '[NO TITLE]'}
                                 </p>
                               </div>
 
