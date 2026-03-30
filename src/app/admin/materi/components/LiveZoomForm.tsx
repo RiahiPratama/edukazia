@@ -181,8 +181,9 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
         const response = await fetch('/api/admin/materials', { method: 'PATCH', body: formData });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to update');
+        
         alert('✅ Material berhasil diupdate!');
-        onSave();
+        onSave(); // ✅ FIX: This will close modal and refresh list
       } else {
         if (selectedLevels.length === 0) {
           alert('Pilih minimal 1 level!');
@@ -190,6 +191,64 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           return;
         }
 
+        // ✅ FIX BUG #1: Create unit/lesson ONCE, then reuse for all levels
+        let actualUnitId = selectedUnit;
+        let actualLessonId = selectedLesson;
+
+        // Create NEW unit if needed (ONCE!)
+        if (selectedUnit === 'NEW' && newUnitName) {
+          console.log('🆕 Creating unit ONCE:', newUnitName);
+          
+          const { data: newUnit, error: unitError } = await supabase
+            .from('units')
+            .insert({
+              level_id: selectedLevels[0], // Use first level as reference
+              judul_id: selectedJudul === 'NEW' ? null : selectedJudul,
+              unit_name: newUnitName,
+              unit_number: 0,
+              position: 0,
+            })
+            .select()
+            .single();
+
+          if (unitError) {
+            console.error('Unit creation error:', unitError);
+            alert(`❌ Gagal membuat unit: ${unitError.message}`);
+            setLoading(false);
+            return;
+          }
+
+          actualUnitId = newUnit.id;
+          console.log('✅ Unit created with ID:', actualUnitId);
+        }
+
+        // Create NEW lesson if needed (ONCE!)
+        if (selectedLesson === 'NEW' && newLessonName && actualUnitId) {
+          console.log('🆕 Creating lesson ONCE:', newLessonName);
+          
+          const { data: newLesson, error: lessonError } = await supabase
+            .from('lessons')
+            .insert({
+              unit_id: actualUnitId,
+              lesson_name: newLessonName,
+              lesson_number: 0,
+              position: 0,
+            })
+            .select()
+            .single();
+
+          if (lessonError) {
+            console.error('Lesson creation error:', lessonError);
+            alert(`❌ Gagal membuat lesson: ${lessonError.message}`);
+            setLoading(false);
+            return;
+          }
+
+          actualLessonId = newLesson.id;
+          console.log('✅ Lesson created with ID:', actualLessonId);
+        }
+
+        // Now create materials for all levels using the SAME unit/lesson IDs
         let successCount = 0;
         let failedLevels: string[] = [];
 
@@ -203,10 +262,10 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             formData.append('level_id', levelId);
             formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
             formData.append('judul_name', newJudulName);
-            formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
-            formData.append('unit_name', newUnitName);
-            formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
-            formData.append('lesson_name', newLessonName);
+            formData.append('unit_id', actualUnitId); // ✅ Use the same unit ID!
+            formData.append('unit_name', ''); // Empty - don't create new
+            formData.append('lesson_id', actualLessonId); // ✅ Use the same lesson ID!
+            formData.append('lesson_name', ''); // Empty - don't create new
             formData.append('order_number', orderNumber.toString());
             formData.append('is_published', isPublished.toString());
             formData.append('content_data', JSON.stringify({ platform, url }));
@@ -217,32 +276,30 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             if (!response.ok) {
               const levelName = levels.find(l => l.id === levelId)?.name || levelId;
               failedLevels.push(levelName);
+              console.error(`Failed for ${levelName}:`, result);
             } else {
               successCount++;
             }
           } catch (error) {
             const levelName = levels.find(l => l.id === levelId)?.name || levelId;
             failedLevels.push(levelName);
+            console.error(`Error for ${levelName}:`, error);
           }
         }
 
         if (successCount === selectedLevels.length) {
           alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
-          setNewJudulName('');
-          setNewUnitName('');
-          setNewLessonName('');
-          setPlatform('canva');
-          setUrl('');
-          setOrderNumber(1);
+          onSave(); // ✅ FIX: Close modal and refresh
         } else if (successCount > 0) {
           alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal: ${failedLevels.join(', ')}`);
+          onSave(); // ✅ FIX: Close even with partial success
         } else {
-          alert(`❌ Gagal untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
+          alert(`❌ Gagal membuat material untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
+          setLoading(false); // Keep modal open on total failure
         }
       }
     } catch (error) {
       alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
       setLoading(false);
     }
   };
@@ -278,7 +335,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Quick Actions */}
                 <div className="flex items-center justify-between p-3 bg-gradient-to-r from-[#5C4FE5]/5 to-purple-50 rounded-lg border border-[#5C4FE5]/20">
                   <div className="flex items-center gap-2">
                     <Sparkles size={16} className="text-[#5C4FE5]" />
@@ -296,7 +352,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   </div>
                 </div>
 
-                {/* Compact Grid Layout */}
                 <div className="grid grid-cols-3 gap-2">
                   {levels.map((level) => {
                     const hasMaterial = levelsWithMaterials.has(level.id);
@@ -327,7 +382,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
                   })}
                 </div>
 
-                {/* Legend */}
                 {levelsWithMaterials.size > 0 && (
                   <div className="flex items-center gap-4 pt-2 text-xs text-gray-600">
                     <div className="flex items-center gap-1.5">
