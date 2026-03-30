@@ -137,8 +137,8 @@ export async function POST(request: NextRequest) {
     // STEP 2: HANDLE FILE UPLOAD (for bacaan and cefr categories)
     // ============================================================
 
-    let uploadedFilePath = null;
-    let storageBucket = null;
+    let uploadedFilePath: string | null = null;
+    let storageBucket: string | null = null;
 
     if (file && (category === 'bacaan' || category === 'cefr')) {
       const timestamp = Date.now();
@@ -153,21 +153,24 @@ export async function POST(request: NextRequest) {
         uploadedFilePath = `${timestamp}-${random}.${ext}`;
       }
 
-      console.log('📤 Uploading file to:', { storageBucket, uploadedFilePath });
+      // Only upload if both bucket and path are set
+      if (storageBucket && uploadedFilePath) {
+        console.log('📤 Uploading file to:', { storageBucket, uploadedFilePath });
 
-      const { error: uploadError } = await supabase.storage
-        .from(storageBucket)
-        .upload(uploadedFilePath, file);
+        const { error: uploadError } = await supabase.storage
+          .from(storageBucket)
+          .upload(uploadedFilePath, file);
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return NextResponse.json({
-          error: 'Failed to upload file',
-          details: uploadError.message
-        }, { status: 500 });
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          return NextResponse.json({
+            error: 'Failed to upload file',
+            details: uploadError.message
+          }, { status: 500 });
+        }
+
+        console.log('✅ File uploaded successfully');
       }
-
-      console.log('✅ File uploaded successfully');
     }
 
     // ============================================================
@@ -324,8 +327,8 @@ export async function PATCH(request: NextRequest) {
     const category = existingMaterial.category;
 
     // Handle file upload if new file provided
-    let newFilePath = null;
-    let newBucket = null;
+    let newFilePath: string | null = null;
+    let newBucket: string | null = null;
 
     if (file) {
       const timestamp = Date.now();
