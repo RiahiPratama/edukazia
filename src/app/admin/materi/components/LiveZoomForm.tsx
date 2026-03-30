@@ -183,7 +183,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
         if (!response.ok) throw new Error(result.error || 'Failed to update');
         
         alert('✅ Material berhasil diupdate!');
-        onSave(); // ✅ FIX: This will close modal and refresh list
+        onSave();
       } else {
         if (selectedLevels.length === 0) {
           alert('Pilih minimal 1 level!');
@@ -191,19 +191,51 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           return;
         }
 
-        // ✅ FIX BUG #1: Create unit/lesson ONCE, then reuse for all levels
-        let actualUnitId = selectedUnit;
-        let actualLessonId = selectedLesson;
+        // ✅ FIX BUG #1: Create JUDUL first if NEW
+        let actualJudulId = selectedJudul;
+        
+        if (selectedJudul === 'NEW' && newJudulName) {
+          console.log('🆕 Creating Judul FIRST for all selected levels...');
+          
+          // Create judul for EACH selected level (juduls are level-specific)
+          const judulIds: string[] = [];
+          
+          for (const levelId of selectedLevels) {
+            const { data: newJudul, error: judulError } = await supabase
+              .from('juduls')
+              .insert({
+                level_id: levelId,
+                name: newJudulName,
+              })
+              .select()
+              .single();
 
-        // Create NEW unit if needed (ONCE!)
+            if (judulError) {
+              console.error('Judul creation error:', judulError);
+              alert(`❌ Gagal membuat judul: ${judulError.message}`);
+              setLoading(false);
+              return;
+            }
+
+            judulIds.push(newJudul.id);
+            console.log(`✅ Judul created for level ${levelId}:`, newJudul.id);
+          }
+          
+          // Use first judul ID as reference for unit creation
+          actualJudulId = judulIds[0];
+        }
+
+        // ✅ FIX BUG #2: Create UNIT once with proper judul_id
+        let actualUnitId = selectedUnit;
+        
         if (selectedUnit === 'NEW' && newUnitName) {
-          console.log('🆕 Creating unit ONCE:', newUnitName);
+          console.log('🆕 Creating Unit ONCE with judul_id:', actualJudulId);
           
           const { data: newUnit, error: unitError } = await supabase
             .from('units')
             .insert({
-              level_id: selectedLevels[0], // Use first level as reference
-              judul_id: selectedJudul === 'NEW' ? null : selectedJudul,
+              level_id: selectedLevels[0],
+              judul_id: actualJudulId, // ✅ Use actual judul ID, not null!
               unit_name: newUnitName,
               unit_number: 0,
               position: 0,
@@ -222,9 +254,11 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           console.log('✅ Unit created with ID:', actualUnitId);
         }
 
-        // Create NEW lesson if needed (ONCE!)
+        // Create LESSON once
+        let actualLessonId = selectedLesson;
+        
         if (selectedLesson === 'NEW' && newLessonName && actualUnitId) {
-          console.log('🆕 Creating lesson ONCE:', newLessonName);
+          console.log('🆕 Creating Lesson ONCE:', newLessonName);
           
           const { data: newLesson, error: lessonError } = await supabase
             .from('lessons')
@@ -248,27 +282,32 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           console.log('✅ Lesson created with ID:', actualLessonId);
         }
 
-        // Now create materials for all levels using the SAME unit/lesson IDs
+        // Create materials for all levels
         let successCount = 0;
         let failedLevels: string[] = [];
 
         for (const levelId of selectedLevels) {
           try {
+            // ✅ Material title = Lesson name only (level is filtered separately)
+            const materialTitle = newLessonName || selectedLesson;
+            
             const formData = new FormData();
-            formData.append('title', newLessonName || selectedLesson);
+            formData.append('title', materialTitle);
             formData.append('type', 'live_zoom');
             formData.append('category', 'live_zoom');
             formData.append('course_id', selectedCourse);
             formData.append('level_id', levelId);
-            formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-            formData.append('judul_name', newJudulName);
-            formData.append('unit_id', actualUnitId); // ✅ Use the same unit ID!
-            formData.append('unit_name', ''); // Empty - don't create new
-            formData.append('lesson_id', actualLessonId); // ✅ Use the same lesson ID!
-            formData.append('lesson_name', ''); // Empty - don't create new
+            formData.append('judul_id', actualJudulId);
+            formData.append('judul_name', '');
+            formData.append('unit_id', actualUnitId);
+            formData.append('unit_name', '');
+            formData.append('lesson_id', actualLessonId);
+            formData.append('lesson_name', '');
             formData.append('order_number', orderNumber.toString());
             formData.append('is_published', isPublished.toString());
             formData.append('content_data', JSON.stringify({ platform, url }));
+
+            console.log(`📝 Creating material:`, materialTitle);
 
             const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
             const result = await response.json();
@@ -279,6 +318,7 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
               console.error(`Failed for ${levelName}:`, result);
             } else {
               successCount++;
+              console.log(`✅ Material created for level ${levelId}`);
             }
           } catch (error) {
             const levelName = levels.find(l => l.id === levelId)?.name || levelId;
@@ -289,13 +329,13 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
 
         if (successCount === selectedLevels.length) {
           alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
-          onSave(); // ✅ FIX: Close modal and refresh
+          onSave();
         } else if (successCount > 0) {
           alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal: ${failedLevels.join(', ')}`);
-          onSave(); // ✅ FIX: Close even with partial success
+          onSave();
         } else {
           alert(`❌ Gagal membuat material untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
-          setLoading(false); // Keep modal open on total failure
+          setLoading(false);
         }
       }
     } catch (error) {
