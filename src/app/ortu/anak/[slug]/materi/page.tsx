@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import MateriContent from '@/components/siswa/MateriContent'
+import MateriContent from './MateriContent'
 
 export default async function MateriPage({ params }: { params: { slug: string } }) {
   const { slug } = params
