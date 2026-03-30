@@ -120,7 +120,7 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-2">Ayo Belajar</p>
-                <h3 className="text-white text-xl font-bold mb-3 leading-tight">{nextMaterial.title}</h3>
+                <h3 className="text-white text-xl font-bold mb-3 leading-tight">{nextMaterial.title || nextMaterial.lesson_title}</h3>
                 <div className="flex items-center gap-2 mb-4 flex-wrap">
                   <span className="bg-white/20 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full font-semibold border border-white/30">
                     {levelName}
@@ -266,14 +266,8 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                                   material.completed 
                                     ? 'text-[#1A5C36] dark:text-[#34C76D]' 
                                     : 'text-[#5C4FE5] dark:text-[#E6B800] group-hover:text-[#E6B800] dark:group-hover:text-[#7A6FFF]'
-                                }`}
-                                style={{ 
-                                  opacity: 1, 
-                                  display: 'block',
-                                  visibility: 'visible',
-                                  minHeight: '1.5rem'
-                                }}>
-                                  {material.title || '[NO TITLE]'}
+                                }`}>
+                                  {material.title || material.lesson_title}
                                 </p>
                               </div>
 
