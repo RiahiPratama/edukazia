@@ -68,9 +68,9 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
 
   const getMaterialUrl = (material: Material) => {
     if (material.category === 'live_zoom' || material.category === 'cefr') {
-      return `/materi/render/${material.component_id}`
+      return `/ortu/materi/render/${material.component_id}`
     } else if (material.category === 'bacaan') {
-      return `/materi/render/${material.component_id}`
+      return `/ortu/materi/render/${material.component_id}`
     } else if (material.category === 'kosakata') {
       return material.gdrive_url || '#'
     }
@@ -175,10 +175,10 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                         {judul.materials.map(material => (
                           <div
                             key={material.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border ${
+                            className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
                               material.completed
                                 ? 'bg-[#E6F4EC] border-[#9FE1CB]'
-                                : 'bg-white border-[#E5E3FF]'
+                                : 'bg-white border-[#E5E3FF] hover:bg-[#F7F6FF] hover:border-[#5C4FE5]'
                             }`}
                           >
                             {/* Completion Status */}
