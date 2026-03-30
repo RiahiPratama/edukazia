@@ -64,7 +64,6 @@ export async function POST(request: NextRequest) {
 
     // ============================================================
     // STEP 1: CREATE HIERARCHY (unit → lesson)
-    // NO MORE JUDULS! Units now link directly to levels!
     // ============================================================
 
     // 1. Create or get Unit
@@ -75,10 +74,10 @@ export async function POST(request: NextRequest) {
       const { data: newUnit, error: unitError } = await supabase
         .from('units')
         .insert({
-          level_id: levelId,  // ✅ Direct link to level (no more judul_id!)
+          level_id: levelId,
           unit_name: unitName,
-          unit_number: 0,  // ✅ Required NOT NULL field
-          position: 0,  // ✅ position instead of order_number
+          unit_number: 0,
+          position: 0,
         })
         .select()
         .single();
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest) {
         .insert({
           unit_id: actualUnitId,
           lesson_name: lessonName,
-          position: 0,  // ✅ position instead of sort_order
+          position: 0,
         })
         .select()
         .single();
@@ -135,7 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================================
-    // STEP 2: HANDLE FILE UPLOAD (for bacaan and cefr categories)
+    // STEP 2: HANDLE FILE UPLOAD
     // ============================================================
 
     let uploadedFilePath: string | null = null;
@@ -154,7 +153,6 @@ export async function POST(request: NextRequest) {
         uploadedFilePath = `${timestamp}-${random}.${ext}`;
       }
 
-      // Only upload if both bucket and path are set
       if (storageBucket && uploadedFilePath) {
         console.log('📤 Uploading file to:', { storageBucket, uploadedFilePath });
 
@@ -184,7 +182,7 @@ export async function POST(request: NextRequest) {
         title,
         category,
         lesson_id: actualLessonId,
-        position,  // ✅ position instead of order_number
+        position,
         is_published: isPublished,
       })
       .select()
@@ -202,7 +200,6 @@ export async function POST(request: NextRequest) {
 
     // ============================================================
     // STEP 4: CREATE MATERIAL_CONTENTS RECORD
-    // This is the NEW table in v4.1!
     // ============================================================
 
     let contentType: 'url' | 'component' | 'audio' = 'url';
@@ -241,7 +238,6 @@ export async function POST(request: NextRequest) {
 
     if (contentError) {
       console.error('Material content creation error:', contentError);
-      // Delete the material if content creation fails
       await supabase.from('materials').delete().eq('id', newMaterial.id);
       return NextResponse.json({
         error: 'Failed to create material content',
@@ -371,7 +367,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // ============================================================
-    // HANDLE HIERARCHY CHANGES (if provided)
+    // HANDLE HIERARCHY CHANGES
     // ============================================================
     let finalLessonId = existingMaterial.lesson_id;
 
@@ -386,7 +382,7 @@ export async function PATCH(request: NextRequest) {
           .insert({
             level_id: levelId,
             unit_name: unitName,
-            unit_number: 0,  // ✅ Required NOT NULL field
+            unit_number: 0,
             position: 0,
           })
           .select()
@@ -433,16 +429,29 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // Update material
+    // ============================================================
+    // UPDATE MATERIAL - WITH CANVA_URLS FIX
+    // ============================================================
+    const materialUpdateData: any = {
+      title,
+      lesson_id: finalLessonId,
+      position,
+      is_published: isPublished,
+      updated_at: new Date().toISOString(),
+    };
+
+    // CRITICAL FIX: Save canva_urls to materials table for live_zoom
+    if (category === 'live_zoom' && contentData) {
+      const canvaUrl = contentData.url || contentData.zoom_link || contentData.canva_link;
+      if (canvaUrl) {
+        materialUpdateData.canva_urls = [canvaUrl];
+        console.log('✅ Saving to canva_urls:', canvaUrl);
+      }
+    }
+
     const { data: updatedMaterial, error: updateError } = await supabase
       .from('materials')
-      .update({
-        title,
-        lesson_id: finalLessonId,
-        position,
-        is_published: isPublished,
-        updated_at: new Date().toISOString(),
-      })
+      .update(materialUpdateData)
       .eq('id', materialId)
       .select()
       .single();
