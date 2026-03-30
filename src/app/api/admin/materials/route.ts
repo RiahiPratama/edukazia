@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
-// POST - CREATE NEW MATERIAL (ALL 4 CATEGORIES)
+// POST - CREATE NEW MATERIAL (v4.1 COMPATIBLE)
 // ============================================================
 export async function POST(request: NextRequest) {
   try {
@@ -29,22 +29,18 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
 
     const title = formData.get('title') as string;
-    const type = formData.get('type') as string;
     const category = formData.get('category') as string;
-    const courseId = formData.get('course_id') as string;
     const levelId = formData.get('level_id') as string;
-    const judulId = formData.get('judul_id') as string;
-    const judulName = formData.get('judul_name') as string;
     const unitId = formData.get('unit_id') as string;
     const unitName = formData.get('unit_name') as string;
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
-    const orderNumber = parseInt(formData.get('order_number') as string) || 1;
+    const position = parseInt(formData.get('order_number') as string) || 1;
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
     const file = formData.get('file') as File | null;
 
-    console.log('📦 Creating material:', { title, type, category, levelId });
+    console.log('📦 Creating material v4.1:', { title, category, levelId });
 
     // Validate required fields
     if (!title || !category || !levelId) {
@@ -67,44 +63,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================================
-    // STEP 1: CREATE HIERARCHY (judul → unit → lesson)
+    // STEP 1: CREATE HIERARCHY (unit → lesson)
+    // NO MORE JUDULS! Units now link directly to levels!
     // ============================================================
 
-    // 1. Create or get Judul
-    let actualJudulId = judulId;
-    if (judulId === 'NEW' && judulName) {
-      console.log('🆕 Creating new Judul:', judulName);
-
-      const { data: newJudul, error: judulError } = await supabase
-        .from('juduls')
-        .insert({
-          level_id: levelId,
-          name: judulName,
-          is_active: true,
-          sort_order: 0,
-        })
-        .select()
-        .single();
-
-      if (judulError) {
-        console.error('Judul creation error:', judulError);
-        return NextResponse.json({
-          error: 'Failed to create judul',
-          details: judulError.message
-        }, { status: 500 });
-      }
-
-      actualJudulId = newJudul.id;
-      console.log('✅ Judul created:', actualJudulId);
-    }
-
-    if (!actualJudulId) {
-      return NextResponse.json({
-        error: 'Judul ID required'
-      }, { status: 400 });
-    }
-
-    // 2. Create or get Unit
+    // 1. Create or get Unit
     let actualUnitId = unitId;
     if (unitId === 'NEW' && unitName) {
       console.log('🆕 Creating new Unit:', unitName);
@@ -112,9 +75,9 @@ export async function POST(request: NextRequest) {
       const { data: newUnit, error: unitError } = await supabase
         .from('units')
         .insert({
-          judul_id: actualJudulId,
+          level_id: levelId,  // ✅ Direct link to level (no more judul_id!)
           unit_name: unitName,
-          order_number: 0,
+          position: 0,  // ✅ position instead of order_number
         })
         .select()
         .single();
@@ -137,7 +100,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 3. Create or get Lesson
+    // 2. Create or get Lesson
     let actualLessonId = lessonId;
     if (lessonId === 'NEW' && lessonName) {
       console.log('🆕 Creating new Lesson:', lessonName);
@@ -147,7 +110,7 @@ export async function POST(request: NextRequest) {
         .insert({
           unit_id: actualUnitId,
           lesson_name: lessonName,
-          sort_order: 0,
+          position: 0,  // ✅ position instead of sort_order
         })
         .select()
         .single();
@@ -174,41 +137,27 @@ export async function POST(request: NextRequest) {
     // STEP 2: HANDLE FILE UPLOAD (for bacaan and cefr categories)
     // ============================================================
 
-    let componentId = null;
+    let uploadedFilePath = null;
+    let storageBucket = null;
 
     if (file && (category === 'bacaan' || category === 'cefr')) {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
-
-      const originalName = file.name;
-      const sanitizedName = originalName
-        .replace(/[^a-zA-Z0-9.-]/g, '_')
-        .replace(/_+/g, '_')
-        .toLowerCase();
-
-      const ext = sanitizedName.split('.').pop();
-      const baseName = sanitizedName.replace(`.${ext}`, '');
-      const fileName = `${timestamp}-${random}`;
-
-      let bucket = '';
-      let filePath = '';
-
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      
       if (category === 'bacaan') {
-        // JSX components
-        bucket = 'components';
-        filePath = `bacaan/${fileName}`;
-        componentId = `${bucket}/${filePath}`;
+        storageBucket = 'components';
+        uploadedFilePath = `${timestamp}-${random}.jsx`;
       } else if (category === 'cefr') {
-        // Audio files
-        bucket = 'audio';
-        filePath = `cefr/${fileName}.${ext}`;
+        storageBucket = 'audio';
+        uploadedFilePath = `${timestamp}-${random}.${ext}`;
       }
 
-      console.log('📤 Uploading file to:', { bucket, filePath });
+      console.log('📤 Uploading file to:', { storageBucket, uploadedFilePath });
 
       const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file);
+        .from(storageBucket)
+        .upload(uploadedFilePath, file);
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
@@ -219,19 +168,6 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('✅ File uploaded successfully');
-
-      // Add file path to content data
-      if (category === 'bacaan') {
-        contentData = {
-          ...contentData,
-          jsx_file_path: filePath,
-        };
-      } else if (category === 'cefr') {
-        contentData = {
-          ...contentData,
-          audio_url: filePath,
-        };
-      }
     }
 
     // ============================================================
@@ -242,33 +178,16 @@ export async function POST(request: NextRequest) {
       .from('materials')
       .insert({
         title,
-        type: type || category,
         category,
         lesson_id: actualLessonId,
-        order_number: orderNumber,
+        position,  // ✅ position instead of order_number
         is_published: isPublished,
-        content_data: contentData,
-        component_id: componentId,
       })
       .select()
       .single();
 
     if (materialError) {
       console.error('Material creation error:', materialError);
-
-      // If material creation fails, clean up uploaded file
-      if (file && (category === 'bacaan' || category === 'cefr')) {
-        const bucket = category === 'bacaan' ? 'components' : 'audio';
-        const filePath = category === 'bacaan'
-          ? (contentData as any).jsx_file_path
-          : (contentData as any).audio_url;
-
-        if (filePath) {
-          await supabase.storage.from(bucket).remove([filePath]);
-          console.log('🗑️ Cleaned up uploaded file after error');
-        }
-      }
-
       return NextResponse.json({
         error: 'Failed to create material',
         details: materialError.message
@@ -277,9 +196,61 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Material created:', newMaterial.id);
 
+    // ============================================================
+    // STEP 4: CREATE MATERIAL_CONTENTS RECORD
+    // This is the NEW table in v4.1!
+    // ============================================================
+
+    let contentType: 'url' | 'component' | 'audio' = 'url';
+    let contentUrl: string | null = null;
+    let audioPath: string | null = null;
+    let storagePath: string | null = null;
+
+    if (category === 'live_zoom') {
+      contentType = 'url';
+      contentUrl = contentData.zoom_link || contentData.url || null;
+    } else if (category === 'kosakata') {
+      contentType = 'url';
+      contentUrl = contentData.url || contentData.canva_link || contentData.gdrive_url || null;
+    } else if (category === 'bacaan') {
+      contentType = 'component';
+      storagePath = uploadedFilePath;
+    } else if (category === 'cefr') {
+      contentType = 'audio';
+      audioPath = uploadedFilePath;
+    }
+
+    const { data: materialContent, error: contentError } = await supabase
+      .from('material_contents')
+      .insert({
+        material_id: newMaterial.id,
+        content_type: contentType,
+        content_url: contentUrl,
+        storage_bucket: storageBucket,
+        storage_path: storagePath,
+        audio_bucket: storageBucket,
+        audio_path: audioPath,
+        content_data: contentData,
+      })
+      .select()
+      .single();
+
+    if (contentError) {
+      console.error('Material content creation error:', contentError);
+      // Delete the material if content creation fails
+      await supabase.from('materials').delete().eq('id', newMaterial.id);
+      return NextResponse.json({
+        error: 'Failed to create material content',
+        details: contentError.message
+      }, { status: 500 });
+    }
+
+    console.log('✅ Material content created:', materialContent.id);
+
     return NextResponse.json({
       success: true,
-      material: newMaterial
+      material: newMaterial,
+      content: materialContent
     });
 
   } catch (error) {
@@ -292,7 +263,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================
-// PATCH - UPDATE EXISTING MATERIAL (WITH HIERARCHY SUPPORT)
+// PATCH - UPDATE EXISTING MATERIAL (v4.1 COMPATIBLE)
 // ============================================================
 export async function PATCH(request: NextRequest) {
   try {
@@ -320,22 +291,19 @@ export async function PATCH(request: NextRequest) {
 
     const materialId = formData.get('material_id') as string;
     const title = formData.get('title') as string;
-    const orderNumber = parseInt(formData.get('order_number') as string);
+    const position = parseInt(formData.get('order_number') as string);
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
     const file = formData.get('file') as File | null;
 
     // HIERARCHY CHANGE SUPPORT
-    const courseId = formData.get('course_id') as string;
     const levelId = formData.get('level_id') as string;
-    const judulId = formData.get('judul_id') as string;
-    const judulName = formData.get('judul_name') as string;
     const unitId = formData.get('unit_id') as string;
     const unitName = formData.get('unit_name') as string;
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
 
-    console.log('📝 Updating material:', materialId);
+    console.log('📝 Updating material v4.1:', materialId);
 
     if (!materialId) {
       return NextResponse.json({ error: 'Material ID required' }, { status: 400 });
@@ -344,7 +312,7 @@ export async function PATCH(request: NextRequest) {
     // Get existing material
     const { data: existingMaterial, error: fetchError } = await supabase
       .from('materials')
-      .select('*')
+      .select('*, material_contents(*)')
       .eq('id', materialId)
       .single();
 
@@ -352,49 +320,41 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Material not found' }, { status: 404 });
     }
 
-    let contentData = JSON.parse(contentDataStr);
+    let contentData = contentDataStr ? JSON.parse(contentDataStr) : {};
     const category = existingMaterial.category;
 
     // Handle file upload if new file provided
+    let newFilePath = null;
+    let newBucket = null;
+
     if (file) {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
-
-      const originalName = file.name;
-      const sanitizedName = originalName
-        .replace(/[^a-zA-Z0-9.-]/g, '_')
-        .replace(/_+/g, '_')
-        .toLowerCase();
-
-      const ext = sanitizedName.split('.').pop();
-      const baseName = sanitizedName.replace(`.${ext}`, '');
-      const fileName = `${baseName}-${timestamp}-${random}.${ext}`;
-
-      let bucket = '';
-      let filePath = '';
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
       if (category === 'bacaan') {
-        bucket = 'components';
-        filePath = `bacaan/${fileName}`;
+        newBucket = 'components';
+        newFilePath = `${timestamp}-${random}.jsx`;
       } else if (category === 'cefr') {
-        bucket = 'audio';
-        filePath = `cefr/${fileName}`;
+        newBucket = 'audio';
+        newFilePath = `${timestamp}-${random}.${ext}`;
       }
 
-      if (bucket) {
+      if (newBucket && newFilePath) {
         // Delete old file if exists
-        const oldPath = category === 'bacaan'
-          ? existingMaterial.content_data?.jsx_file_path
-          : existingMaterial.content_data?.audio_url;
-
-        if (oldPath) {
-          await supabase.storage.from(bucket).remove([oldPath]);
+        const oldContent = existingMaterial.material_contents?.[0];
+        if (oldContent) {
+          const oldPath = category === 'bacaan' ? oldContent.storage_path : oldContent.audio_path;
+          const oldBucket = category === 'bacaan' ? oldContent.storage_bucket : oldContent.audio_bucket;
+          if (oldPath && oldBucket) {
+            await supabase.storage.from(oldBucket).remove([oldPath]);
+          }
         }
 
         // Upload new file
         const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file);
+          .from(newBucket)
+          .upload(newFilePath, file);
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
@@ -403,60 +363,26 @@ export async function PATCH(request: NextRequest) {
             details: uploadError.message
           }, { status: 500 });
         }
-
-        if (category === 'bacaan') {
-          contentData.jsx_file_path = filePath;
-        } else if (category === 'cefr') {
-          contentData.audio_url = filePath;
-        }
       }
     }
 
     // ============================================================
-    // HANDLE HIERARCHY CHANGES
+    // HANDLE HIERARCHY CHANGES (if provided)
     // ============================================================
     let finalLessonId = existingMaterial.lesson_id;
 
-    // If hierarchy info provided, handle inline creation + get correct lesson_id
-    if (courseId && levelId && lessonId) {
-      // 1. Create Judul if new
-      let actualJudulId = judulId;
-      if (judulId === 'NEW' && judulName && levelId) {
-        console.log('🆕 Creating new Judul:', judulName);
-
-        const { data: newJudul, error: judulError } = await supabase
-          .from('juduls')
-          .insert({
-            level_id: levelId,
-            name: judulName,
-            is_active: true,
-          })
-          .select()
-          .single();
-
-        if (judulError) {
-          console.error('Judul creation error:', judulError);
-          return NextResponse.json({
-            error: 'Failed to create judul',
-            details: judulError.message
-          }, { status: 500 });
-        }
-
-        actualJudulId = newJudul.id;
-        console.log('✅ Judul created:', actualJudulId);
-      }
-
-      // 2. Create Unit if new
+    if (levelId && lessonId) {
+      // 1. Create Unit if new
       let actualUnitId = unitId;
-      if (unitId === 'NEW' && unitName && actualJudulId) {
+      if (unitId === 'NEW' && unitName && levelId) {
         console.log('🆕 Creating new Unit:', unitName);
 
         const { data: newUnit, error: unitError } = await supabase
           .from('units')
           .insert({
-            judul_id: actualJudulId,
+            level_id: levelId,
             unit_name: unitName,
-            order_number: 0,
+            position: 0,
           })
           .select()
           .single();
@@ -473,7 +399,7 @@ export async function PATCH(request: NextRequest) {
         console.log('✅ Unit created:', actualUnitId);
       }
 
-      // 3. Create Lesson if new
+      // 2. Create Lesson if new
       if (lessonId === 'NEW' && lessonName && actualUnitId) {
         console.log('🆕 Creating new Lesson:', lessonName);
 
@@ -482,7 +408,7 @@ export async function PATCH(request: NextRequest) {
           .insert({
             unit_id: actualUnitId,
             lesson_name: lessonName,
-            lesson_number: 0,
+            position: 0,
           })
           .select()
           .single();
@@ -498,7 +424,6 @@ export async function PATCH(request: NextRequest) {
         finalLessonId = newLesson.id;
         console.log('✅ Lesson created:', finalLessonId);
       } else if (lessonId && lessonId !== 'NEW') {
-        // Use existing lesson
         finalLessonId = lessonId;
       }
     }
@@ -508,10 +433,9 @@ export async function PATCH(request: NextRequest) {
       .from('materials')
       .update({
         title,
-        lesson_id: finalLessonId, // Can be changed!
-        order_number: orderNumber,
+        lesson_id: finalLessonId,
+        position,
         is_published: isPublished,
-        content_data: contentData,
         updated_at: new Date().toISOString(),
       })
       .eq('id', materialId)
@@ -524,6 +448,37 @@ export async function PATCH(request: NextRequest) {
         error: 'Failed to update material',
         details: updateError.message
       }, { status: 500 });
+    }
+
+    // Update material_contents if needed
+    if (newFilePath || contentDataStr) {
+      const existingContent = existingMaterial.material_contents?.[0];
+      
+      const contentUpdate: any = {
+        content_data: contentData,
+      };
+
+      if (newFilePath) {
+        if (category === 'bacaan') {
+          contentUpdate.storage_path = newFilePath;
+          contentUpdate.storage_bucket = newBucket;
+        } else if (category === 'cefr') {
+          contentUpdate.audio_path = newFilePath;
+          contentUpdate.audio_bucket = newBucket;
+        }
+      }
+
+      if (contentData.url || contentData.zoom_link || contentData.canva_link) {
+        contentUpdate.content_url = contentData.url || contentData.zoom_link || contentData.canva_link;
+      }
+
+      if (existingContent) {
+        // Update existing content
+        await supabase
+          .from('material_contents')
+          .update(contentUpdate)
+          .eq('id', existingContent.id);
+      }
     }
 
     console.log('✅ Material updated:', updatedMaterial.id);
