@@ -204,7 +204,7 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                           {String(idx + 1).padStart(2, '0')}
                         </div>
                         <div className="flex-1 min-w-0 text-left">
-                          <h3 className="font-bold text-[#1A1640] text-base mb-1 truncate">{judul.name}</h3>
+                          <h3 className="font-bold text-[#1A1640] dark:text-[#E6B800] group-hover:dark:text-[#7A6FFF] text-base mb-1 truncate transition-colors">{judul.name}</h3>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5">
                               <div className="w-full max-w-[120px] h-1.5 bg-[#F7F6FF] rounded-full overflow-hidden">
@@ -265,7 +265,7 @@ export default function MateriContent({ juduls, levelName, courseName, studentNa
                                 <p className={`font-semibold truncate transition-colors ${
                                   material.completed 
                                     ? 'text-[#1A5C36] dark:text-[#34C76D]' 
-                                    : 'text-[#1A1640] dark:text-white group-hover:text-[#5C4FE5] dark:group-hover:text-[#7A6FFF]'
+                                    : 'text-[#E6B800] dark:text-[#E6B800] group-hover:text-[#5C4FE5] dark:group-hover:text-[#7A6FFF]'
                                 }`}>
                                   {material.title}
                                 </p>
