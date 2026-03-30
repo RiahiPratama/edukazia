@@ -148,6 +148,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
     )
 
     try {
+      // 1. Delete old enrollment_levels
       const { error: deleteError } = await supabase
         .from('enrollment_levels')
         .delete()
@@ -155,6 +156,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
       if (deleteError) throw deleteError
 
+      // 2. Insert new enrollment_levels
       if (enrollment.selectedLevels.length > 0) {
         const { error: insertError } = await supabase
           .from('enrollment_levels')
@@ -166,6 +168,23 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
           )
 
         if (insertError) throw insertError
+
+        // 3. ✅ NEW: Update enrollments.level_id with first selected level
+        const primaryLevelId = enrollment.selectedLevels[0]
+        const { error: updateError } = await supabase
+          .from('enrollments')
+          .update({ level_id: primaryLevelId })
+          .eq('id', enrollmentId)
+
+        if (updateError) throw updateError
+      } else {
+        // 4. ✅ NEW: If no levels selected, set to NULL
+        const { error: updateError } = await supabase
+          .from('enrollments')
+          .update({ level_id: null })
+          .eq('id', enrollmentId)
+
+        if (updateError) throw updateError
       }
 
       setEnrollments((prev) =>
