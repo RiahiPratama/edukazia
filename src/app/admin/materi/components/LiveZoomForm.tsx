@@ -11,7 +11,6 @@ type Material = {
   order_number: number;
   is_published: boolean;
   level_id: string;
-  judul_id: string;
   unit_id: string;
   lesson_id: string;
 };
@@ -25,17 +24,17 @@ type LiveZoomFormProps = {
 export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFormProps) {
   const [courses, setCourses] = useState<any[]>([]);
   const [levels, setLevels] = useState<any[]>([]);
-  const [juduls, setJuduls] = useState<any[]>([]);
+  const [chapters, setChapters] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
-  const [selectedJudul, setSelectedJudul] = useState('');
+  const [selectedChapter, setSelectedChapter] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
 
-  const [newJudulName, setNewJudulName] = useState('');
+  const [newChapterTitle, setNewChapterTitle] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
   const [newLessonName, setNewLessonName] = useState('');
 
@@ -46,7 +45,8 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   // Edit mode states
   const [editLevelName, setEditLevelName] = useState('');
-  const [editJudulName, setEditJudulName] = useState('');
+  const [editChapterTitle, setEditChapterTitle] = useState('');
+  const [editChapterId, setEditChapterId] = useState('');
   const [editUnitName, setEditUnitName] = useState('');
   const [editUnitPosition, setEditUnitPosition] = useState(0);
   const [editLessonName, setEditLessonName] = useState('');
@@ -84,23 +84,27 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         .single();
       if (levelData) setEditLevelName(levelData.name);
 
-      // Fetch judul data
-      const { data: judulData } = await supabase
-        .from('juduls')
-        .select('name')
-        .eq('id', editData.judul_id)
-        .single();
-      if (judulData) setEditJudulName(judulData.name);
-
-      // Fetch unit data
+      // Fetch unit data to get chapter_id
       const { data: unitData } = await supabase
         .from('units')
-        .select('unit_name, position')
+        .select('unit_name, position, chapter_id')
         .eq('id', editData.unit_id)
         .single();
+      
       if (unitData) {
         setEditUnitName(unitData.unit_name);
         setEditUnitPosition(unitData.position || 0);
+        
+        // Fetch chapter data if chapter_id exists
+        if (unitData.chapter_id) {
+          setEditChapterId(unitData.chapter_id);
+          const { data: chapterData } = await supabase
+            .from('chapters')
+            .select('chapter_title')
+            .eq('id', unitData.chapter_id)
+            .single();
+          if (chapterData) setEditChapterTitle(chapterData.chapter_title);
+        }
       }
 
       // Fetch lesson data
@@ -122,21 +126,21 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   useEffect(() => {
     if (selectedLevel) {
-      fetchJuduls(selectedLevel);
+      fetchChapters(selectedLevel);
     } else {
-      setJuduls([]);
-      setSelectedJudul('');
+      setChapters([]);
+      setSelectedChapter('');
     }
   }, [selectedLevel]);
 
   useEffect(() => {
-    if (selectedJudul && selectedJudul !== 'NEW') {
-      fetchUnits(selectedJudul);
+    if (selectedChapter && selectedChapter !== 'NEW') {
+      fetchUnits(selectedChapter);
     } else {
       setUnits([]);
       setSelectedUnit('');
     }
-  }, [selectedJudul]);
+  }, [selectedChapter]);
 
   useEffect(() => {
     if (selectedUnit && selectedUnit !== 'NEW') {
@@ -157,13 +161,13 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
     setLevels(data || []);
   };
 
-  const fetchJuduls = async (levelId: string) => {
-    const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId).order('name');
-    setJuduls(data || []);
+  const fetchChapters = async (levelId: string) => {
+    const { data } = await supabase.from('chapters').select('*').eq('level_id', levelId).order('order_number');
+    setChapters(data || []);
   };
 
-  const fetchUnits = async (judulId: string) => {
-    const { data } = await supabase.from('units').select('*').eq('judul_id', judulId).order('position');
+  const fetchUnits = async (chapterId: string) => {
+    const { data } = await supabase.from('units').select('*').eq('chapter_id', chapterId).order('position');
     setUnits(data || []);
   };
 
@@ -181,8 +185,8 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         // EDIT MODE - Update existing material
         const formData = new FormData();
         formData.append('material_id', editData.id);
-        formData.append('judul_id', editData.judul_id);
-        formData.append('judul_name', editJudulName);
+        formData.append('chapter_id', editChapterId || '');
+        formData.append('chapter_title', editChapterTitle);
         formData.append('unit_id', editData.unit_id);
         formData.append('unit_name', editUnitName);
         formData.append('unit_position', editUnitPosition.toString());
@@ -208,21 +212,38 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           return;
         }
 
-        // Create Judul if NEW
-        let actualJudulId = selectedJudul;
-        if (selectedJudul === 'NEW' && newJudulName) {
-          const { data: newJudul, error: judulError } = await supabase
-            .from('juduls')
-            .insert({ level_id: selectedLevel, name: newJudulName })
+        // Create Chapter if NEW
+        let actualChapterId = selectedChapter;
+        if (selectedChapter === 'NEW' && newChapterTitle) {
+          // Get next order_number for this level
+          const { data: existingChapters } = await supabase
+            .from('chapters')
+            .select('order_number')
+            .eq('level_id', selectedLevel)
+            .order('order_number', { ascending: false })
+            .limit(1);
+
+          const nextOrderNumber = existingChapters && existingChapters.length > 0
+            ? (existingChapters[0].order_number + 1)
+            : 1;
+
+          const { data: newChapter, error: chapterError } = await supabase
+            .from('chapters')
+            .insert({
+              level_id: selectedLevel,
+              chapter_title: newChapterTitle,
+              chapter_number: nextOrderNumber,
+              order_number: nextOrderNumber,
+            })
             .select()
             .single();
 
-          if (judulError) {
-            alert(`❌ Gagal membuat judul: ${judulError.message}`);
+          if (chapterError) {
+            alert(`❌ Gagal membuat chapter: ${chapterError.message}`);
             setLoading(false);
             return;
           }
-          actualJudulId = newJudul.id;
+          actualChapterId = newChapter.id;
         }
 
         // Create Unit if NEW
@@ -232,7 +253,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             .from('units')
             .insert({
               level_id: selectedLevel,
-              judul_id: actualJudulId,
+              chapter_id: actualChapterId,
               unit_name: newUnitName,
               unit_number: 0,
               position: 0,
@@ -259,7 +280,9 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             .order('position', { ascending: false })
             .limit(1);
 
-          const nextPosition = existingLessons?.length > 0 ? (existingLessons[0].position + 1) : 0;
+          const nextPosition = existingLessons && existingLessons.length > 0
+            ? (existingLessons[0].position + 1)
+            : 0;
 
           const { data: newLesson, error: lessonError } = await supabase
             .from('lessons')
@@ -286,7 +309,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         formData.append('category', 'live_zoom');
         formData.append('course_id', selectedCourse);
         formData.append('level_id', selectedLevel);
-        formData.append('judul_id', actualJudulId);
         formData.append('unit_id', actualUnitId);
         formData.append('lesson_id', actualLessonId);
         formData.append('order_number', orderNumber.toString());
@@ -356,32 +378,32 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           {selectedLevel && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Judul *</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter *</label>
                 <select
-                  value={selectedJudul}
-                  onChange={(e) => setSelectedJudul(e.target.value)}
+                  value={selectedChapter}
+                  onChange={(e) => setSelectedChapter(e.target.value)}
                   required
                   className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"
                 >
-                  <option value="">Pilih Judul</option>
-                  <option value="NEW">+ Buat Judul Baru</option>
-                  {juduls.map((j) => (
-                    <option key={j.id} value={j.id}>{j.name}</option>
+                  <option value="">Pilih Chapter</option>
+                  <option value="NEW">+ Buat Chapter Baru</option>
+                  {chapters.map((ch) => (
+                    <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>
                   ))}
                 </select>
-                {selectedJudul === 'NEW' && (
+                {selectedChapter === 'NEW' && (
                   <input
                     type="text"
-                    value={newJudulName}
-                    onChange={(e) => setNewJudulName(e.target.value)}
-                    placeholder="Nama Judul Baru"
+                    value={newChapterTitle}
+                    onChange={(e) => setNewChapterTitle(e.target.value)}
+                    placeholder="Nama Chapter Baru (contoh: Phonics Foundations)"
                     required
                     className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
                   />
                 )}
               </div>
 
-              {selectedJudul && (
+              {selectedChapter && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
                   <select
@@ -401,7 +423,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
                       type="text"
                       value={newUnitName}
                       onChange={(e) => setNewUnitName(e.target.value)}
-                      placeholder="Nama Unit Baru"
+                      placeholder="Nama Unit Baru (contoh: 02 Weekend activities)"
                       required
                       className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
                     />
@@ -429,7 +451,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
                       type="text"
                       value={newLessonName}
                       onChange={(e) => setNewLessonName(e.target.value)}
-                      placeholder="Nama Lesson Baru"
+                      placeholder="Nama Lesson Baru (contoh: 01_The Magic Crystal)"
                       required
                       className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
                     />
@@ -446,32 +468,34 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">Level Kurikulum</label>
             <div className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-600 font-medium">
-              {editLevelName} 🔒 (tidak bisa diganti)
+              {editLevelName} 🔒 (tidak bisa diganti - mengacu ke siswa enrollment)
             </div>
           </div>
 
-          <div className="border-t-2 border-gray-200 pt-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">📚 Judul Settings</h3>
-            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
-              <div className="flex gap-3">
-                <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
-                <div className="text-sm text-yellow-800">
-                  <p className="font-semibold mb-1">⚠️ Perhatian:</p>
-                  <p>Mengubah nama Judul akan mempengaruhi <strong>SEMUA materials, units, dan lessons</strong> dalam Judul ini.</p>
+          {editChapterId && (
+            <div className="border-t-2 border-gray-200 pt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📚 Chapter Settings</h3>
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                <div className="flex gap-3">
+                  <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-semibold mb-1">⚠️ Perhatian:</p>
+                    <p>Mengubah nama Chapter akan mempengaruhi <strong>SEMUA materials, units, dan lessons</strong> dalam Chapter ini.</p>
+                  </div>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter Title *</label>
+                <input
+                  type="text"
+                  value={editChapterTitle}
+                  onChange={(e) => setEditChapterTitle(e.target.value)}
+                  required
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">Judul Name *</label>
-              <input
-                type="text"
-                value={editJudulName}
-                onChange={(e) => setEditJudulName(e.target.value)}
-                required
-                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-              />
-            </div>
-          </div>
+          )}
 
           <div className="border-t-2 border-gray-200 pt-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">📦 Unit Settings</h3>
