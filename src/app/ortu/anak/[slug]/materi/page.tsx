@@ -1,10 +1,10 @@
-import { createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import MateriContent from '@/components/siswa/MateriContent'
 
 export default async function MateriPage({ params }: { params: { slug: string } }) {
   const { slug } = params
-  const supabase = await createServerClient()
+  const supabase = await createClient()
 
   // Get authenticated user
   const { data: { user } } = await supabase.auth.getUser()
