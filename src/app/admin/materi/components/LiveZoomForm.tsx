@@ -227,7 +227,6 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
             .insert({
               unit_id: actualUnitId,
               lesson_name: newLessonName,
-              lesson_number: 0,
               position: 0,
             })
             .select()
