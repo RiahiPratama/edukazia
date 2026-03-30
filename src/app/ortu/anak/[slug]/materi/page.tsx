@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import MateriContent from './MateriContent'
 
 export default async function MateriPage({ 
   params 
@@ -10,194 +11,169 @@ export default async function MateriPage({
   const { slug } = await params
   const supabase = await createClient()
 
-  try {
-    // DEBUG: Show slug
-    if (!slug) {
-      return <div className="p-8">ERROR: No slug provided! Params: {JSON.stringify(await params)}</div>
-    }
+  // Get authenticated user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) notFound()
 
-    // Get authenticated user
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return <div className="p-8">ERROR: Not authenticated</div>
-    }
+  // 1. Get student by slug
+  const { data: students } = await supabase
+    .from('students')
+    .select('id, profile_id')
+    .eq('slug', slug)
 
-    // 1. Get student by slug (don't use .single() yet)
-    const { data: students, error: studentError } = await supabase
-      .from('students')
-      .select('id, profile_id, slug')
-      .eq('slug', slug)
+  if (!students || students.length === 0) {
+    notFound()
+  }
 
-    if (studentError) {
-      return (
-        <div className="p-8">
-          <h1 className="text-xl font-bold">STUDENT QUERY ERROR</h1>
-          <p>Slug: {slug}</p>
-          <p>Error: {studentError.message}</p>
-        </div>
-      )
-    }
+  const student = students[0]
 
-    if (!students || students.length === 0) {
-      return (
-        <div className="p-8">
-          <h1 className="text-xl font-bold">NO STUDENT FOUND</h1>
-          <p>Slug searched: {slug}</p>
-          <p>Results: 0</p>
-        </div>
-      )
-    }
+  // 2. Get student's profile name
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', student.profile_id)
+    .single()
 
-    if (students.length > 1) {
-      return (
-        <div className="p-8">
-          <h1 className="text-xl font-bold">MULTIPLE STUDENTS FOUND!</h1>
-          <p>Slug: {slug}</p>
-          <p>Count: {students.length}</p>
-          <pre className="mt-4 bg-gray-100 p-4 rounded">
-            {JSON.stringify(students, null, 2)}
-          </pre>
-          <p className="mt-4 text-red-600">
-            DATABASE ERROR: Duplicate slugs exist! Fix in database.
-          </p>
-        </div>
-      )
-    }
+  // 3. Get student's enrollment with level
+  const { data: enrollments } = await supabase
+    .from('enrollments')
+    .select('id, level_id, class_group_id')
+    .eq('student_id', student.id)
+    .eq('status', 'active')
 
-    const student = students[0]
-
-    // 2. Get student's profile name
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', student.profile_id)
-      .single()
-
-    if (profileError) {
-      return <div className="p-8">ERROR: Profile not found - {profileError.message}</div>
-    }
-
-    // 3. Get student's enrollment with level
-    const { data: enrollment, error: enrollmentError } = await supabase
-      .from('enrollments')
-      .select('id, level_id, class_group_id, status')
-      .eq('student_id', student.id)
-      .eq('status', 'active')
-
-    if (enrollmentError) {
-      return <div className="p-8">ERROR: Enrollment query failed - {enrollmentError.message}</div>
-    }
-
-    if (!enrollment || enrollment.length === 0) {
-      return (
-        <div className="p-8">
-          <h1 className="text-xl font-bold">NO ACTIVE ENROLLMENT</h1>
-          <p>Student: {profile?.full_name}</p>
-          <p>Student ID: {student.id}</p>
-          <p>No active enrollment found for this student.</p>
-        </div>
-      )
-    }
-
-    const activeEnrollment = enrollment[0]
-
-    if (!activeEnrollment.level_id) {
-      return (
-        <div className="p-8">
-          <h1 className="text-xl font-bold">NO LEVEL ASSIGNED</h1>
-          <p>Student: {profile?.full_name}</p>
-          <p>Enrollment exists but no level_id set.</p>
-        </div>
-      )
-    }
-
-    // 4. Get level details
-    const { data: level } = await supabase
-      .from('levels')
-      .select('id, name, course_id')
-      .eq('id', activeEnrollment.level_id)
-      .single()
-
-    if (!level) {
-      return <div className="p-8">ERROR: Level not found</div>
-    }
-
-    // 5. Get course details
-    const { data: course } = await supabase
-      .from('courses')
-      .select('id, name')
-      .eq('id', level.course_id)
-      .single()
-
-    // 6. Get all units for this level
-    const { data: units } = await supabase
-      .from('units')
-      .select('id, name, position')
-      .eq('level_id', level.id)
-      .order('position')
-
-    // SUCCESS - Show what we got
+  if (!enrollments || enrollments.length === 0 || !enrollments[0].level_id) {
     return (
-      <div className="min-h-screen bg-[#F7F6FF] p-8">
-        <div className="max-w-2xl mx-auto bg-white rounded-xl p-8">
-          <h1 className="text-2xl font-bold mb-4 text-green-600">✅ ALL DATA LOADED!</h1>
-          
-          <div className="space-y-4">
-            <div className="p-4 bg-blue-50 rounded">
-              <p className="font-bold">Slug (URL param):</p>
-              <p className="font-mono">{slug}</p>
-            </div>
-
-            <div className="p-4 bg-green-50 rounded">
-              <p className="font-bold">Student:</p>
-              <p>{profile?.full_name}</p>
-              <p className="text-sm text-gray-600">ID: {student.id}</p>
-            </div>
-
-            <div className="p-4 bg-purple-50 rounded">
-              <p className="font-bold">Course:</p>
-              <p>{course?.name || 'No course'}</p>
-            </div>
-
-            <div className="p-4 bg-indigo-50 rounded">
-              <p className="font-bold">Level:</p>
-              <p>{level.name}</p>
-            </div>
-
-            <div className="p-4 bg-yellow-50 rounded">
-              <p className="font-bold">Units:</p>
-              <p>{units?.length || 0} units found</p>
-              {units && units.length > 0 && (
-                <ul className="list-disc ml-6 mt-2">
-                  {units.map(u => (
-                    <li key={u.id}>{u.name}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="mt-8 p-4 bg-green-100 rounded border-2 border-green-600">
-              <p className="font-bold text-green-800 text-lg">
-                🎉 SUCCESS! All queries work!
-              </p>
-              <p className="text-green-700 mt-2">
-                Next step: Replace this debug page with the actual MateriContent component.
-              </p>
-            </div>
+      <div className="min-h-screen bg-[#F7F6FF] p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
+              Hubungi admin untuk mengatur level pembelajaran kamu.
+            </p>
           </div>
         </div>
       </div>
     )
+  }
 
-  } catch (error: any) {
+  const enrollment = enrollments[0]
+
+  // 4. Get level details
+  const { data: level } = await supabase
+    .from('levels')
+    .select('id, name, course_id')
+    .eq('id', enrollment.level_id)
+    .single()
+
+  if (!level) {
     return (
-      <div className="p-8">
-        <h1 className="text-xl font-bold text-red-600">UNEXPECTED ERROR</h1>
-        <p className="text-red-600">{error.message}</p>
-        <pre className="mt-4 bg-gray-100 p-4 rounded overflow-auto">
-          {error.stack}
-        </pre>
+      <div className="min-h-screen bg-[#F7F6FF] p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
+              Level pembelajaran tidak ditemukan.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
+
+  // 5. Get course details
+  const { data: course } = await supabase
+    .from('courses')
+    .select('id, name')
+    .eq('id', level.course_id)
+    .single()
+
+  // 6. Get all units for this level
+  const { data: units } = await supabase
+    .from('units')
+    .select('id, name, position, level_id')
+    .eq('level_id', level.id)
+    .order('position')
+
+  if (!units || units.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F7F6FF] p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
+              Materi pembelajaran untuk level {level.name} belum tersedia.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 7. Get all lessons for these units
+  const unitIds = units.map(u => u.id)
+  const { data: lessons } = await supabase
+    .from('lessons')
+    .select('id, title, position, unit_id')
+    .in('unit_id', unitIds)
+    .order('position')
+
+  // 8. Get all materials for these lessons
+  const lessonIds = lessons?.map(l => l.id) || []
+  const { data: materials } = await supabase
+    .from('materials')
+    .select('id, title, position, lesson_id')
+    .in('lesson_id', lessonIds)
+    .order('position')
+
+  // 9. Get material contents for all materials
+  const materialIds = materials?.map(m => m.id) || []
+  const { data: materialContents } = await supabase
+    .from('material_contents')
+    .select('material_id, category, content_url, storage_path')
+    .in('material_id', materialIds)
+
+  // 10. Get student's material progress
+  const { data: progress } = await supabase
+    .from('student_material_progress')
+    .select('material_id, completed_at')
+    .eq('student_id', student.id)
+
+  // Transform data into the structure needed by MateriContent component
+  const transformedData = units.map(unit => {
+    const unitLessons = lessons?.filter(l => l.unit_id === unit.id) || []
+    const unitMaterials = unitLessons.flatMap(lesson => {
+      const lessonMaterials = materials?.filter(m => m.lesson_id === lesson.id) || []
+      return lessonMaterials.map(material => {
+        const content = materialContents?.find(c => c.material_id === material.id)
+        const isCompleted = progress?.some(p => p.material_id === material.id)
+        
+        return {
+          id: material.id,
+          title: material.title,
+          category: content?.category || 'live_zoom',
+          gdrive_url: content?.content_url || null,
+          component_id: content?.storage_path || null,
+          completed: isCompleted || false,
+          lesson_title: lesson.title,
+          unit_name: unit.name
+        }
+      })
+    })
+
+    return {
+      id: unit.id,
+      name: unit.name,
+      sort_order: unit.position,
+      materials: unitMaterials
+    }
+  })
+
+  return (
+    <div className="min-h-screen bg-[#F7F6FF]">
+      <MateriContent
+        juduls={transformedData}
+        levelName={level.name}
+        courseName={course?.name || ''}
+        studentName={profile?.full_name || 'Student'}
+        studentId={student.id}
+      />
+    </div>
+  )
 }
