@@ -163,69 +163,72 @@ export default async function MateriPage({ params }: PageProps) {
     progressData.map((p: any) => p.material_id)
   )
 
-  // 8. Nest materials under lessons, lessons under units
-  const unitsWithContent = unitsData.map((unit: any) => {
-    const unitLessons = (lessonsData ?? [])
-      .filter((l: any) => l.unit_id === unit.id)
-      .map((lesson: any) => {
-        const lessonMaterials = materialsData
-          .filter((m: any) => m.lesson_id === lesson.id)
-          .map((m: any) => {
-            // Get content data from material_contents
-            const content = m.material_contents?.[0]
-            let contentUrl = null
-            
-            if (content) {
-              if (content.content_type === 'url') {
-                contentUrl = content.content_url
-              } else if (content.content_type === 'component') {
-                contentUrl = `components/${content.storage_path}`
-              } else if (content.content_type === 'audio') {
-                contentUrl = `audio/${content.audio_path}`
-              }
+  // 8. Transform units to match old Judul structure for MateriContent
+  const judulsData = unitsData.map((unit: any) => {
+    // Flatten all materials from all lessons in this unit
+    const unitLessons = (lessonsData ?? []).filter((l: any) => l.unit_id === unit.id)
+    
+    const allMaterials = unitLessons.flatMap((lesson: any) => {
+      return materialsData
+        .filter((m: any) => m.lesson_id === lesson.id)
+        .map((m: any) => {
+          // Get content data from material_contents
+          const content = m.material_contents?.[0]
+          let gdrive_url = null
+          let component_id = null
+          
+          if (content) {
+            if (content.content_type === 'url') {
+              gdrive_url = content.content_url
+            } else if (content.content_type === 'component') {
+              component_id = `${content.storage_bucket}/${content.storage_path}`
             }
+          }
 
-            return {
-              id: m.id,
-              title: m.title,
-              category: m.category,
-              position: m.position,
-              contentUrl,
-              isCompleted: completedMaterialIds.has(m.id),
-            }
-          })
+          return {
+            id: m.id,
+            title: m.title,
+            lesson_name: lesson.lesson_name,
+            category: m.category,
+            gdrive_url,
+            component_id,
+            thumbnail_url: null,
+            lesson_number: m.position,
+            isCompleted: completedMaterialIds.has(m.id),
+          }
+        })
+    })
 
-        return {
-          id: lesson.id,
-          lesson_name: lesson.lesson_name,
-          position: lesson.position,
-          materials: lessonMaterials,
-        }
-      })
-
+    // Transform to match Judul type
     return {
       id: unit.id,
       name: unit.unit_name,
       description: unit.description,
-      position: unit.position,
+      sort_order: unit.position,
       level_id: unit.level_id,
-      level_name: unit.levels.name,
-      course_name: unit.levels.courses.name,
-      course_color: unit.levels.courses.color,
-      lessons: unitLessons,
+      levels: {
+        id: unit.levels.id,
+        name: unit.levels.name,
+        course_id: unit.levels.course_id,
+        courses: {
+          name: unit.levels.courses.name,
+          color: unit.levels.courses.color,
+        },
+      },
+      materials: allMaterials,
     }
   })
 
   // 9. Filter out units with no materials
-  const unitsWithMaterials = unitsWithContent.filter(
-    (unit: any) => unit.lessons.some((lesson: any) => lesson.materials.length > 0)
+  const judulsWithMaterials = judulsData.filter(
+    (judul: any) => judul.materials.length > 0
   )
 
   return (
     <MateriContent
       studentName={student.relation_name}
       studentId={student.id}
-      juduls={unitsWithMaterials}  // Pass units as "juduls" for backward compatibility with MateriContent
+      juduls={judulsWithMaterials}
     />
   )
 }
