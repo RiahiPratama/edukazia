@@ -216,18 +216,30 @@ export default function LiveZoomFormMultiLevel({ onSave, onCancel, editData }: L
           console.log('✅ Unit created with ID:', actualUnitId);
         }
 
-        // ✅ Create LESSON once
+        // ✅ Create LESSON once with auto-increment position
         let actualLessonId = selectedLesson;
         
         if (selectedLesson === 'NEW' && newLessonName && actualUnitId) {
           console.log('🆕 Creating Lesson ONCE:', newLessonName);
+          
+          // Get max position for this unit to avoid duplicate constraint violation
+          const { data: existingLessons } = await supabase
+            .from('lessons')
+            .select('position')
+            .eq('unit_id', actualUnitId)
+            .order('position', { ascending: false })
+            .limit(1);
+          
+          const nextPosition = existingLessons && existingLessons.length > 0 
+            ? (existingLessons[0].position + 1) 
+            : 0;
           
           const { data: newLesson, error: lessonError } = await supabase
             .from('lessons')
             .insert({
               unit_id: actualUnitId,
               lesson_name: newLessonName,
-              position: 0,
+              position: nextPosition,
             })
             .select()
             .single();
