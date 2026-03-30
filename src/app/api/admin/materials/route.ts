@@ -200,6 +200,7 @@ export async function POST(request: NextRequest) {
     const contentRecord: any = {
       material_id: material.id,
       content_data: contentData,
+      content_type: category,
     };
 
     if (filePath) {
