@@ -165,9 +165,22 @@ export async function PATCH(
   if (category !== undefined) updateData.category = category
   if (lesson_id !== undefined) updateData.lesson_id = lesson_id
   if (position !== undefined) updateData.position = position
-  if (canva_urls !== undefined) updateData.canva_urls = canva_urls
   if (template_id !== undefined) updateData.template_id = template_id
-  if (content_data !== undefined) updateData.content_data = content_data
+  
+  // Handle content_data and canva_urls
+  if (content_data !== undefined) {
+    updateData.content_data = content_data
+    
+    // IMPORTANT: If content_data has a Canva URL, also save to canva_urls array
+    if (content_data.platform === 'canva' && content_data.url) {
+      updateData.canva_urls = [content_data.url]
+    }
+  }
+  
+  // Direct canva_urls takes precedence
+  if (canva_urls !== undefined) {
+    updateData.canva_urls = canva_urls
+  }
   
   // Always update timestamp
   updateData.updated_at = new Date().toISOString()
