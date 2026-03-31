@@ -3,11 +3,11 @@ import { NextResponse } from 'next/server';
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { id } = params;
+    const { id } = await params; // ← FIX: await params for Next.js 15+
 
     // Check auth
     const { data: { user }, error: authError } = await supabase.auth.getUser();
