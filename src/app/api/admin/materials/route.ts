@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
           level_id: levelId,
           chapter_title: chapterName,
           chapter_number: 0, // Required field
+          order_number: 0,   // Required field
         })
         .select()
         .single();
