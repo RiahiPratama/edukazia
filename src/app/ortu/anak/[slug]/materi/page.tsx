@@ -34,23 +34,10 @@ export default async function MateriPage({
     .eq('id', student.profile_id)
     .single()
 
-  // 3. Get ALL student's active enrollments with levels
+  // 3. Get ALL student's active enrollments
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select(`
-      id, 
-      level_id, 
-      class_group_id,
-      levels:level_id (
-        id,
-        name,
-        course_id,
-        courses:course_id (
-          id,
-          name
-        )
-      )
-    `)
+    .select('id, level_id, class_group_id')
     .eq('student_id', student.id)
     .eq('status', 'active')
 
@@ -68,9 +55,9 @@ export default async function MateriPage({
     )
   }
 
-  // 4. Get ALL level IDs from enrollments
+  // 4. Get level IDs and fetch level details separately
   const levelIds = enrollments
-    .map(e => e.levels?.id)
+    .map(e => e.level_id)
     .filter((id): id is string => !!id)
 
   if (levelIds.length === 0) {
@@ -87,7 +74,13 @@ export default async function MateriPage({
     )
   }
 
-  // 5. Get all units for ALL enrolled levels
+  // 5. Get levels with courses
+  const { data: levels } = await supabase
+    .from('levels')
+    .select('id, name, course_id, courses:course_id(id, name)')
+    .in('id', levelIds)
+
+  // 6. Get all units for ALL enrolled levels
   const { data: units } = await supabase
     .from('units')
     .select('id, unit_name, position, level_id, chapter_id')
@@ -146,9 +139,11 @@ export default async function MateriPage({
     .eq('student_id', student.id)
 
   // Transform data grouped by LEVEL
-  const levelsData = enrollments.map(enrollment => {
-    const level = enrollment.levels
+  const levelsData = levelIds.map(levelId => {
+    const level = levels?.find(l => l.id === levelId)
     if (!level) return null
+
+    const course = Array.isArray(level.courses) ? level.courses[0] : level.courses
 
     const levelUnits = units.filter(u => u.level_id === level.id)
     
@@ -200,7 +195,7 @@ export default async function MateriPage({
     return {
       level_id: level.id,
       level_name: level.name,
-      course_name: level.courses?.name || '',
+      course_name: course?.name || '',
       units: transformedUnits
     }
   }).filter((l): l is NonNullable<typeof l> => l !== null)
