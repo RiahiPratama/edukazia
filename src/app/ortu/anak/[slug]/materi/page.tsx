@@ -34,14 +34,27 @@ export default async function MateriPage({
     .eq('id', student.profile_id)
     .single()
 
-  // 3. Get student's enrollment with level
+  // 3. Get ALL student's active enrollments with levels
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select('id, level_id, class_group_id')
+    .select(`
+      id, 
+      level_id, 
+      class_group_id,
+      levels:level_id (
+        id,
+        name,
+        course_id,
+        courses:course_id (
+          id,
+          name
+        )
+      )
+    `)
     .eq('student_id', student.id)
     .eq('status', 'active')
 
-  if (!enrollments || enrollments.length === 0 || !enrollments[0].level_id) {
+  if (!enrollments || enrollments.length === 0) {
     return (
       <div className="min-h-screen bg-[#F7F6FF] p-6">
         <div className="max-w-2xl mx-auto">
@@ -55,16 +68,12 @@ export default async function MateriPage({
     )
   }
 
-  const enrollment = enrollments[0]
+  // 4. Get ALL level IDs from enrollments
+  const levelIds = enrollments
+    .map(e => e.levels?.id)
+    .filter((id): id is string => !!id)
 
-  // 4. Get level details
-  const { data: level } = await supabase
-    .from('levels')
-    .select('id, name, course_id')
-    .eq('id', enrollment.level_id)
-    .single()
-
-  if (!level) {
+  if (levelIds.length === 0) {
     return (
       <div className="min-h-screen bg-[#F7F6FF] p-6">
         <div className="max-w-2xl mx-auto">
@@ -78,18 +87,11 @@ export default async function MateriPage({
     )
   }
 
-  // 5. Get course details
-  const { data: course } = await supabase
-    .from('courses')
-    .select('id, name')
-    .eq('id', level.course_id)
-    .single()
-
-  // 6. Get all units for this level
+  // 5. Get all units for ALL enrolled levels
   const { data: units } = await supabase
     .from('units')
-    .select('id, unit_name, position, level_id')
-    .eq('level_id', level.id)
+    .select('id, unit_name, position, level_id, chapter_id')
+    .in('level_id', levelIds)
     .order('position')
 
   if (!units || units.length === 0) {
@@ -98,13 +100,20 @@ export default async function MateriPage({
         <div className="max-w-2xl mx-auto">
           <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
             <p className="text-lg text-gray-600">
-              Materi pembelajaran untuk level {level.name} belum tersedia.
+              Materi pembelajaran belum tersedia.
             </p>
           </div>
         </div>
       </div>
     )
   }
+
+  // 6. Get chapters for context
+  const chapterIds = units.map(u => u.chapter_id).filter((id): id is string => !!id)
+  const { data: chapters } = await supabase
+    .from('chapters')
+    .select('id, chapter_title, level_id')
+    .in('id', chapterIds)
 
   // 7. Get all lessons for these units
   const unitIds = units.map(u => u.id)
@@ -118,8 +127,9 @@ export default async function MateriPage({
   const lessonIds = lessons?.map(l => l.id) || []
   const { data: materials } = await supabase
     .from('materials')
-    .select('id, title, position, lesson_id, category, canva_urls, content_data, template_id')
+    .select('id, title, position, lesson_id, category, canva_urls, content_data, template_id, is_published')
     .in('lesson_id', lessonIds)
+    .eq('is_published', true) // Only published materials
     .order('position')
 
   // 9. Get material contents for all materials
@@ -135,58 +145,70 @@ export default async function MateriPage({
     .select('material_id, completed_at')
     .eq('student_id', student.id)
 
-  // Transform data into the structure needed by MateriContent component
-  const transformedData = units.map(unit => {
-    const unitLessons = lessons?.filter(l => l.unit_id === unit.id) || []
-    const unitMaterials = unitLessons.flatMap(lesson => {
-      const lessonMaterials = materials?.filter(m => m.lesson_id === lesson.id) || []
-      return lessonMaterials.map(material => {
-        const content = materialContents?.find(c => c.material_id === material.id)
-        const isCompleted = progress?.some(p => p.material_id === material.id)
-        
-        // Extract URL based on category
-        let materialUrl = null
-        let componentId = null
-        
-        if (material.category === 'live_zoom' && material.canva_urls) {
-          // Extract first URL from canva_urls JSONB array
-          const urls = Array.isArray(material.canva_urls) ? material.canva_urls : []
-          materialUrl = urls[0] || null
-        } else if (material.category === 'kosakata') {
-          // For kosakata, use content_url from material_contents
-          materialUrl = content?.content_url || null
-        } else if (material.category === 'bacaan' || material.category === 'cefr') {
-          // For bacaan/cefr, use template_id or storage_path for component rendering
-          componentId = material.template_id || content?.storage_path || null
-        }
-        
-        return {
-          id: material.id,
-          title: material.title,
-          category: material.category || 'live_zoom',
-          gdrive_url: materialUrl,
-          component_id: componentId,
-          completed: isCompleted || false,
-          lesson_title: lesson.lesson_name,
-          unit_name: unit.unit_name
-        }
+  // Transform data grouped by LEVEL
+  const levelsData = enrollments.map(enrollment => {
+    const level = enrollment.levels
+    if (!level) return null
+
+    const levelUnits = units.filter(u => u.level_id === level.id)
+    
+    const transformedUnits = levelUnits.map(unit => {
+      const unitLessons = lessons?.filter(l => l.unit_id === unit.id) || []
+      const unitMaterials = unitLessons.flatMap(lesson => {
+        const lessonMaterials = materials?.filter(m => m.lesson_id === lesson.id) || []
+        return lessonMaterials.map(material => {
+          const content = materialContents?.find(c => c.material_id === material.id)
+          const isCompleted = progress?.some(p => p.material_id === material.id)
+          
+          // Extract URL based on category
+          let materialUrl = null
+          let componentId = null
+          
+          if (material.category === 'live_zoom' && material.canva_urls) {
+            const urls = Array.isArray(material.canva_urls) ? material.canva_urls : []
+            materialUrl = urls[0] || null
+          } else if (material.category === 'kosakata') {
+            materialUrl = content?.content_url || null
+          } else if (material.category === 'bacaan' || material.category === 'cefr') {
+            componentId = material.template_id || content?.storage_path || null
+          }
+          
+          return {
+            id: material.id,
+            title: material.title,
+            category: material.category || 'live_zoom',
+            gdrive_url: materialUrl,
+            component_id: componentId,
+            completed: isCompleted || false,
+            lesson_title: lesson.lesson_name,
+            unit_name: unit.unit_name
+          }
+        })
       })
+
+      const chapter = chapters?.find(c => c.id === unit.chapter_id)
+
+      return {
+        id: unit.id,
+        name: unit.unit_name,
+        chapter_title: chapter?.chapter_title || null,
+        sort_order: unit.position,
+        materials: unitMaterials
+      }
     })
 
     return {
-      id: unit.id,
-      name: unit.unit_name,
-      sort_order: unit.position,
-      materials: unitMaterials
+      level_id: level.id,
+      level_name: level.name,
+      course_name: level.courses?.name || '',
+      units: transformedUnits
     }
-  })
+  }).filter((l): l is NonNullable<typeof l> => l !== null)
 
   return (
     <div className="min-h-screen bg-[#F7F6FF]">
       <MateriContent
-        juduls={transformedData}
-        levelName={level.name}
-        courseName={course?.name || ''}
+        levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
         studentId={student.id}
       />

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { BookOpen, Video, FileText, Headphones, ChevronDown, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Material = {
@@ -14,301 +15,275 @@ type Material = {
   unit_name: string
 }
 
-type Judul = {
+type Unit = {
   id: string
   name: string
+  chapter_title: string | null
   sort_order: number
   materials: Material[]
 }
 
-type Props = {
-  juduls: Judul[]
-  levelName: string
-  courseName: string
+type LevelData = {
+  level_id: string
+  level_name: string
+  course_name: string
+  units: Unit[]
+}
+
+type MateriContentProps = {
+  levelsData: LevelData[]
   studentName: string
   studentId: string
 }
 
-type TabType = 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'
+export default function MateriContent({ levelsData, studentName, studentId }: MateriContentProps) {
+  const [selectedLevelId, setSelectedLevelId] = useState<string>('')
+  const [activeTab, setActiveTab] = useState<'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'>('live_zoom')
 
-const TABS: { id: TabType; icon: string; label: string }[] = [
-  { id: 'live_zoom', icon: '🎥', label: 'Live Zoom' },
-  { id: 'bacaan', icon: '📚', label: 'Bacaan' },
-  { id: 'kosakata', icon: '📝', label: 'Kosakata' },
-  { id: 'cefr', icon: '🎧', label: 'CEFR' },
-]
+  // Initialize with first level or load from localStorage
+  useEffect(() => {
+    const storedLevelId = localStorage.getItem('selected_level_id')
+    if (storedLevelId && levelsData.some(l => l.level_id === storedLevelId)) {
+      setSelectedLevelId(storedLevelId)
+    } else if (levelsData.length > 0) {
+      setSelectedLevelId(levelsData[0].level_id)
+    }
+  }, [levelsData])
 
-export default function MateriContent({ juduls, levelName, courseName, studentName, studentId }: Props) {
-  const [activeTab, setActiveTab] = useState<TabType>('live_zoom')
-  const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set())
+  // Save selected level to localStorage
+  useEffect(() => {
+    if (selectedLevelId) {
+      localStorage.setItem('selected_level_id', selectedLevelId)
+    }
+  }, [selectedLevelId])
 
-  // Filter materials by active tab
-  const filteredJuduls = juduls.map(judul => ({
-    ...judul,
-    materials: judul.materials.filter(m => m.category === activeTab)
-  })).filter(judul => judul.materials.length > 0)
+  const selectedLevel = levelsData.find(l => l.level_id === selectedLevelId)
 
-  // Get all materials for the active tab (across all units)
-  const allMaterialsForTab = juduls.flatMap(j => j.materials.filter(m => m.category === activeTab))
+  if (!selectedLevel) {
+    return (
+      <div className="p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
+              Tidak ada level yang tersedia.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  // Find next unfinished material for "Ayo Belajar" card
-  const nextMaterial = allMaterialsForTab.find(m => !m.completed) || allMaterialsForTab[0]
+  // Get materials for selected tab
+  const filteredMaterials = selectedLevel.units
+    .flatMap(unit => 
+      unit.materials
+        .filter(m => m.category === activeTab)
+        .map(m => ({ ...m, chapter_title: unit.chapter_title, unit_name: unit.name }))
+    )
 
-  const toggleUnit = (unitId: string) => {
-    setExpandedUnits(prev => {
-      const next = new Set(prev)
-      if (next.has(unitId)) {
-        next.delete(unitId)
-      } else {
-        next.add(unitId)
-      }
-      return next
-    })
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'live_zoom':
+        return <Video className="w-5 h-5" />
+      case 'bacaan':
+        return <BookOpen className="w-5 h-5" />
+      case 'kosakata':
+        return <FileText className="w-5 h-5" />
+      case 'cefr':
+        return <Headphones className="w-5 h-5" />
+      default:
+        return <Video className="w-5 h-5" />
+    }
+  }
+
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case 'live_zoom':
+        return 'Live Zoom'
+      case 'bacaan':
+        return 'Bacaan'
+      case 'kosakata':
+        return 'Kosakata'
+      case 'cefr':
+        return 'CEFR'
+      default:
+        return category
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F7F6FF] via-[#FEFBFF] to-[#F7F6FF]">
-      {/* Premium Header */}
-      <div className="bg-gradient-to-r from-[#5C4FE5] via-[#6B5FF5] to-[#7A6FFF] text-white shadow-lg">
-        <div className="max-w-5xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Materi Pembelajaran</h1>
-              <p className="text-sm opacity-90 mt-1 font-medium">{studentName}</p>
-            </div>
-            <div className="hidden md:flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-              <div className="w-2 h-2 rounded-full bg-[#E6B800] animate-pulse"></div>
-              <span className="text-xs font-medium">Level {levelName}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Premium Tabs */}
-      <div className="bg-white border-b border-[#E5E3FF] shadow-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-2 px-6 py-4 text-sm font-semibold transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'text-[#5C4FE5]'
-                    : 'text-[#7B78A8] hover:text-[#5C4FE5] hover:bg-[#F7F6FF]'
-                }`}
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header with Level Selector */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Materi Pembelajaran</h1>
+        <p className="text-gray-600 mb-4">{selectedLevel.course_name}</p>
+        
+        {/* Level Selector Dropdown */}
+        {levelsData.length > 1 && (
+          <div className="relative inline-block w-full max-w-md">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Pilih Level:
+            </label>
+            <div className="relative">
+              <select
+                value={selectedLevelId}
+                onChange={(e) => setSelectedLevelId(e.target.value)}
+                className="w-full appearance-none bg-white border-2 border-[#E5E3FF] rounded-xl px-4 py-3 pr-10 text-gray-900 font-semibold focus:outline-none focus:ring-2 focus:ring-[#5C4FE5] focus:border-transparent transition-all cursor-pointer hover:border-[#5C4FE5]"
               >
-                <span className="text-lg">{tab.icon}</span>
-                <span>{tab.label}</span>
-                {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#5C4FE5] to-[#7A6FFF] rounded-t-full shadow-lg shadow-[#5C4FE5]/30"></div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Premium Ayo Belajar Card */}
-        {nextMaterial && (
-          <div className="bg-gradient-to-br from-[#5C4FE5] via-[#6B5FF5] to-[#7A6FFF] rounded-2xl p-6 mb-8 shadow-2xl shadow-[#5C4FE5]/20 border border-white/20">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-2xl">
-                🔥
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-2">Ayo Belajar</p>
-                <h3 className="text-white text-xl font-bold mb-3 leading-tight">{nextMaterial.title || nextMaterial.lesson_title}</h3>
-                <div className="flex items-center gap-2 mb-4 flex-wrap">
-                  <span className="bg-white/20 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full font-semibold border border-white/30">
-                    {levelName}
-                  </span>
-                  <span className="text-white/60">•</span>
-                  <span className="text-white/90 text-xs font-medium">{nextMaterial.unit_name}</span>
-                </div>
-                {(nextMaterial.category === 'live_zoom' || nextMaterial.category === 'kosakata') ? (
-                  <a
-                    href={nextMaterial.gdrive_url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-white text-[#5C4FE5] px-6 py-3 rounded-xl font-bold hover:bg-white/90 hover:shadow-xl transition-all group"
-                  >
-                    <span>Mulai Belajar</span>
-                    <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
-                  </a>
-                ) : (
-                  <Link
-                    href={`/ortu/materi/render/${nextMaterial.component_id}`}
-                    className="inline-flex items-center gap-2 bg-white text-[#5C4FE5] px-6 py-3 rounded-xl font-bold hover:bg-white/90 hover:shadow-xl transition-all group"
-                  >
-                    <span>Mulai Belajar</span>
-                    <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
-                  </Link>
-                )}
-              </div>
+                {levelsData.map(level => (
+                  <option key={level.level_id} value={level.level_id}>
+                    Level {level.level_name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             </div>
           </div>
         )}
 
-        {/* Course Section with Premium Units */}
-        {filteredJuduls.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-[#E5E3FF]">
-            <div className="text-6xl mb-4 opacity-50">📚</div>
-            <p className="text-[#7B78A8] text-lg font-medium">
-              Belum ada materi {TABS.find(t => t.id === activeTab)?.label} untuk level ini.
-            </p>
+        {/* Single level display (no dropdown needed) */}
+        {levelsData.length === 1 && (
+          <div className="inline-block bg-gradient-to-r from-[#5C4FE5] to-[#7C6FE5] text-white px-6 py-3 rounded-xl font-semibold shadow-lg">
+            Level {selectedLevel.level_name}
           </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Course Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-[#1A1640] flex items-center gap-2">
-                  <span className="text-2xl">🎓</span>
-                  {courseName}
-                </h2>
-                <p className="text-sm text-[#7B78A8] mt-1 font-medium">Level: {levelName}</p>
-              </div>
-              <div className="bg-[#F7F6FF] border border-[#E5E3FF] px-4 py-2 rounded-full">
-                <p className="text-xs font-semibold text-[#5C4FE5]">
-                  {filteredJuduls.length} {filteredJuduls.length === 1 ? 'unit' : 'units'}
-                </p>
-              </div>
-            </div>
+        )}
+      </div>
 
-            {/* Premium Units List */}
-            <div className="space-y-4">
-              {filteredJuduls.map((judul, idx) => {
-                const isExpanded = expandedUnits.has(judul.id)
-                const completedCount = judul.materials.filter(m => m.completed).length
-                const totalCount = judul.materials.length
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        {(['live_zoom', 'bacaan', 'kosakata', 'cefr'] as const).map((tab) => {
+          const count = selectedLevel.units.flatMap(u => u.materials).filter(m => m.category === tab).length
+          const isActive = activeTab === tab
 
-                return (
-                  <div
-                    key={judul.id}
-                    className="bg-white rounded-2xl shadow-sm border border-[#E5E3FF] overflow-hidden hover:shadow-lg hover:border-[#C4BFFF] transition-all"
-                  >
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
+                isActive
+                  ? 'bg-gradient-to-r from-[#5C4FE5] to-[#7C6FE5] text-white shadow-lg'
+                  : 'bg-white border-2 border-[#E5E3FF] text-gray-700 hover:border-[#5C4FE5]'
+              }`}
+            >
+              {getCategoryIcon(tab)}
+              {getCategoryLabel(tab)}
+              {count > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  isActive ? 'bg-white/20' : 'bg-[#5C4FE5]/10 text-[#5C4FE5]'
+                }`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Materials List */}
+      {filteredMaterials.length === 0 ? (
+        <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-12 text-center">
+          <div className="w-20 h-20 mx-auto mb-4 text-gray-300">
+            {getCategoryIcon(activeTab)}
+          </div>
+          <p className="text-lg text-gray-600">
+            Belum ada materi {getCategoryLabel(activeTab)} untuk level ini.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Group by Chapter → Unit */}
+          {(() => {
+            const grouped = new Map<string, Map<string, Material[]>>()
+            
+            filteredMaterials.forEach(material => {
+              const chapterKey = material.chapter_title || 'Tanpa Chapter'
+              const unitKey = material.unit_name
+              
+              if (!grouped.has(chapterKey)) {
+                grouped.set(chapterKey, new Map())
+              }
+              
+              const chapterMap = grouped.get(chapterKey)!
+              if (!chapterMap.has(unitKey)) {
+                chapterMap.set(unitKey, [])
+              }
+              
+              chapterMap.get(unitKey)!.push(material)
+            })
+
+            return Array.from(grouped.entries()).map(([chapterTitle, units]) => (
+              <div key={chapterTitle} className="bg-white border-2 border-[#E5E3FF] rounded-xl overflow-hidden">
+                {/* Chapter Header */}
+                <div className="bg-gradient-to-r from-[#5C4FE5] to-[#7C6FE5] px-6 py-4">
+                  <h2 className="text-xl font-bold text-white">{chapterTitle}</h2>
+                </div>
+
+                {/* Units */}
+                {Array.from(units.entries()).map(([unitName, materials]) => (
+                  <div key={unitName} className="border-t-2 border-[#E5E3FF]">
                     {/* Unit Header */}
-                    <button
-                      onClick={() => toggleUnit(judul.id)}
-                      className="w-full px-6 py-5 flex items-center justify-between hover:bg-[#F7F6FF] transition-colors group"
-                    >
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-all ${
-                          isExpanded 
-                            ? 'bg-gradient-to-br from-[#5C4FE5] to-[#7A6FFF] text-white shadow-lg shadow-[#5C4FE5]/30' 
-                            : 'bg-[#F7F6FF] text-[#5C4FE5] group-hover:bg-[#EEEDFE]'
-                        }`}>
-                          {String(idx + 1).padStart(2, '0')}
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <h3 className="font-bold text-[#1A1640] dark:text-[#7A6FFF] dark:group-hover:text-[#E6B800] text-base mb-1 truncate transition-colors">{judul.name}</h3>
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-full max-w-[120px] h-1.5 bg-[#F7F6FF] dark:bg-[#2A2640] rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-[#27A05A] to-[#34C76D] rounded-full transition-all"
-                                  style={{ width: `${(completedCount / totalCount) * 100}%` }}
-                                ></div>
+                    <div className="bg-[#F7F6FF] px-6 py-3 border-b border-[#E5E3FF]">
+                      <h3 className="font-semibold text-gray-900">{unitName}</h3>
+                    </div>
+
+                    {/* Materials */}
+                    <div className="divide-y divide-[#E5E3FF]">
+                      {materials.map((material) => {
+                        const isClickable = material.gdrive_url || material.component_id
+
+                        return (
+                          <div
+                            key={material.id}
+                            className={`px-6 py-4 flex items-center justify-between ${
+                              isClickable ? 'hover:bg-[#F7F6FF] transition-colors' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className="text-[#5C4FE5]">
+                                {getCategoryIcon(material.category)}
                               </div>
-                              <span className="text-xs font-semibold text-[#7B78A8] dark:text-[#7A6FFF] dark:group-hover:text-[#E6B800] transition-colors">
-                                {completedCount}/{totalCount}
-                              </span>
+                              <div>
+                                <p className="font-medium text-gray-900">{material.title}</p>
+                                <p className="text-sm text-gray-500">{material.lesson_title}</p>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className={`text-[#5C4FE5] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                        </svg>
-                      </div>
-                    </button>
 
-                    {/* Premium Materials List */}
-                    {isExpanded && (
-                      <div className="px-6 pb-6 space-y-2 animate-in slide-in-from-top-2 duration-200">
-                        {judul.materials.map((material, matIdx) => {
-                          const shouldOpenInNewTab = material.category === 'live_zoom' || material.category === 'kosakata'
-                          const materialUrl = shouldOpenInNewTab 
-                            ? (material.gdrive_url || '#')
-                            : `/ortu/materi/render/${material.component_id}`
-
-                          return (
-                            <div
-                              key={material.id}
-                              className={`group flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                                material.completed
-                                  ? 'bg-gradient-to-r from-[#E6F4EC] to-[#F0F8F4] border-[#9FE1CB]'
-                                  : 'bg-white border-[#E5E3FF] hover:bg-gradient-to-r hover:from-[#F7F6FF] hover:to-[#FEFBFF] hover:border-[#5C4FE5] hover:shadow-md'
-                              }`}
-                            >
-                              {/* Completion Status */}
-                              <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold transition-all ${
-                                material.completed
-                                  ? 'bg-gradient-to-br from-[#27A05A] to-[#34C76D] text-white shadow-lg shadow-[#27A05A]/30'
-                                  : 'bg-[#F7F6FF] text-[#C4BFFF] border-2 border-[#E5E3FF] group-hover:border-[#5C4FE5] group-hover:text-[#5C4FE5]'
-                              }`}>
-                                {material.completed ? (
-                                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M13.485 3.515a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L5.778 10.07l6.293-6.293a1 1 0 011.414 0z"/>
-                                  </svg>
-                                ) : (
-                                  <span className="text-xs">{String(matIdx + 1).padStart(2, '0')}</span>
-                                )}
-                              </div>
-
-                              {/* Material Info */}
-                              <div className="flex-1 min-w-0">
-                                <p className={`font-semibold truncate transition-colors ${
-                                  material.completed 
-                                    ? 'text-[#1A5C36] dark:text-[#34C76D]' 
-                                    : 'text-[#5C4FE5] dark:text-[#E6B800] group-hover:text-[#E6B800] dark:group-hover:text-[#7A6FFF]'
-                                }`}>
-                                  {material.title || material.lesson_title}
-                                </p>
-                              </div>
-
-                              {/* Premium Action Button */}
-                              {shouldOpenInNewTab ? (
-                                <a
-                                  href={materialUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex-shrink-0 px-5 py-2.5 text-sm font-bold rounded-lg transition-all ${
-                                    material.completed
-                                      ? 'bg-white border-2 border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC] hover:shadow-md'
-                                      : 'bg-gradient-to-r from-[#5C4FE5] to-[#7A6FFF] text-white hover:shadow-lg hover:shadow-[#5C4FE5]/30 hover:-translate-y-0.5'
-                                  }`}
-                                >
-                                  {material.completed ? 'Buka' : 'Mulai'}
-                                </a>
-                              ) : (
-                                <Link
-                                  href={materialUrl}
-                                  className={`flex-shrink-0 px-5 py-2.5 text-sm font-bold rounded-lg transition-all ${
-                                    material.completed
-                                      ? 'bg-white border-2 border-[#27A05A] text-[#27A05A] hover:bg-[#E6F4EC] hover:shadow-md'
-                                      : 'bg-gradient-to-r from-[#5C4FE5] to-[#7A6FFF] text-white hover:shadow-lg hover:shadow-[#5C4FE5]/30 hover:-translate-y-0.5'
-                                  }`}
-                                >
-                                  {material.completed ? 'Buka' : 'Mulai'}
-                                </Link>
+                            <div className="flex items-center gap-3">
+                              {material.completed && (
+                                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                              )}
+                              
+                              {isClickable && (
+                                material.gdrive_url ? (
+                                  <a
+                                    href={material.gdrive_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors"
+                                  >
+                                    Buka
+                                  </a>
+                                ) : material.component_id ? (
+                                  <Link
+                                    href={`/ortu/anak/${studentId}/materi/render/${material.component_id}`}
+                                    className="px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors"
+                                  >
+                                    Buka
+                                  </Link>
+                                ) : null
                               )}
                             </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+                ))}
+              </div>
+            ))
+          })()}
+        </div>
+      )}
     </div>
   )
 }
