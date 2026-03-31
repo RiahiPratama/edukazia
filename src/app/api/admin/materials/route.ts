@@ -178,10 +178,10 @@ export async function POST(request: NextRequest) {
       
       if (category === 'bacaan') {
         storageBucket = 'components';
-        uploadedFilePath = `${timestamp}-${random}.jsx`;
+        uploadedFilePath = `bacaan/${timestamp}-${random}.jsx`;
       } else if (category === 'cefr') {
         storageBucket = 'audio';
-        uploadedFilePath = `${timestamp}-${random}.${ext}`;
+        uploadedFilePath = `cefr/${timestamp}-${random}.${ext}`;
       }
 
       if (storageBucket && uploadedFilePath) {
