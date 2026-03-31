@@ -17,7 +17,16 @@ export async function PATCH(
 
     // Parse form data
     const formData = await request.formData();
+    const title = formData.get('title') as string;
     const url = formData.get('url') as string;
+
+    // Validate inputs
+    if (!title || !title.trim()) {
+      return NextResponse.json(
+        { error: 'Title is required' },
+        { status: 400 }
+      );
+    }
 
     if (!url || !url.trim()) {
       return NextResponse.json(
@@ -54,7 +63,10 @@ export async function PATCH(
     // Update material
     const { data, error } = await supabase
       .from('materials')
-      .update({ content_data })
+      .update({ 
+        title: title.trim(),
+        content_data 
+      })
       .eq('id', id)
       .select()
       .single();
@@ -70,7 +82,7 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       data,
-      message: 'Link updated successfully'
+      message: 'Material updated successfully'
     });
 
   } catch (error) {
