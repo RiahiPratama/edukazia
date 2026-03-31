@@ -31,6 +31,8 @@ export async function POST(request: NextRequest) {
     const title = formData.get('title') as string;
     const category = formData.get('category') as string;
     const levelId = formData.get('level_id') as string;
+    const chapterId = formData.get('chapter_id') as string;
+    const chapterName = formData.get('chapter_name') as string;
     const unitId = formData.get('unit_id') as string;
     const unitName = formData.get('unit_name') as string;
     const lessonId = formData.get('lesson_id') as string;
@@ -38,9 +40,9 @@ export async function POST(request: NextRequest) {
     const position = parseInt(formData.get('order_number') as string) || 1;
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
-    const file = formData.get('file') as File | null;
+    const file = formData.get('jsx_file') as File | null; // Fixed: jsx_file not 'file'
 
-    console.log('📦 Creating material v4.1:', { title, category, levelId });
+    console.log('📦 Creating material v4.1:', { title, category, levelId, chapterId });
 
     // Validate required fields
     if (!title || !category || !levelId) {
@@ -63,10 +65,36 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================================
-    // STEP 1: CREATE HIERARCHY (unit → lesson)
+    // STEP 1: CREATE HIERARCHY (chapter → unit → lesson)
     // ============================================================
 
-    // 1. Create or get Unit
+    // 1. Create or get Chapter
+    let actualChapterId = chapterId;
+    if (chapterId === 'NEW' && chapterName) {
+      console.log('🆕 Creating new Chapter:', chapterName);
+
+      const { data: newChapter, error: chapterError } = await supabase
+        .from('chapters')
+        .insert({
+          level_id: levelId,
+          chapter_title: chapterName,
+        })
+        .select()
+        .single();
+
+      if (chapterError) {
+        console.error('Chapter creation error:', chapterError);
+        return NextResponse.json({
+          error: 'Failed to create chapter',
+          details: chapterError.message
+        }, { status: 500 });
+      }
+
+      actualChapterId = newChapter.id;
+      console.log('✅ Chapter created:', actualChapterId);
+    }
+
+    // 2. Create or get Unit
     let actualUnitId = unitId;
     if (unitId === 'NEW' && unitName) {
       console.log('🆕 Creating new Unit:', unitName);
@@ -75,6 +103,7 @@ export async function POST(request: NextRequest) {
         .from('units')
         .insert({
           level_id: levelId,
+          chapter_id: actualChapterId || null, // Link to chapter!
           unit_name: unitName,
           unit_number: 0,
           position: 0,
@@ -100,7 +129,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 2. Create or get Lesson
+    // 3. Create or get Lesson
     let actualLessonId = lessonId;
     if (lessonId === 'NEW' && lessonName) {
       console.log('🆕 Creating new Lesson:', lessonName);
