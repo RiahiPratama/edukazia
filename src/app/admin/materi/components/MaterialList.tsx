@@ -610,6 +610,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           </div>
         );
       })}
+      </div>
 
       {totalMaterials === 0 && (
         <div className="text-center py-12 text-gray-500">
