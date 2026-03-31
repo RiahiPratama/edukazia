@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type MaterialWithHierarchy = {
@@ -519,8 +519,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                 ) : (
                   <ChevronRight className="w-6 h-6 text-[#5C4FE5]" />
                 )}
+                <Library className="w-6 h-6 text-[#5C4FE5]" />
                 <span className="text-xl font-bold text-[#5C4FE5]">
-                  📚 {chapterGroup.chapterTitle}
+                  {chapterGroup.chapterTitle}
                 </span>
               </div>
               <span className="text-sm text-gray-600 font-semibold">
@@ -551,8 +552,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                 ) : (
                                   <ChevronRight className="w-5 h-5 text-gray-600" />
                                 )}
+                                <Book className="w-5 h-5 text-[#5C4FE5]" />
                                 <span className="text-lg font-semibold text-gray-900">
-                                  📦 {unitGroup.unitName}
+                                  {unitGroup.unitName}
                                 </span>
                               </button>
 
@@ -571,7 +573,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                             </>
                           ) : (
                             <div className="flex items-center gap-3 flex-1">
-                              <span className="text-lg">📦</span>
+                              <Book className="w-5 h-5 text-[#5C4FE5]" />
                               <input
                                 type="text"
                                 value={editingUnitName}
@@ -645,8 +647,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                         <div className="text-[#5C4FE5]">
                           {getCategoryIcon(material.category)}
                         </div>
+                        <FileCheck className="w-4 h-4 text-gray-500" />
                         <span className="text-sm font-semibold text-gray-700">
-                          ▸ {lessonGroup.lessonName}
+                          {lessonGroup.lessonName}
                         </span>
                         {material.is_published && (
                           <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">
