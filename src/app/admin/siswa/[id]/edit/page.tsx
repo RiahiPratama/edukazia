@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { UserCheck, UserPlus, Eye, EyeOff } from 'lucide-react'
+import ArchiveEnrollmentManager from '@/components/admin/ArchiveEnrollmentManager'
 import EnrollmentLevelManager from '@/components/admin/EnrollmentLevelManager'
 
 import { WILAYAH, PROVINCES, getCities } from '@/lib/wilayah'
@@ -475,6 +476,7 @@ export default function SiswaEditPage() {
         </div>
 
         {/* ENROLLMENT & LEVEL MANAGER */}
+        <ArchiveEnrollmentManager studentId={siswaId} />
         <EnrollmentLevelManager studentId={siswaId} />
 
         {/* CATATAN */}
