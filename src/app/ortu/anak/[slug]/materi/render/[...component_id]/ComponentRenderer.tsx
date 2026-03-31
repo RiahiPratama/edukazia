@@ -9,9 +9,7 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
   const escapedCode = jsxCode
     .replace(/\\/g, '\\\\')
     .replace(/`/g, '\\`')
-    .replace(/\$/g, '\\$')
-    .replace(/</g, '\\x3C')
-    .replace(/>/g, '\\x3E');
+    .replace(/\$/g, '\\$');
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -22,6 +20,7 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
   <title>${title}</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,13 +30,12 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
   </style>
 </head>
 <body>
-  <div id="root"><div class="loading">Loading...</div></div>
+  <div id="root"><div class="loading">Loading component...</div></div>
   <script>
-    // Wait for React libraries
-    function waitForReact() {
+    function waitForLibraries() {
       return new Promise((resolve) => {
         const check = () => {
-          if (window.React && window.ReactDOM) {
+          if (window.React && window.ReactDOM && window.Babel) {
             resolve();
           } else {
             setTimeout(check, 50);
@@ -47,55 +45,61 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
       });
     }
 
-    waitForReact().then(() => {
+    waitForLibraries().then(() => {
       try {
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         
-        // Create stub icon components (simple divs)
-        const IconStub = ({ name }) => React.createElement('span', { 
-          style: { display: 'inline-block', width: '20px', height: '20px', marginRight: '4px' }
-        }, '•');
-        
-        const BookOpen = (props) => React.createElement(IconStub, { name: 'book', ...props });
-        const ChevronDown = (props) => React.createElement(IconStub, { name: 'down', ...props });
-        const ChevronUp = (props) => React.createElement(IconStub, { name: 'up', ...props });
-        const Globe = (props) => React.createElement(IconStub, { name: 'globe', ...props });
-        const AlertTriangle = (props) => React.createElement(IconStub, { name: 'alert', ...props });
-        const Check = (props) => React.createElement(IconStub, { name: 'check', ...props });
-        const X = (props) => React.createElement(IconStub, { name: 'x', ...props });
-        const Info = (props) => React.createElement(IconStub, { name: 'info', ...props });
-        const ChevronRight = (props) => React.createElement(IconStub, { name: 'right', ...props });
-        const ChevronLeft = (props) => React.createElement(IconStub, { name: 'left', ...props });
+        // Stub icon components
+        const BookOpen = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '📖');
+        const ChevronDown = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▼');
+        const ChevronUp = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▲');
+        const Globe = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '🌐');
+        const AlertTriangle = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '⚠️');
+        const Check = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '✓');
+        const X = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '✕');
+        const Info = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, 'ℹ️');
+        const ChevronRight = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▶');
+        const ChevronLeft = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '◀');
 
-        const ComponentFunction = new Function(
-          'React', 'useState', 'useEffect', 'useRef', 'useCallback', 'useMemo',
-          'BookOpen', 'ChevronDown', 'ChevronUp', 'Globe', 'AlertTriangle',
-          'Check', 'X', 'Info', 'ChevronRight', 'ChevronLeft',
-          \`
-          ${escapedCode}
+        // JSX code with icon imports replaced
+        const code = \`
+          const { useState, useEffect, useRef, useCallback, useMemo } = React;
+          const BookOpen = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '📖');
+          const ChevronDown = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▼');
+          const ChevronUp = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▲');
+          const Globe = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '🌐');
+          const AlertTriangle = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '⚠️');
           
-          if (typeof PronunciationGuideAE !== 'undefined') return PronunciationGuideAE;
-          if (typeof App !== 'undefined') return App;
-          if (typeof Component !== 'undefined') return Component;
+          \${escapedCode}
           
-          throw new Error('No component found');
-          \`
-        );
+          // Export component
+          if (typeof PronunciationGuideAE !== 'undefined') window.__Component = PronunciationGuideAE;
+          else if (typeof App !== 'undefined') window.__Component = App;
+          else if (typeof Component !== 'undefined') window.__Component = Component;
+        \`;
 
-        const Component = ComponentFunction(
-          React, useState, useEffect, useRef, useCallback, useMemo,
-          BookOpen, ChevronDown, ChevronUp, Globe, AlertTriangle,
-          Check, X, Info, ChevronRight, ChevronLeft
-        );
+        // Transpile JSX to JavaScript
+        const transformed = Babel.transform(code, {
+          presets: ['react']
+        }).code;
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(Component));
+        // Execute transformed code
+        eval(transformed);
+
+        // Render component
+        if (window.__Component) {
+          const root = ReactDOM.createRoot(document.getElementById('root'));
+          root.render(React.createElement(window.__Component));
+        } else {
+          throw new Error('Component not found');
+        }
       } catch (error) {
         console.error('Error:', error);
         document.getElementById('root').innerHTML = \`
           <div style="padding: 32px; text-align: center; color: #ef4444;">
             <h2>Component Error</h2>
             <p>\${error.message}</p>
+            <pre style="margin-top: 16px; padding: 12px; background: #fee; border-radius: 6px; overflow: auto; font-size: 12px; text-align: left;">\${error.stack}</pre>
           </div>
         \`;
       }
