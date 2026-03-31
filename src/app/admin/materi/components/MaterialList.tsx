@@ -51,6 +51,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [selectedLesson, setSelectedLesson] = useState('');
 
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [editingPosition, setEditingPosition] = useState<number>(0);
   const [savingPosition, setSavingPosition] = useState(false);
@@ -261,37 +262,55 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setFilteredMaterials(filtered);
   };
 
-  const groupByUnitAndLesson = () => {
-    const unitGroups: {
-      [unitId: string]: {
-        unitId: string;
-        unitName: string;
-        lessons: {
-          [lessonId: string]: {
-            lessonId: string;
-            lessonName: string;
-            materials: MaterialWithHierarchy[];
+  const groupByChapterUnitAndLesson = () => {
+    const chapterGroups: {
+      [chapterId: string]: {
+        chapterId: string;
+        chapterTitle: string;
+        units: {
+          [unitId: string]: {
+            unitId: string;
+            unitName: string;
+            unitPosition: number;
+            lessons: {
+              [lessonId: string]: {
+                lessonId: string;
+                lessonName: string;
+                materials: MaterialWithHierarchy[];
+              }
+            }
           }
         }
       }
     } = {};
 
     filteredMaterials.forEach(material => {
+      const chapterId = material.chapter_id || 'no-chapter';
       const unitId = material.unit_id || 'no-unit';
       const lessonId = material.lesson_id || 'no-lesson';
 
-      // Create unit group if not exists
-      if (!unitGroups[unitId]) {
-        unitGroups[unitId] = {
+      // Create chapter group if not exists
+      if (!chapterGroups[chapterId]) {
+        chapterGroups[chapterId] = {
+          chapterId,
+          chapterTitle: material.chapter_title || 'Chapter Tidak Diketahui',
+          units: {}
+        };
+      }
+
+      // Create unit group within chapter if not exists
+      if (!chapterGroups[chapterId].units[unitId]) {
+        chapterGroups[chapterId].units[unitId] = {
           unitId,
           unitName: material.unit_name || 'Unit Tidak Diketahui',
+          unitPosition: material.unit_position || 0,
           lessons: {}
         };
       }
 
       // Create lesson group within unit if not exists
-      if (!unitGroups[unitId].lessons[lessonId]) {
-        unitGroups[unitId].lessons[lessonId] = {
+      if (!chapterGroups[chapterId].units[unitId].lessons[lessonId]) {
+        chapterGroups[chapterId].units[unitId].lessons[lessonId] = {
           lessonId,
           lessonName: material.lesson_name || 'Lesson Tidak Diketahui',
           materials: []
@@ -299,10 +318,10 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       }
 
       // Add material to lesson group
-      unitGroups[unitId].lessons[lessonId].materials.push(material);
+      chapterGroups[chapterId].units[unitId].lessons[lessonId].materials.push(material);
     });
 
-    return unitGroups;
+    return chapterGroups;
   };
 
   const toggleUnit = (unitId: string) => {
@@ -313,6 +332,16 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       newExpanded.add(unitId);
     }
     setExpandedUnits(newExpanded);
+  };
+
+  const toggleChapter = (chapterId: string) => {
+    const newExpanded = new Set(expandedChapters);
+    if (newExpanded.has(chapterId)) {
+      newExpanded.delete(chapterId);
+    } else {
+      newExpanded.add(chapterId);
+    }
+    setExpandedChapters(newExpanded);
   };
 
   const handleDelete = async (materialId: string) => {
@@ -408,7 +437,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     );
   }
 
-  const unitGroups = groupByUnitAndLesson();
+  const chapterGroups = groupByChapterUnitAndLesson();
   const totalMaterials = filteredMaterials.length;
 
   return (
@@ -466,97 +495,118 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         {totalMaterials} Materi
       </div>
 
-      {/* Material List Grouped by Unit → Lesson */}
+      {/* Material List Grouped by Chapter → Unit → Lesson */}
       <div className="space-y-4">
-        {Object.values(unitGroups).map((unitGroup) => {
-          // Get first material to extract unit data
-          const firstLesson = Object.values(unitGroup.lessons)[0];
-          const firstMaterial = firstLesson?.materials[0];
-          const unitData = materials.find(m => m.unit_id === unitGroup.unitId);
-          const isEditing = editingUnitId === unitGroup.unitId;
-
-          return (
-            <div key={unitGroup.unitId} className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
-              {/* Unit Header */}
-              <div className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3 flex-1">
-                  <button
-                    onClick={() => toggleUnit(unitGroup.unitId)}
-                    className="flex items-center gap-3"
-                  >
-                    {expandedUnits.has(unitGroup.unitId) ? (
-                      <ChevronDown className="w-5 h-5 text-gray-600" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-gray-600" />
-                    )}
-                    <span className="text-lg font-semibold text-gray-900">
-                      📦 {unitGroup.unitName}
-                    </span>
-                  </button>
-
-                  {/* Position Controls */}
-                  {!isEditing ? (
-                    <div className="flex items-center gap-2 ml-4">
-                      <span className="text-sm text-gray-600">
-                        Urutan: <span className="font-semibold">{unitData?.unit_position || 0}</span>
-                      </span>
-                      <button
-                        onClick={() => startEditPosition(unitGroup.unitId, unitData?.unit_position || 0)}
-                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                        title="Edit urutan"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 ml-4">
-                      <span className="text-sm text-gray-600">Urutan:</span>
-                      <input
-                        type="number"
-                        value={editingPosition}
-                        onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
-                        min="0"
-                        className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => saveUnitPosition(unitGroup.unitId)}
-                        disabled={savingPosition}
-                        className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
-                        title="Simpan"
-                      >
-                        {savingPosition ? (
-                          <div className="animate-spin w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full" />
-                        ) : (
-                          <span className="text-lg">✓</span>
-                        )}
-                      </button>
-                      <button
-                        onClick={cancelEditPosition}
-                        disabled={savingPosition}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                        title="Batal"
-                      >
-                        <span className="text-lg">✕</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <span className="text-sm text-gray-600">
-                  {Object.keys(unitGroup.lessons).length} lesson
+        {Object.values(chapterGroups).map((chapterGroup) => (
+          <div key={chapterGroup.chapterId} className="bg-white rounded-xl border-2 border-[#5C4FE5] overflow-hidden">
+            {/* Chapter Header */}
+            <button
+              onClick={() => toggleChapter(chapterGroup.chapterId)}
+              className="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-50 transition-colors bg-gradient-to-r from-purple-50 to-white"
+            >
+              <div className="flex items-center gap-3">
+                {expandedChapters.has(chapterGroup.chapterId) ? (
+                  <ChevronDown className="w-6 h-6 text-[#5C4FE5]" />
+                ) : (
+                  <ChevronRight className="w-6 h-6 text-[#5C4FE5]" />
+                )}
+                <span className="text-xl font-bold text-[#5C4FE5]">
+                  📚 {chapterGroup.chapterTitle}
                 </span>
               </div>
+              <span className="text-sm text-gray-600 font-semibold">
+                {Object.keys(chapterGroup.units).length} unit
+              </span>
+            </button>
 
-              {/* Lessons under this unit */}
-              {expandedUnits.has(unitGroup.unitId) && (
-              <div className="border-t-2 border-gray-200">
-                {Object.values(unitGroup.lessons)
-                  .sort((a, b) => {
-                    // Sort by lesson name (which has position prefix like 01_, 02_)
-                    return a.lessonName.localeCompare(b.lessonName);
-                  })
-                  .map((lessonGroup) => {
+            {/* Units under this chapter */}
+            {expandedChapters.has(chapterGroup.chapterId) && (
+              <div className="border-t-2 border-[#5C4FE5]">
+                {Object.values(chapterGroup.units).map((unitGroup) => {
+                  const unitData = materials.find(m => m.unit_id === unitGroup.unitId);
+                  const isEditing = editingUnitId === unitGroup.unitId;
+
+                  return (
+                    <div key={unitGroup.unitId} className="border-b-2 border-gray-200 last:border-b-0">
+                      {/* Unit Header */}
+                      <div className="px-8 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors bg-gray-50">
+                        <div className="flex items-center gap-3 flex-1">
+                          <button
+                            onClick={() => toggleUnit(unitGroup.unitId)}
+                            className="flex items-center gap-3"
+                          >
+                            {expandedUnits.has(unitGroup.unitId) ? (
+                              <ChevronDown className="w-5 h-5 text-gray-600" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-gray-600" />
+                            )}
+                            <span className="text-lg font-semibold text-gray-900">
+                              📦 {unitGroup.unitName}
+                            </span>
+                          </button>
+
+                          {/* Position Controls */}
+                          {!isEditing ? (
+                            <div className="flex items-center gap-2 ml-4">
+                              <span className="text-sm text-gray-600">
+                                Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span>
+                              </span>
+                              <button
+                                onClick={() => startEditPosition(unitGroup.unitId, unitGroup.unitPosition || 0)}
+                                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                title="Edit urutan"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 ml-4">
+                              <span className="text-sm text-gray-600">Urutan:</span>
+                              <input
+                                type="number"
+                                value={editingPosition}
+                                onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
+                                min="0"
+                                className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => saveUnitPosition(unitGroup.unitId)}
+                                disabled={savingPosition}
+                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                                title="Simpan"
+                              >
+                                {savingPosition ? (
+                                  <div className="animate-spin w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full" />
+                                ) : (
+                                  <span className="text-lg">✓</span>
+                                )}
+                              </button>
+                              <button
+                                onClick={cancelEditPosition}
+                                disabled={savingPosition}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                title="Batal"
+                              >
+                                <span className="text-lg">✕</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <span className="text-sm text-gray-600">
+                          {Object.keys(unitGroup.lessons).length} lesson
+                        </span>
+                      </div>
+
+                      {/* Lessons under this unit */}
+                      {expandedUnits.has(unitGroup.unitId) && (
+                      <div className="bg-white">
+                        {Object.values(unitGroup.lessons)
+                          .sort((a, b) => {
+                            return a.lessonName.localeCompare(b.lessonName);
+                          })
+                          .map((lessonGroup) => {
                   // Get first material for this lesson (usually only 1)
                   const material = lessonGroup.materials[0];
                   if (!material) return null;
@@ -614,9 +664,13 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                 })}
               </div>
             )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        );
-      })}
+        ))}
       </div>
 
       {totalMaterials === 0 && (
