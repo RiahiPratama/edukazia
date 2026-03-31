@@ -55,10 +55,21 @@ export default async function MateriPage({
     )
   }
 
-  // 4. Get level IDs and fetch level details separately
-  const levelIds = enrollments
+  // 4. Get level IDs from enrollment_levels table (supports multi-level per enrollment)
+  const enrollmentIds = enrollments.map(e => e.id)
+  const { data: enrollmentLevels } = await supabase
+    .from('enrollment_levels')
+    .select('level_id')
+    .in('enrollment_id', enrollmentIds)
+
+  // Combine level_id from both enrollments (old system) and enrollment_levels (new system)
+  const levelIdsFromEnrollments = enrollments
     .map(e => e.level_id)
     .filter((id): id is string => !!id)
+  
+  const levelIdsFromJunction = enrollmentLevels?.map(el => el.level_id) || []
+  
+  const levelIds = Array.from(new Set([...levelIdsFromEnrollments, ...levelIdsFromJunction]))
 
   if (levelIds.length === 0) {
     return (
