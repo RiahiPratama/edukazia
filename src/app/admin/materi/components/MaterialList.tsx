@@ -138,7 +138,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       // Transform flat data into MaterialWithHierarchy
       const materialsWithHierarchy: MaterialWithHierarchy[] = [];
 
-      lessonsData?.forEach(lesson => {
+      lessonsData?.forEach((lesson: any) => {
         const unit = lesson.units;
         const level = unit?.levels;
         const chapter = unit?.chapters;
