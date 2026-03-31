@@ -73,13 +73,29 @@ export async function POST(request: NextRequest) {
     if (chapterId === 'NEW' && chapterName) {
       console.log('🆕 Creating new Chapter:', chapterName);
 
+      // Get max chapter_number and order_number for this level
+      const { data: existingChapters } = await supabase
+        .from('chapters')
+        .select('chapter_number, order_number')
+        .eq('level_id', levelId)
+        .order('chapter_number', { ascending: false })
+        .limit(1);
+
+      const nextChapterNumber = existingChapters && existingChapters.length > 0 
+        ? (existingChapters[0].chapter_number || 0) + 1 
+        : 1;
+
+      const nextOrderNumber = existingChapters && existingChapters.length > 0 
+        ? (existingChapters[0].order_number || 0) + 1 
+        : 1;
+
       const { data: newChapter, error: chapterError } = await supabase
         .from('chapters')
         .insert({
           level_id: levelId,
           chapter_title: chapterName,
-          chapter_number: 0, // Required field
-          order_number: 0,   // Required field
+          chapter_number: nextChapterNumber,
+          order_number: nextOrderNumber,
         })
         .select()
         .single();
@@ -93,7 +109,7 @@ export async function POST(request: NextRequest) {
       }
 
       actualChapterId = newChapter.id;
-      console.log('✅ Chapter created:', actualChapterId);
+      console.log('✅ Chapter created:', actualChapterId, 'number:', nextChapterNumber);
     }
 
     // 2. Create or get Unit
