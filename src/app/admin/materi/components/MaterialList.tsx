@@ -455,85 +455,62 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
             {/* Lessons under this unit */}
             {expandedUnits.has(unitGroup.unitId) && (
               <div className="border-t-2 border-gray-200">
-                {Object.values(unitGroup.lessons).map((lessonGroup) => (
-                  <div key={lessonGroup.lessonId} className="border-b border-gray-200 last:border-b-0">
-                    {/* Lesson Header */}
-                    <div className="px-6 py-3 bg-gray-50">
-                      <div className="flex items-center gap-2">
+                {Object.values(unitGroup.lessons).map((lessonGroup) => {
+                  // Get first material for this lesson (usually only 1)
+                  const material = lessonGroup.materials[0];
+                  if (!material) return null;
+
+                  return (
+                    <div 
+                      key={lessonGroup.lessonId} 
+                      className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="text-[#5C4FE5]">
+                          {getCategoryIcon(material.category)}
+                        </div>
                         <span className="text-sm font-semibold text-gray-700">
                           ▸ {lessonGroup.lessonName}
                         </span>
-                        <span className="text-xs text-gray-500">
-                          ({lessonGroup.materials.length} materi)
-                        </span>
+                        {material.is_published && (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">
+                            Published
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                          <a
+                            href={getContentUrl(material)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Buka link"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                        {onEdit && (
+                          <button
+                            onClick={() => onEdit(material)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(material.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-
-                    {/* Materials under this lesson */}
-                    {lessonGroup.materials.map((material) => (
-                      <div
-                        key={material.id}
-                        className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="text-[#5C4FE5]">
-                            {getCategoryIcon(material.category)}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-semibold text-gray-900">
-                                {material.title}
-                              </h4>
-                              {material.is_published && (
-                                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded">
-                                  Published
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {material.content_data?.platform || 'N/A'}
-                            </p>
-                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
-                              <span>Order: #{material.position}</span>
-                              <span>•</span>
-                              <span>{new Date(material.created_at).toLocaleDateString('id-ID')}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {(material.category === 'live_zoom' || material.category === 'kosakata') && (
-                            <a
-                              href={getContentUrl(material)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Buka link"
-                            >
-                              <ExternalLink className="w-5 h-5" />
-                            </a>
-                          )}
-                          {onEdit && (
-                            <button
-                              onClick={() => onEdit(material)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Edit"
-                            >
-                              <Edit className="w-5 h-5" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDelete(material.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
