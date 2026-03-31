@@ -551,7 +551,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               {/* Lessons under this unit */}
               {expandedUnits.has(unitGroup.unitId) && (
               <div className="border-t-2 border-gray-200">
-                {Object.values(unitGroup.lessons).map((lessonGroup) => {
+                {Object.values(unitGroup.lessons)
+                  .sort((a, b) => {
+                    // Sort by lesson name (which has position prefix like 01_, 02_)
+                    return a.lessonName.localeCompare(b.lessonName);
+                  })
+                  .map((lessonGroup) => {
                   // Get first material for this lesson (usually only 1)
                   const material = lessonGroup.materials[0];
                   if (!material) return null;
