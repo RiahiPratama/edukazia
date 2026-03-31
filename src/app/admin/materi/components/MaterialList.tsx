@@ -544,6 +544,41 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     }
   };
 
+  // Platform detection helper
+  const detectPlatformFromUrl = (url: string, category: string): string => {
+    if (!url) return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
+    
+    const urlLower = url.toLowerCase();
+    
+    // Live meeting platforms
+    if (urlLower.includes('zoom.us') || urlLower.includes('zoom.com')) {
+      return 'Live Zoom';
+    }
+    if (urlLower.includes('meet.google.com') || urlLower.includes('meet.app.goo.gl')) {
+      return 'Live GMeet';
+    }
+    if (urlLower.includes('teams.microsoft.com') || urlLower.includes('teams.live.com')) {
+      return 'Live MS Teams';
+    }
+    if (urlLower.includes('webex.com')) {
+      return 'Live Webex';
+    }
+    
+    // Kosakata/content platforms
+    if (urlLower.includes('canva.com')) {
+      return 'Kosakata Canva';
+    }
+    if (urlLower.includes('docs.google.com') || urlLower.includes('drive.google.com')) {
+      return 'Kosakata GDocs';
+    }
+    if (urlLower.includes('figma.com')) {
+      return 'Kosakata Figma';
+    }
+    
+    // Default fallback
+    return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
+  };
+
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'live_zoom': return <Video className="w-5 h-5" />;
@@ -807,13 +842,22 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <input
-                                                type="text"
-                                                value={editingMaterialTitle}
-                                                onChange={(e) => setEditingMaterialTitle(e.target.value)}
-                                                placeholder="Nama material (contoh: Live Zoom, Live GMeet)"
-                                                className="w-64 px-3 py-2 border-2 border-blue-500 rounded text-sm font-semibold focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                                              />
+                                              <div className="flex items-center gap-2">
+                                                <input
+                                                  type="text"
+                                                  value={editingMaterialTitle}
+                                                  onChange={(e) => setEditingMaterialTitle(e.target.value)}
+                                                  placeholder="Nama material"
+                                                  className="w-48 px-3 py-2 border-2 border-blue-500 rounded text-sm font-semibold focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                                                />
+                                                <button
+                                                  onClick={() => setEditingMaterialTitle(detectPlatformFromUrl(editingMaterialUrl, material.category))}
+                                                  className="px-3 py-2 bg-purple-500 text-white text-xs font-semibold rounded hover:bg-purple-600 transition-colors"
+                                                  title="Auto-detect platform dari URL"
+                                                >
+                                                  🔍 Auto
+                                                </button>
+                                              </div>
                                               <input
                                                 type="url"
                                                 value={editingMaterialUrl}
