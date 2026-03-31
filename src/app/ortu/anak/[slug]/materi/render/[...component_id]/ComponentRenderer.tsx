@@ -6,13 +6,15 @@ interface ComponentRendererProps {
 }
 
 export default function ComponentRenderer({ jsxCode, title }: ComponentRendererProps) {
+  // Escape for safe embedding in HTML
   const escapedCode = jsxCode
     .replace(/\\/g, '\\\\')
     .replace(/`/g, '\\`')
-    .replace(/\$/g, '\\$');
+    .replace(/\$/g, '\\$')
+    .replace(/</g, '\\x3C')
+    .replace(/>/g, '\\x3E');
 
-  const htmlContent = `
-<!DOCTYPE html>
+  const htmlContent = `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -32,6 +34,9 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
 <body>
   <div id="root"><div class="loading">Loading component...</div></div>
   <script>
+    window.COMPONENT_CODE = \`${escapedCode}\`;
+  </script>
+  <script>
     function waitForLibraries() {
       return new Promise((resolve) => {
         const check = () => {
@@ -49,37 +54,35 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
       try {
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         
-        // Stub icon components
-        const BookOpen = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '📖');
-        const ChevronDown = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▼');
-        const ChevronUp = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▲');
-        const Globe = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '🌐');
-        const AlertTriangle = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '⚠️');
-        const Check = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '✓');
-        const X = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '✕');
-        const Info = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, 'ℹ️');
-        const ChevronRight = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▶');
-        const ChevronLeft = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '◀');
+        // Icon stub components with emojis
+        const iconStubs = {
+          BookOpen: '📖',
+          ChevronDown: '▼',
+          ChevronUp: '▲',
+          Globe: '🌐',
+          AlertTriangle: '⚠️',
+          Check: '✓',
+          X: '✕',
+          Info: 'ℹ️',
+          ChevronRight: '▶',
+          ChevronLeft: '◀'
+        };
 
-        // JSX code with icon imports replaced
-        const code = \`
-          const { useState, useEffect, useRef, useCallback, useMemo } = React;
-          const BookOpen = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '📖');
-          const ChevronDown = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▼');
-          const ChevronUp = (props) => React.createElement('span', { className: 'inline-block w-5 h-5' }, '▲');
-          const Globe = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '🌐');
-          const AlertTriangle = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mr-1' }, '⚠️');
-          
-          \${escapedCode}
-          
-          // Export component
-          if (typeof PronunciationGuideAE !== 'undefined') window.__Component = PronunciationGuideAE;
-          else if (typeof App !== 'undefined') window.__Component = App;
-          else if (typeof Component !== 'undefined') window.__Component = Component;
-        \`;
+        // Build code with icon definitions
+        const iconDefs = Object.entries(iconStubs).map(([name, emoji]) => 
+          "const " + name + " = (props) => React.createElement('span', { className: 'inline-block w-5 h-5 mx-1' }, '" + emoji + "');"
+        ).join('\\n');
+
+        const fullCode = 
+          "const { useState, useEffect, useRef, useCallback, useMemo } = React;\\n" +
+          iconDefs + "\\n" +
+          window.COMPONENT_CODE + "\\n" +
+          "if (typeof PronunciationGuideAE !== 'undefined') window.__Component = PronunciationGuideAE;\\n" +
+          "else if (typeof App !== 'undefined') window.__Component = App;\\n" +
+          "else if (typeof Component !== 'undefined') window.__Component = Component;";
 
         // Transpile JSX to JavaScript
-        const transformed = Babel.transform(code, {
+        const transformed = Babel.transform(fullCode, {
           presets: ['react']
         }).code;
 
@@ -91,23 +94,22 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
           const root = ReactDOM.createRoot(document.getElementById('root'));
           root.render(React.createElement(window.__Component));
         } else {
-          throw new Error('Component not found');
+          throw new Error('Component not found in code');
         }
       } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('root').innerHTML = \`
-          <div style="padding: 32px; text-align: center; color: #ef4444;">
-            <h2>Component Error</h2>
-            <p>\${error.message}</p>
-            <pre style="margin-top: 16px; padding: 12px; background: #fee; border-radius: 6px; overflow: auto; font-size: 12px; text-align: left;">\${error.stack}</pre>
-          </div>
-        \`;
+        console.error('Render error:', error);
+        document.getElementById('root').innerHTML = 
+          '<div style="padding: 32px; text-align: center; color: #ef4444;">' +
+          '<h2>Component Error</h2>' +
+          '<p>' + error.message + '</p>' +
+          '<pre style="margin-top: 16px; padding: 12px; background: #fee; border-radius: 6px; overflow: auto; font-size: 12px; text-align: left; white-space: pre-wrap;">' + 
+          (error.stack || '') + 
+          '</pre></div>';
       }
     });
   </script>
 </body>
-</html>
-`;
+</html>`;
 
   return (
     <div className="min-h-screen bg-white">
