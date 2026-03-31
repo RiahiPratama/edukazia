@@ -91,6 +91,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [editingPosition, setEditingPosition] = useState<number>(0);
   const [savingPosition, setSavingPosition] = useState(false);
 
+  // Lesson edit states
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [editingLessonName, setEditingLessonName] = useState<string>('');
+  const [editingLessonPosition, setEditingLessonPosition] = useState<number>(0);
+  const [savingLesson, setSavingLesson] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -443,6 +449,48 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     }
   };
 
+  // LESSON EDIT FUNCTIONS
+  const startEditLesson = (lessonId: string, currentName: string, currentPosition: number) => {
+    setEditingLessonId(lessonId);
+    setEditingLessonName(currentName);
+    setEditingLessonPosition(currentPosition || 0);
+  };
+
+  const cancelEditLesson = () => {
+    setEditingLessonId(null);
+    setEditingLessonName('');
+    setEditingLessonPosition(0);
+  };
+
+  const saveLesson = async (lessonId: string) => {
+    if (!editingLessonName.trim()) {
+      alert('❌ Nama lesson tidak boleh kosong!');
+      return;
+    }
+
+    setSavingLesson(true);
+    try {
+      const formData = new FormData();
+      formData.append('lesson_name', editingLessonName);
+      formData.append('position', editingLessonPosition.toString());
+
+      const response = await fetch(`/api/admin/lessons/${lessonId}`, {
+        method: 'PATCH',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to update');
+
+      alert('✅ Lesson berhasil diupdate!');
+      setEditingLessonId(null);
+      fetchMaterials();
+    } catch (error) {
+      alert('❌ Gagal mengupdate lesson');
+    } finally {
+      setSavingLesson(false);
+    }
+  };
+
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'live_zoom': return <Video className="w-5 h-5" />;
@@ -624,33 +672,122 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                         {/* Lessons under this unit */}
                         {expandedUnits.has(unitGroup.unitId) && (
                           <div className="bg-white">
-                            {Object.values(unitGroup.lessons).sort((a, b) => a.lessonName.localeCompare(b.lessonName)).map((lessonGroup) => {
-                              const material = lessonGroup.materials[0];
-                              if (!material) return null;
+                            {Object.values(unitGroup.lessons).sort((a, b) => {
+                              const posA = a.materials[0]?.position || 0;
+                              const posB = b.materials[0]?.position || 0;
+                              return posA - posB;
+                            }).map((lessonGroup) => {
+                              if (lessonGroup.materials.length === 0) return null;
+                              
+                              const lessonPosition = lessonGroup.materials[0]?.position || 0;
+                              const isEditingLesson = editingLessonId === lessonGroup.lessonId;
 
                               return (
-                                <div key={lessonGroup.lessonId} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0">
-                                  <div className="flex items-center gap-3">
-                                    <div className="text-[#5C4FE5]">{getCategoryIcon(material.category)}</div>
-                                    <FileCheck className="w-4 h-4 text-gray-500" />
-                                    <span className="text-sm font-semibold text-gray-700">{lessonGroup.lessonName}</span>
-                                    {material.is_published && <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {(material.category === 'live_zoom' || material.category === 'kosakata') && (
-                                      <a href={getContentUrl(material)} target="_blank" rel="noopener noreferrer" className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Buka link">
-                                        <ExternalLink className="w-4 h-4" />
-                                      </a>
-                                    )}
-                                    {onEdit && (
-                                      <button onClick={() => onEdit(material)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" title="Edit">
-                                        <Edit className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                    <button onClick={() => handleDelete(material.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
+                                <div key={lessonGroup.lessonId} className="border-b border-gray-200 last:border-b-0">
+                                  {/* LESSON HEADER */}
+                                  {!isEditingLesson ? (
+                                    <div className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors bg-gray-50">
+                                      <div className="flex items-center gap-3">
+                                        <FileCheck className="w-5 h-5 text-[#5C4FE5]" />
+                                        <span className="text-sm font-bold text-gray-900">{lessonGroup.lessonName}</span>
+                                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded">
+                                          Urutan: {lessonPosition}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => startEditLesson(lessonGroup.lessonId, lessonGroup.lessonName, lessonPosition)}
+                                          className="p-1.5 text-gray-600 hover:bg-white rounded transition-colors"
+                                          title="Edit lesson"
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </button>
+                                        <span className="text-xs text-gray-600">{lessonGroup.materials.length} material</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="px-6 py-3 bg-purple-50">
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="text"
+                                          value={editingLessonName}
+                                          onChange={(e) => setEditingLessonName(e.target.value)}
+                                          placeholder="Nama Lesson"
+                                          className="flex-1 px-3 py-2 border-2 border-[#5C4FE5] rounded text-sm font-bold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm text-gray-700 font-semibold">Urutan:</span>
+                                          <input
+                                            type="number"
+                                            value={editingLessonPosition}
+                                            onChange={(e) => setEditingLessonPosition(parseInt(e.target.value) || 0)}
+                                            min="0"
+                                            className="w-20 px-2 py-2 border-2 border-[#5C4FE5] rounded text-sm font-bold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                                          />
+                                        </div>
+                                        <button
+                                          onClick={() => saveLesson(lessonGroup.lessonId)}
+                                          disabled={savingLesson}
+                                          className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 text-sm"
+                                        >
+                                          {savingLesson ? 'Saving...' : 'UPDATE'}
+                                        </button>
+                                        <button
+                                          onClick={cancelEditLesson}
+                                          disabled={savingLesson}
+                                          className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
+                                        >
+                                          CANCEL
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* MATERIALS UNDER THIS LESSON */}
+                                  {!isEditingLesson && (
+                                    <div className="pl-8">
+                                      {lessonGroup.materials.map((material) => (
+                                        <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                                          <div className="flex items-center gap-3">
+                                            <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
+                                            <span className="text-sm text-gray-700">{material.title}</span>
+                                            {material.is_published && (
+                                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                              <a
+                                                href={getContentUrl(material)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Buka link"
+                                              >
+                                                <ExternalLink className="w-4 h-4" />
+                                              </a>
+                                            )}
+                                            {onEdit && (
+                                              <button
+                                                onClick={() => onEdit(material)}
+                                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                title="Edit material content"
+                                              >
+                                                <Edit className="w-4 h-4" />
+                                              </button>
+                                            )}
+                                            <button
+                                              onClick={() => handleDelete(material.id)}
+                                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                              title="Hapus material"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
