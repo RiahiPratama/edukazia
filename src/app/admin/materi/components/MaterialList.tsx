@@ -99,7 +99,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
   // Material edit states
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
-  const [editingMaterialTitle, setEditingMaterialTitle] = useState<string>('');
   const [editingMaterialUrl, setEditingMaterialUrl] = useState<string>('');
   const [savingMaterial, setSavingMaterial] = useState(false);
 
@@ -498,24 +497,17 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   };
 
   // MATERIAL EDIT FUNCTIONS
-  const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string) => {
+  const startEditMaterial = (materialId: string, currentUrl: string) => {
     setEditingMaterialId(materialId);
-    setEditingMaterialTitle(currentTitle);
     setEditingMaterialUrl(currentUrl);
   };
 
   const cancelEditMaterial = () => {
     setEditingMaterialId(null);
-    setEditingMaterialTitle('');
     setEditingMaterialUrl('');
   };
 
   const saveMaterial = async (materialId: string) => {
-    if (!editingMaterialTitle.trim()) {
-      alert('❌ Nama material tidak boleh kosong!');
-      return;
-    }
-
     if (!editingMaterialUrl.trim()) {
       alert('❌ Link tidak boleh kosong!');
       return;
@@ -524,7 +516,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setSavingMaterial(true);
     try {
       const formData = new FormData();
-      formData.append('title', editingMaterialTitle);
       formData.append('url', editingMaterialUrl);
 
       const response = await fetch(`/api/admin/materials/${materialId}`, {
@@ -534,11 +525,11 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
       if (!response.ok) throw new Error('Failed to update');
 
-      alert('✅ Material berhasil diupdate!');
+      alert('✅ Link berhasil diupdate!');
       setEditingMaterialId(null);
       fetchMaterials();
     } catch (error) {
-      alert('❌ Gagal mengupdate material');
+      alert('❌ Gagal mengupdate link');
     } finally {
       setSavingMaterial(false);
     }
@@ -807,19 +798,15 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <input
-                                                type="text"
-                                                value={editingMaterialTitle}
-                                                onChange={(e) => setEditingMaterialTitle(e.target.value)}
-                                                placeholder="Nama material"
-                                                className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm font-semibold focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                                              />
+                                              <span className="text-sm font-semibold text-gray-700 min-w-[100px]">
+                                                {material.category === 'live_zoom' ? 'Link Zoom:' : 'Link Canva:'}
+                                              </span>
                                               <input
                                                 type="url"
                                                 value={editingMaterialUrl}
                                                 onChange={(e) => setEditingMaterialUrl(e.target.value)}
                                                 placeholder="https://..."
-                                                className="w-96 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                                                className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                                               />
                                               <button
                                                 onClick={() => saveMaterial(material.id)}
@@ -841,7 +828,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                           <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <span className="text-sm text-gray-700">{material.title}</span>
+                                              <span className="text-xs text-gray-500">
+                                                {material.category === 'live_zoom' ? 'Live Zoom' : 
+                                                 material.category === 'kosakata' ? 'Kosakata' : 
+                                                 material.category === 'bacaan' ? 'Bacaan' : 
+                                                 material.category === 'cefr' ? 'CEFR' : material.category}
+                                              </span>
                                               {material.is_published && (
                                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
                                               )}
@@ -859,9 +851,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                 </a>
                                               )}
                                               <button
-                                                onClick={() => startEditMaterial(material.id, material.title, materialUrl)}
+                                                onClick={() => startEditMaterial(material.id, materialUrl)}
                                                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                title="Edit material"
+                                                title="Edit link"
                                               >
                                                 <Edit className="w-4 h-4" />
                                               </button>

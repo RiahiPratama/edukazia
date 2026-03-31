@@ -17,52 +17,44 @@ export async function PATCH(
 
     // Parse form data
     const formData = await request.formData();
-    const title = formData.get('title') as string;
     const url = formData.get('url') as string;
 
-    // Prepare update data
-    const updateData: any = {};
-    
-    if (title && title.trim()) {
-      updateData.title = title.trim();
-    }
-    
-    if (url && url.trim()) {
-      // Get current material to know the category
-      const { data: currentMaterial } = await supabase
-        .from('materials')
-        .select('category, content_data')
-        .eq('id', id)
-        .single();
-
-      if (currentMaterial) {
-        const content_data = currentMaterial.content_data || {};
-        
-        // Update URL based on category
-        if (currentMaterial.category === 'live_zoom') {
-          content_data.url = url.trim();
-          content_data.zoom_link = url.trim();
-        } else if (currentMaterial.category === 'kosakata') {
-          content_data.url = url.trim();
-          content_data.canva_link = url.trim();
-        }
-        
-        updateData.content_data = content_data;
-      }
-    }
-
-    // Validate - at least one field must be provided
-    if (Object.keys(updateData).length === 0) {
+    if (!url || !url.trim()) {
       return NextResponse.json(
-        { error: 'No fields to update' },
+        { error: 'URL is required' },
         { status: 400 }
       );
+    }
+
+    // Get current material to know the category
+    const { data: currentMaterial } = await supabase
+      .from('materials')
+      .select('category, content_data')
+      .eq('id', id)
+      .single();
+
+    if (!currentMaterial) {
+      return NextResponse.json(
+        { error: 'Material not found' },
+        { status: 404 }
+      );
+    }
+
+    const content_data = currentMaterial.content_data || {};
+    
+    // Update URL based on category
+    if (currentMaterial.category === 'live_zoom') {
+      content_data.url = url.trim();
+      content_data.zoom_link = url.trim();
+    } else if (currentMaterial.category === 'kosakata') {
+      content_data.url = url.trim();
+      content_data.canva_link = url.trim();
     }
 
     // Update material
     const { data, error } = await supabase
       .from('materials')
-      .update(updateData)
+      .update({ content_data })
       .eq('id', id)
       .select()
       .single();
@@ -78,7 +70,7 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       data,
-      message: 'Material updated successfully'
+      message: 'Link updated successfully'
     });
 
   } catch (error) {
