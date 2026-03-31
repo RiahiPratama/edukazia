@@ -229,7 +229,7 @@ export default async function MateriPage({
       <MateriContent
         levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
-        studentId={student.id}
+        studentSlug={slug}
       />
     </div>
   )

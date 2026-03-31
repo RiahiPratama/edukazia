@@ -33,10 +33,10 @@ type LevelData = {
 type MateriContentProps = {
   levelsData: LevelData[]
   studentName: string
-  studentId: string
+  studentSlug: string
 }
 
-export default function MateriContent({ levelsData, studentName, studentId }: MateriContentProps) {
+export default function MateriContent({ levelsData, studentName, studentSlug }: MateriContentProps) {
   const [selectedLevelId, setSelectedLevelId] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'>('live_zoom')
   const [openChapters, setOpenChapters] = useState<Set<string>>(new Set())
@@ -267,7 +267,7 @@ export default function MateriContent({ levelsData, studentName, studentId }: Ma
                                               </a>
                                             ) : material.component_id ? (
                                               <Link
-                                                href={`/ortu/anak/${studentId}/materi/render/${material.component_id}`}
+                                                href={`/ortu/anak/${studentSlug}/materi/render/${material.component_id}`}
                                                 className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
                                               >
                                                 {getCategoryIcon(material.category)}
