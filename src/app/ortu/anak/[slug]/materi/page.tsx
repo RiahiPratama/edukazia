@@ -146,7 +146,7 @@ export default async function MateriPage({
   const materialIds = materials?.map(m => m.id) || []
   const { data: materialContents } = await supabase
     .from('material_contents')
-    .select('material_id, category, content_url, storage_path')
+    .select('material_id, content_url, storage_path')
     .in('material_id', materialIds)
 
   // 10. Get student's material progress
