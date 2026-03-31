@@ -8,7 +8,7 @@ export default async function RenderMaterialPage({
 }) {
   const { component_id } = await params
   
-  // Join array to get full path (e.g., ["bacaan", "file.jsx"] -> "bacaan/file.jsx")
+  // Join array to get full path
   const componentPath = Array.isArray(component_id) ? component_id.join('/') : component_id
   
   const supabase = await createClient()
@@ -17,7 +17,7 @@ export default async function RenderMaterialPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) notFound()
 
-  // Fetch material content by storage_path (component_id)
+  // Fetch material content by storage_path
   const { data: materialContent } = await supabase
     .from('material_contents')
     .select(`
@@ -47,9 +47,9 @@ export default async function RenderMaterialPage({
   const material = materialContent.materials as any
   const category = material?.category
 
-  // Handle different categories
+  // Handle bacaan category
   if (category === 'bacaan') {
-    // Bacaan: Fetch JSX component from storage
+    // Fetch JSX component from storage
     const { data: componentData, error: downloadError } = await supabase
       .storage
       .from('components')
@@ -71,24 +71,44 @@ export default async function RenderMaterialPage({
 
     const jsxCode = await componentData.text()
 
-    // Strip import statements from JSX code
+    // Strip import statements
     const cleanedJsxCode = jsxCode
       .replace(/import\s+.*?from\s+['"]react['"];?\n?/g, '')
       .replace(/import\s+.*?from\s+['"]lucide-react['"];?\n?/g, '')
       .trim();
 
-    // Create HTML wrapper with React runtime + Babel for JSX transpilation
+    // Escape backticks and ${} in JSX code for template literal
+    const escapedJsxCode = cleanedJsxCode
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$');
+
+    // Create HTML wrapper
     const htmlWrapper = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${material?.title || 'Bacaan Material'}</title>
+  
+  <!-- React & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
+  
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+  
+  <!-- Lucide React Icons (ES Module) -->
+  <script type="module">
+    import * as LucideReact from 'https://cdn.jsdelivr.net/npm/lucide-react@0.263.1/dist/esm/lucide-react.js';
+    window.LucideReact = LucideReact;
+    window.lucideLoaded = true;
+  </script>
+  
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  
   <style>
     body {
       margin: 0;
@@ -104,28 +124,74 @@ export default async function RenderMaterialPage({
       padding: 24px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      color: #5C4FE5;
+      font-size: 18px;
+    }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    // Map React hooks and lucide icons to global scope
-    const { useState, useEffect, useRef, useCallback, useMemo } = React;
-    const { BookOpen, ChevronDown, ChevronUp, Globe, AlertTriangle, Check, X, Info, ChevronRight, ChevronLeft } = lucideReact;
+  <div id="root">
+    <div id="loading">Loading component...</div>
+  </div>
+  
+  <script>
+    // Wait for all libraries to load
+    function waitForLibraries() {
+      return new Promise((resolve) => {
+        const check = () => {
+          if (window.React && window.ReactDOM && window.Babel && window.lucideLoaded) {
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
+    }
     
-    ${cleanedJsxCode}
-    
-    // Auto-detect component name and render
-    const Component = typeof PronunciationGuideAE !== 'undefined' ? PronunciationGuideAE : 
-                      typeof App !== 'undefined' ? App :
-                      () => <div className="p-8 text-center text-red-600">Component not found</div>;
-    
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<Component />);
+    waitForLibraries().then(() => {
+      try {
+        // Create Babel-transformed script
+        const code = \`
+          const { useState, useEffect, useRef, useCallback, useMemo } = React;
+          const { BookOpen, ChevronDown, ChevronUp, Globe, AlertTriangle, Check, X, Info, ChevronRight, ChevronLeft } = window.LucideReact;
+          
+          ${escapedJsxCode}
+          
+          // Auto-detect component
+          const Component = typeof PronunciationGuideAE !== 'undefined' ? PronunciationGuideAE : 
+                            typeof App !== 'undefined' ? App :
+                            () => React.createElement('div', { className: 'p-8 text-center text-red-600' }, 'Component not found');
+          
+          const root = ReactDOM.createRoot(document.getElementById('root'));
+          root.render(React.createElement(Component));
+        \`;
+        
+        // Transform and execute
+        const transformed = Babel.transform(code, {
+          presets: ['react']
+        }).code;
+        
+        eval(transformed);
+      } catch (error) {
+        console.error('Error rendering component:', error);
+        document.getElementById('root').innerHTML = \`
+          <div style="padding: 32px; text-align: center;">
+            <h2 style="color: #ef4444; font-size: 20px; font-weight: bold;">Error Loading Component</h2>
+            <p style="color: #6b7280; margin-top: 8px;">\${error.message}</p>
+          </div>
+        \`;
+      }
+    });
   </script>
 </body>
 </html>
-`
+`;
 
     return (
       <div className="min-h-screen bg-white">
@@ -137,10 +203,9 @@ export default async function RenderMaterialPage({
       </div>
     )
   } else if (category === 'cefr') {
-    // CEFR: Audio player + text content
+    // CEFR: Audio player
     const audioUrl = materialContent.content_url
 
-    // Fetch audio file from storage if needed
     const { data: audioData, error: audioError } = await supabase
       .storage
       .from('audio')
@@ -152,9 +217,6 @@ export default async function RenderMaterialPage({
           <div className="text-center">
             <h1 className="text-xl font-bold text-red-600">Audio not found</h1>
             <p className="text-gray-600 mt-2">Storage path: {componentPath}</p>
-            {audioError && (
-              <p className="text-sm text-red-500 mt-2">Error: {audioError.message}</p>
-            )}
           </div>
         </div>
       )
@@ -169,7 +231,6 @@ export default async function RenderMaterialPage({
             {material?.title || 'CEFR Material'}
           </h1>
 
-          {/* Audio Player */}
           <div className="mb-8">
             <audio controls className="w-full">
               <source src={audioBlob} type="audio/mpeg" />
@@ -177,7 +238,6 @@ export default async function RenderMaterialPage({
             </audio>
           </div>
 
-          {/* Text Content (if available in content_url as markup) */}
           {audioUrl && (
             <div className="prose max-w-none">
               <div dangerouslySetInnerHTML={{ __html: audioUrl }} />
@@ -188,7 +248,7 @@ export default async function RenderMaterialPage({
     )
   }
 
-  // Fallback for unknown category
+  // Fallback
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F7F6FF]">
       <div className="text-center">
