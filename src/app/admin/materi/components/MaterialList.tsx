@@ -98,70 +98,88 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setError(null);
 
     try {
-      // PROPER JOIN QUERY - Get materials with full hierarchy in ONE query
-      const { data: lessonsData, error: fetchError } = await supabase
+      // STEP 1: Fetch materials (flat)
+      const { data: materialsData, error: materialsError } = await supabase
+        .from('materials')
+        .select('id, title, category, position, is_published, content_data, created_at, lesson_id')
+        .eq('category', category)
+        .order('created_at', { ascending: false });
+
+      if (materialsError) throw materialsError;
+      if (!materialsData || materialsData.length === 0) {
+        setMaterials([]);
+        setLoading(false);
+        return;
+      }
+
+      // STEP 2: Get unique lesson IDs
+      const lessonIds = [...new Set(materialsData.map(m => m.lesson_id).filter(Boolean))];
+
+      // STEP 3: Fetch lessons (flat)
+      const { data: lessonsData, error: lessonsError } = await supabase
         .from('lessons')
-        .select(`
-          id,
-          lesson_name,
-          position,
-          unit_id,
-          units!inner (
-            id,
-            unit_name,
-            chapter_id,
-            level_id,
-            chapters (
-              id,
-              chapter_title
-            ),
-            levels!inner (
-              id,
-              name
-            )
-          ),
-          materials!inner (
-            id,
-            title,
-            category,
-            position,
-            is_published,
-            content_data,
-            created_at
-          )
-        `)
-        .eq('materials.category', category)
-        .order('materials.created_at', { ascending: false });
+        .select('id, lesson_name, unit_id')
+        .in('id', lessonIds);
 
-      if (fetchError) throw fetchError;
+      if (lessonsError) throw lessonsError;
 
-      // Transform flat data into MaterialWithHierarchy
-      const materialsWithHierarchy: MaterialWithHierarchy[] = [];
+      // STEP 4: Get unique unit IDs
+      const unitIds = [...new Set(lessonsData?.map(l => l.unit_id).filter(Boolean) || [])];
 
-      lessonsData?.forEach((lesson: any) => {
-        const unit = lesson.units;
-        const level = unit?.levels;
-        const chapter = unit?.chapters;
+      // STEP 5: Fetch units (flat)
+      const { data: unitsData, error: unitsError } = await supabase
+        .from('units')
+        .select('id, unit_name, chapter_id, level_id')
+        .in('id', unitIds);
 
-        lesson.materials?.forEach((material: any) => {
-          materialsWithHierarchy.push({
-            id: material.id,
-            title: material.title,
-            category: material.category,
-            position: material.position,
-            is_published: material.is_published,
-            content_data: material.content_data,
-            created_at: material.created_at,
-            lesson_id: lesson.id,
-            lesson_name: lesson.lesson_name,
-            unit_id: unit?.id || '',
-            unit_name: unit?.unit_name || 'Unknown Unit',
-            chapter_id: chapter?.id || null,
-            chapter_title: chapter?.chapter_title || null,
-            level_id: level?.id || '',
-            level_name: level?.name || 'Unknown Level',
-          });
-        });
+      if (unitsError) throw unitsError;
+
+      // STEP 6: Get unique chapter IDs and level IDs
+      const chapterIds = [...new Set(unitsData?.map(u => u.chapter_id).filter(Boolean) || [])];
+      const levelIds = [...new Set(unitsData?.map(u => u.level_id).filter(Boolean) || [])];
+
+      // STEP 7: Fetch chapters (flat)
+      const { data: chaptersData } = await supabase
+        .from('chapters')
+        .select('id, chapter_title')
+        .in('id', chapterIds);
+
+      // STEP 8: Fetch levels (flat)
+      const { data: levelsData } = await supabase
+        .from('levels')
+        .select('id, name')
+        .in('id', levelIds);
+
+      // STEP 9: Create lookup maps
+      const lessonsMap = new Map(lessonsData?.map(l => [l.id, l]) || []);
+      const unitsMap = new Map(unitsData?.map(u => [u.id, u]) || []);
+      const chaptersMap = new Map(chaptersData?.map(ch => [ch.id, ch]) || []);
+      const levelsMap = new Map(levelsData?.map(lv => [lv.id, lv]) || []);
+
+      // STEP 10: Merge data in JavaScript
+      const materialsWithHierarchy: MaterialWithHierarchy[] = materialsData.map(material => {
+        const lesson = lessonsMap.get(material.lesson_id);
+        const unit = lesson ? unitsMap.get(lesson.unit_id) : null;
+        const chapter = unit?.chapter_id ? chaptersMap.get(unit.chapter_id) : null;
+        const level = unit?.level_id ? levelsMap.get(unit.level_id) : null;
+
+        return {
+          id: material.id,
+          title: material.title,
+          category: material.category,
+          position: material.position,
+          is_published: material.is_published,
+          content_data: material.content_data,
+          created_at: material.created_at,
+          lesson_id: material.lesson_id,
+          lesson_name: lesson?.lesson_name || 'Unknown Lesson',
+          unit_id: lesson?.unit_id || '',
+          unit_name: unit?.unit_name || 'Unknown Unit',
+          chapter_id: unit?.chapter_id || null,
+          chapter_title: chapter?.chapter_title || null,
+          level_id: unit?.level_id || '',
+          level_name: level?.name || 'Unknown Level',
+        };
       });
 
       setMaterials(materialsWithHierarchy);
@@ -342,6 +360,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     return (
       <div className="p-8 text-center">
         <p className="text-red-600">{error}</p>
+        <button
+          onClick={() => fetchMaterials()}
+          className="mt-4 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7]"
+        >
+          Coba Lagi
+        </button>
       </div>
     );
   }
