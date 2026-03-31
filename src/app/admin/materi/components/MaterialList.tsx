@@ -97,6 +97,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [editingLessonPosition, setEditingLessonPosition] = useState<number>(0);
   const [savingLesson, setSavingLesson] = useState(false);
 
+  // Material edit states
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+  const [editingMaterialTitle, setEditingMaterialTitle] = useState<string>('');
+  const [editingMaterialUrl, setEditingMaterialUrl] = useState<string>('');
+  const [savingMaterial, setSavingMaterial] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -491,6 +497,53 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     }
   };
 
+  // MATERIAL EDIT FUNCTIONS
+  const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string) => {
+    setEditingMaterialId(materialId);
+    setEditingMaterialTitle(currentTitle);
+    setEditingMaterialUrl(currentUrl);
+  };
+
+  const cancelEditMaterial = () => {
+    setEditingMaterialId(null);
+    setEditingMaterialTitle('');
+    setEditingMaterialUrl('');
+  };
+
+  const saveMaterial = async (materialId: string) => {
+    if (!editingMaterialTitle.trim()) {
+      alert('❌ Nama material tidak boleh kosong!');
+      return;
+    }
+
+    if (!editingMaterialUrl.trim()) {
+      alert('❌ Link tidak boleh kosong!');
+      return;
+    }
+
+    setSavingMaterial(true);
+    try {
+      const formData = new FormData();
+      formData.append('title', editingMaterialTitle);
+      formData.append('url', editingMaterialUrl);
+
+      const response = await fetch(`/api/admin/materials/${materialId}`, {
+        method: 'PATCH',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to update');
+
+      alert('✅ Material berhasil diupdate!');
+      setEditingMaterialId(null);
+      fetchMaterials();
+    } catch (error) {
+      alert('❌ Gagal mengupdate material');
+    } finally {
+      setSavingMaterial(false);
+    }
+  };
+
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'live_zoom': return <Video className="w-5 h-5" />;
@@ -746,46 +799,83 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                   {/* MATERIALS UNDER THIS LESSON */}
                                   {!isEditingLesson && (
                                     <div className="pl-8">
-                                      {lessonGroup.materials.map((material) => (
-                                        <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-                                          <div className="flex items-center gap-3">
-                                            <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                            <span className="text-sm text-gray-700">{material.title}</span>
-                                            {material.is_published && (
-                                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            {(material.category === 'live_zoom' || material.category === 'kosakata') && (
-                                              <a
-                                                href={getContentUrl(material)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                title="Buka link"
-                                              >
-                                                <ExternalLink className="w-4 h-4" />
-                                              </a>
-                                            )}
-                                            {onEdit && (
+                                      {lessonGroup.materials.map((material) => {
+                                        const isEditingMaterial = editingMaterialId === material.id;
+                                        const materialUrl = getContentUrl(material);
+
+                                        return isEditingMaterial ? (
+                                          <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
+                                            <div className="flex items-center gap-3">
+                                              <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
+                                              <input
+                                                type="text"
+                                                value={editingMaterialTitle}
+                                                onChange={(e) => setEditingMaterialTitle(e.target.value)}
+                                                placeholder="Nama material"
+                                                className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm font-semibold focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                                              />
+                                              <input
+                                                type="url"
+                                                value={editingMaterialUrl}
+                                                onChange={(e) => setEditingMaterialUrl(e.target.value)}
+                                                placeholder="https://..."
+                                                className="w-96 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+                                              />
                                               <button
-                                                onClick={() => onEdit(material)}
+                                                onClick={() => saveMaterial(material.id)}
+                                                disabled={savingMaterial}
+                                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 text-sm"
+                                              >
+                                                {savingMaterial ? 'Saving...' : 'UPDATE'}
+                                              </button>
+                                              <button
+                                                onClick={cancelEditMaterial}
+                                                disabled={savingMaterial}
+                                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
+                                              >
+                                                CANCEL
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                                            <div className="flex items-center gap-3">
+                                              <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
+                                              <span className="text-sm text-gray-700">{material.title}</span>
+                                              {material.is_published && (
+                                                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                                <a
+                                                  href={materialUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                  title="Buka link"
+                                                >
+                                                  <ExternalLink className="w-4 h-4" />
+                                                </a>
+                                              )}
+                                              <button
+                                                onClick={() => startEditMaterial(material.id, material.title, materialUrl)}
                                                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                title="Edit material content"
+                                                title="Edit material"
                                               >
                                                 <Edit className="w-4 h-4" />
                                               </button>
-                                            )}
-                                            <button
-                                              onClick={() => handleDelete(material.id)}
-                                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                              title="Hapus material"
-                                            >
-                                              <Trash2 className="w-4 h-4" />
-                                            </button>
+                                              <button
+                                                onClick={() => handleDelete(material.id)}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Hapus material"
+                                              >
+                                                <Trash2 className="w-4 h-4" />
+                                              </button>
+                                            </div>
                                           </div>
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
