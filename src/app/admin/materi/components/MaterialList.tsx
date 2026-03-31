@@ -577,7 +577,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                 value={editingUnitName}
                                 onChange={(e) => setEditingUnitName(e.target.value)}
                                 placeholder="Nama Unit"
-                                className="flex-1 px-3 py-1.5 border-2 border-[#5C4FE5] rounded text-base font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
+                                className="flex-1 px-3 py-1.5 border-2 border-[#5C4FE5] rounded text-base font-semibold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-400"
                               />
                               <div className="flex items-center gap-2">
                                 <span className="text-sm text-gray-600">Urutan:</span>
@@ -586,7 +586,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                   value={editingPosition}
                                   onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
                                   min="0"
-                                  className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
+                                  className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
                                 />
                               </div>
                               <button
