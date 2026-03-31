@@ -20,47 +20,51 @@ export async function PATCH(
     const lesson_name = formData.get('lesson_name') as string;
     const position = formData.get('position') as string;
 
-    // Prepare update data
-    const updateData: any = {};
-    
+    // Update lesson name if provided
     if (lesson_name && lesson_name.trim()) {
-      updateData.lesson_name = lesson_name.trim();
-    }
-    
-    if (position !== null && position !== '') {
-      const positionNum = parseInt(position);
-      if (!isNaN(positionNum)) {
-        updateData.position = positionNum;
+      const { error: lessonError } = await supabase
+        .from('lessons')
+        .update({ lesson_name: lesson_name.trim() })
+        .eq('id', id);
+
+      if (lessonError) {
+        console.error('Error updating lesson name:', lessonError);
+        return NextResponse.json(
+          { error: 'Failed to update lesson name' },
+          { status: 500 }
+        );
       }
     }
 
-    // Validate - at least one field must be provided
-    if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(
-        { error: 'No fields to update' },
-        { status: 400 }
-      );
+    // Update position in materials table (all materials in this lesson)
+    if (position !== null && position !== '') {
+      const positionNum = parseInt(position);
+      if (!isNaN(positionNum)) {
+        const { error: positionError } = await supabase
+          .from('materials')
+          .update({ position: positionNum })
+          .eq('lesson_id', id);
+
+        if (positionError) {
+          console.error('Error updating lesson position:', positionError);
+          return NextResponse.json(
+            { error: 'Failed to update lesson position' },
+            { status: 500 }
+          );
+        }
+      }
     }
 
-    // Update lesson
-    const { data, error } = await supabase
+    // Fetch updated lesson data
+    const { data: lessonData } = await supabase
       .from('lessons')
-      .update(updateData)
+      .select('*')
       .eq('id', id)
-      .select()
       .single();
-
-    if (error) {
-      console.error('Error updating lesson:', error);
-      return NextResponse.json(
-        { error: 'Failed to update lesson' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
-      data,
+      data: lessonData,
       message: 'Lesson updated successfully'
     });
 
