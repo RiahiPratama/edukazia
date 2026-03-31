@@ -133,7 +133,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       // STEP 5: Fetch units (flat)
       const { data: unitsData, error: unitsError } = await supabase
         .from('units')
-        .select('id, unit_name, chapter_id, level_id')
+        .select('id, unit_name, chapter_id, level_id, position')
         .in('id', unitIds);
 
       if (unitsError) throw unitsError;
