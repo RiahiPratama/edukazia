@@ -6,7 +6,6 @@ interface ComponentRendererProps {
 }
 
 export default function ComponentRenderer({ jsxCode, title }: ComponentRendererProps) {
-  // Escape JSX code for safe embedding
   const escapedCode = jsxCode
     .replace(/\\/g, '\\\\')
     .replace(/`/g, '\\`')
@@ -27,72 +26,75 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
     import * as LucideReact from 'https://cdn.jsdelivr.net/npm/lucide-react@0.263.1/dist/esm/lucide-react.js';
     window.LucideReact = LucideReact;
     window.lucideLoaded = true;
+    console.log('✅ Lucide loaded');
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      margin: 0; 
-      padding: 20px; 
-      font-family: system-ui, sans-serif; 
-      background: #F7F6FF; 
-      min-height: 100vh;
-    }
-    #root { 
-      max-width: 1200px; 
-      margin: 0 auto; 
-      background: white; 
-      border-radius: 12px; 
-      padding: 24px; 
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
-      min-height: 400px; 
-    }
-    .loading { 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      min-height: 400px; 
-      color: #5C4FE5; 
-      font-size: 18px; 
-      font-weight: 500; 
-    }
-    .error { padding: 32px; text-align: center; color: #ef4444; }
+    body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; background: #F7F6FF; }
+    #root { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-height: 400px; }
+    .status { padding: 24px; font-size: 14px; line-height: 1.8; }
+    .status-item { margin: 8px 0; padding: 8px; background: #f3f4f6; border-radius: 6px; }
+    .error { color: #ef4444; font-weight: bold; }
+    .success { color: #10b981; font-weight: bold; }
   </style>
 </head>
 <body>
-  <div id="root"><div class="loading">Loading component...</div></div>
+  <div id="root">
+    <div class="status">
+      <div class="status-item">📦 Loading React...</div>
+      <div id="status"></div>
+    </div>
+  </div>
   <script>
+    const status = document.getElementById('status');
+    
+    function log(msg, isError = false) {
+      console.log(msg);
+      const div = document.createElement('div');
+      div.className = 'status-item ' + (isError ? 'error' : 'success');
+      div.textContent = msg;
+      status.appendChild(div);
+    }
+
     function waitForLibraries() {
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
+        let attempts = 0;
         const check = () => {
+          attempts++;
+          
+          if (window.React) log('✅ React loaded');
+          if (window.ReactDOM) log('✅ ReactDOM loaded');
+          if (window.LucideReact) log('✅ Lucide loaded');
+          
           if (window.React && window.ReactDOM && window.LucideReact) {
+            log('✅ All libraries loaded! Rendering component...');
             resolve();
+          } else if (attempts > 100) {
+            log('❌ Timeout waiting for libraries', true);
+            reject(new Error('Library load timeout'));
           } else {
-            setTimeout(check, 50);
+            setTimeout(check, 100);
           }
         };
         check();
       });
     }
 
-    waitForLibraries().then(() => {
-      try {
+    waitForLibraries()
+      .then(() => {
+        log('🔧 Executing component code...');
+        
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         const { 
           BookOpen, ChevronDown, ChevronUp, Globe, AlertTriangle, 
-          Check, X, Info, ChevronRight, ChevronLeft,
-          Home, User, Calendar, FileText, Settings, LogOut,
-          Search, Filter, Plus, Minus, Edit, Trash2, Save,
-          Download, Upload, Share2, Copy, ExternalLink
+          Check, X, Info, ChevronRight, ChevronLeft
         } = window.LucideReact;
 
         const ComponentFunction = new Function(
           'React', 'useState', 'useEffect', 'useRef', 'useCallback', 'useMemo',
           'BookOpen', 'ChevronDown', 'ChevronUp', 'Globe', 'AlertTriangle',
           'Check', 'X', 'Info', 'ChevronRight', 'ChevronLeft',
-          'Home', 'User', 'Calendar', 'FileText', 'Settings', 'LogOut',
-          'Search', 'Filter', 'Plus', 'Minus', 'Edit', 'Trash2', 'Save',
-          'Download', 'Upload', 'Share2', 'Copy', 'ExternalLink',
           \`
           ${escapedCode}
           
@@ -100,34 +102,36 @@ export default function ComponentRenderer({ jsxCode, title }: ComponentRendererP
           if (typeof App !== 'undefined') return App;
           if (typeof Component !== 'undefined') return Component;
           
-          const keys = Object.keys(this).filter(k => typeof this[k] === 'function');
-          if (keys.length > 0) return this[keys[keys.length - 1]];
-          
           throw new Error('No component found');
           \`
         );
 
+        log('🎨 Creating component instance...');
         const Component = ComponentFunction(
           React, useState, useEffect, useRef, useCallback, useMemo,
           BookOpen, ChevronDown, ChevronUp, Globe, AlertTriangle,
-          Check, X, Info, ChevronRight, ChevronLeft,
-          Home, User, Calendar, FileText, Settings, LogOut,
-          Search, Filter, Plus, Minus, Edit, Trash2, Save,
-          Download, Upload, Share2, Copy, ExternalLink
+          Check, X, Info, ChevronRight, ChevronLeft
         );
 
+        log('🚀 Rendering to DOM...');
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(React.createElement(Component));
-      } catch (error) {
-        console.error('Error:', error);
+        
+        log('✅ Component rendered successfully!');
+      })
+      .catch(error => {
+        log('❌ ERROR: ' + error.message, true);
+        log('Stack: ' + error.stack, true);
         document.getElementById('root').innerHTML = \`
-          <div class="error">
-            <h2>Error Loading Component</h2>
-            <p>\${error.message}</p>
+          <div class="status">
+            <div class="status-item error">
+              <h2>❌ Component Render Error</h2>
+              <p><strong>Message:</strong> \${error.message}</p>
+              <pre style="margin-top: 16px; padding: 12px; background: #fee; border-radius: 6px; overflow-x: auto; font-size: 12px;">\${error.stack}</pre>
+            </div>
           </div>
         \`;
-      }
-    });
+      });
   </script>
 </body>
 </html>
