@@ -225,14 +225,10 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
         if (successCount === selectedLevels.length) {
           alert(`✅ Material berhasil dibuat untuk ${successCount} level!`);
-          setNewJudulName('');
-          setNewUnitName('');
-          setNewLessonName('');
-          setDescription('');
-          setJsxFile(null);
-          setOrderNumber(1);
+          onSave(); // Redirect back to dashboard
         } else if (successCount > 0) {
           alert(`⚠️ Material dibuat untuk ${successCount} level.\nGagal: ${failedLevels.join(', ')}`);
+          onSave(); // Redirect even with partial success
         } else {
           alert(`❌ Gagal untuk semua level.\nLevel: ${failedLevels.join(', ')}`);
         }
