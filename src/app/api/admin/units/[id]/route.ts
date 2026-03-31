@@ -9,20 +9,41 @@ export async function PATCH(
     const { id } = await context.params;
     const formData = await request.formData();
     const position = formData.get('position');
+    const unit_name = formData.get('unit_name');
 
-    if (!id || position === null) {
+    if (!id) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing unit ID' },
         { status: 400 }
       );
     }
 
     const supabase = await createClient();
 
-    // Update unit position
+    // Build update object dynamically
+    const updateData: any = {};
+    
+    // Update position if provided
+    if (position !== null && position !== '') {
+      updateData.position = parseInt(position as string);
+    }
+    
+    // Update unit_name if provided and not empty
+    if (unit_name && typeof unit_name === 'string' && unit_name.trim() !== '') {
+      updateData.unit_name = unit_name.trim();
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    // Update unit
     const { error: updateError } = await supabase
       .from('units')
-      .update({ position: parseInt(position as string) })
+      .update(updateData)
       .eq('id', id);
 
     if (updateError) {
@@ -35,7 +56,8 @@ export async function PATCH(
 
     return NextResponse.json({ 
       success: true,
-      message: 'Unit position updated successfully' 
+      message: 'Unit updated successfully',
+      updated: updateData
     });
 
   } catch (error) {
