@@ -53,6 +53,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editingUnitName, setEditingUnitName] = useState<string>('');
   const [editingPosition, setEditingPosition] = useState<number>(0);
   const [savingPosition, setSavingPosition] = useState(false);
 
@@ -361,20 +362,28 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     }
   };
 
-  const startEditPosition = (unitId: string, currentPosition: number) => {
+  const startEditPosition = (unitId: string, currentName: string, currentPosition: number) => {
     setEditingUnitId(unitId);
+    setEditingUnitName(currentName);
     setEditingPosition(currentPosition);
   };
 
   const cancelEditPosition = () => {
     setEditingUnitId(null);
+    setEditingUnitName('');
     setEditingPosition(0);
   };
 
   const saveUnitPosition = async (unitId: string) => {
+    if (!editingUnitName.trim()) {
+      alert('❌ Nama unit tidak boleh kosong!');
+      return;
+    }
+
     setSavingPosition(true);
     try {
       const formData = new FormData();
+      formData.append('unit_name', editingUnitName);
       formData.append('position', editingPosition.toString());
 
       const response = await fetch(`/api/admin/units/${unitId}`, {
@@ -382,13 +391,13 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Failed to update position');
+      if (!response.ok) throw new Error('Failed to update');
 
-      alert('✅ Urutan unit berhasil diupdate!');
+      alert('✅ Unit berhasil diupdate!');
       setEditingUnitId(null);
-      fetchMaterials(); // Refresh to show new order
+      fetchMaterials(); // Refresh to show new name & position
     } catch (error) {
-      alert('❌ Gagal mengupdate urutan unit');
+      alert('❌ Gagal mengupdate unit');
     } finally {
       setSavingPosition(false);
     }
@@ -531,45 +540,55 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                       {/* Unit Header */}
                       <div className="px-8 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors bg-gray-50">
                         <div className="flex items-center gap-3 flex-1">
-                          <button
-                            onClick={() => toggleUnit(unitGroup.unitId)}
-                            className="flex items-center gap-3"
-                          >
-                            {expandedUnits.has(unitGroup.unitId) ? (
-                              <ChevronDown className="w-5 h-5 text-gray-600" />
-                            ) : (
-                              <ChevronRight className="w-5 h-5 text-gray-600" />
-                            )}
-                            <span className="text-lg font-semibold text-gray-900">
-                              📦 {unitGroup.unitName}
-                            </span>
-                          </button>
-
-                          {/* Position Controls */}
                           {!isEditing ? (
-                            <div className="flex items-center gap-2 ml-4">
-                              <span className="text-sm text-gray-600">
-                                Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span>
-                              </span>
+                            <>
                               <button
-                                onClick={() => startEditPosition(unitGroup.unitId, unitGroup.unitPosition || 0)}
-                                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                title="Edit urutan"
+                                onClick={() => toggleUnit(unitGroup.unitId)}
+                                className="flex items-center gap-3"
                               >
-                                <Edit className="w-4 h-4" />
+                                {expandedUnits.has(unitGroup.unitId) ? (
+                                  <ChevronDown className="w-5 h-5 text-gray-600" />
+                                ) : (
+                                  <ChevronRight className="w-5 h-5 text-gray-600" />
+                                )}
+                                <span className="text-lg font-semibold text-gray-900">
+                                  📦 {unitGroup.unitName}
+                                </span>
                               </button>
-                            </div>
+
+                              <div className="flex items-center gap-2 ml-4">
+                                <span className="text-sm text-gray-600">
+                                  Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span>
+                                </span>
+                                <button
+                                  onClick={() => startEditPosition(unitGroup.unitId, unitGroup.unitName, unitGroup.unitPosition || 0)}
+                                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                  title="Edit nama & urutan"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </>
                           ) : (
-                            <div className="flex items-center gap-2 ml-4">
-                              <span className="text-sm text-gray-600">Urutan:</span>
+                            <div className="flex items-center gap-3 flex-1">
+                              <span className="text-lg">📦</span>
                               <input
-                                type="number"
-                                value={editingPosition}
-                                onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
-                                min="0"
-                                className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
-                                autoFocus
+                                type="text"
+                                value={editingUnitName}
+                                onChange={(e) => setEditingUnitName(e.target.value)}
+                                placeholder="Nama Unit"
+                                className="flex-1 px-3 py-1.5 border-2 border-[#5C4FE5] rounded text-base font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
                               />
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Urutan:</span>
+                                <input
+                                  type="number"
+                                  value={editingPosition}
+                                  onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
+                                  min="0"
+                                  className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
+                                />
+                              </div>
                               <button
                                 onClick={() => saveUnitPosition(unitGroup.unitId)}
                                 disabled={savingPosition}
