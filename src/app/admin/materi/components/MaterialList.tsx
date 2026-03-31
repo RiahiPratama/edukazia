@@ -50,6 +50,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [selectedLesson, setSelectedLesson] = useState('');
 
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editingPosition, setEditingPosition] = useState<number>(0);
+  const [savingPosition, setSavingPosition] = useState(false);
 
   const supabase = createClient();
 
@@ -327,6 +330,39 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     }
   };
 
+  const startEditPosition = (unitId: string, currentPosition: number) => {
+    setEditingUnitId(unitId);
+    setEditingPosition(currentPosition);
+  };
+
+  const cancelEditPosition = () => {
+    setEditingUnitId(null);
+    setEditingPosition(0);
+  };
+
+  const saveUnitPosition = async (unitId: string) => {
+    setSavingPosition(true);
+    try {
+      const formData = new FormData();
+      formData.append('position', editingPosition.toString());
+
+      const response = await fetch(`/api/admin/units/${unitId}`, {
+        method: 'PATCH',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to update position');
+
+      alert('✅ Urutan unit berhasil diupdate!');
+      setEditingUnitId(null);
+      fetchMaterials(); // Refresh to show new order
+    } catch (error) {
+      alert('❌ Gagal mengupdate urutan unit');
+    } finally {
+      setSavingPosition(false);
+    }
+  };
+
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'live_zoom': return <Video className="w-5 h-5" />;
@@ -430,27 +466,85 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
       {/* Material List Grouped by Unit → Lesson */}
       <div className="space-y-4">
-        {Object.values(unitGroups).map((unitGroup) => (
-          <div key={unitGroup.unitId} className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
-            {/* Unit Header */}
-            <button
-              onClick={() => toggleUnit(unitGroup.unitId)}
-              className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                {expandedUnits.has(unitGroup.unitId) ? (
-                  <ChevronDown className="w-5 h-5 text-gray-600" />
-                ) : (
-                  <ChevronRight className="w-5 h-5 text-gray-600" />
-                )}
-                <span className="text-lg font-semibold text-gray-900">
-                  📦 {unitGroup.unitName}
+        {Object.values(unitGroups).map((unitGroup) => {
+          // Get first material to extract unit data
+          const firstLesson = Object.values(unitGroup.lessons)[0];
+          const firstMaterial = firstLesson?.materials[0];
+          const unitData = materials.find(m => m.unit_id === unitGroup.unitId);
+          const isEditing = editingUnitId === unitGroup.unitId;
+
+          return (
+            <div key={unitGroup.unitId} className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
+              {/* Unit Header */}
+              <div className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3 flex-1">
+                  <button
+                    onClick={() => toggleUnit(unitGroup.unitId)}
+                    className="flex items-center gap-3"
+                  >
+                    {expandedUnits.has(unitGroup.unitId) ? (
+                      <ChevronDown className="w-5 h-5 text-gray-600" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-gray-600" />
+                    )}
+                    <span className="text-lg font-semibold text-gray-900">
+                      📦 {unitGroup.unitName}
+                    </span>
+                  </button>
+
+                  {/* Position Controls */}
+                  {!isEditing ? (
+                    <div className="flex items-center gap-2 ml-4">
+                      <span className="text-sm text-gray-600">
+                        Urutan: <span className="font-semibold">{unitData?.position || 0}</span>
+                      </span>
+                      <button
+                        onClick={() => startEditPosition(unitGroup.unitId, unitData?.position || 0)}
+                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                        title="Edit urutan"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 ml-4">
+                      <span className="text-sm text-gray-600">Urutan:</span>
+                      <input
+                        type="number"
+                        value={editingPosition}
+                        onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
+                        min="0"
+                        className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5]"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => saveUnitPosition(unitGroup.unitId)}
+                        disabled={savingPosition}
+                        className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                        title="Simpan"
+                      >
+                        {savingPosition ? (
+                          <div className="animate-spin w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full" />
+                        ) : (
+                          <span className="text-lg">✓</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={cancelEditPosition}
+                        disabled={savingPosition}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                        title="Batal"
+                      >
+                        <span className="text-lg">✕</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <span className="text-sm text-gray-600">
+                  {Object.keys(unitGroup.lessons).length} lesson
                 </span>
               </div>
-              <span className="text-sm text-gray-600">
-                {Object.keys(unitGroup.lessons).length} lesson
-              </span>
-            </button>
 
             {/* Lessons under this unit */}
             {expandedUnits.has(unitGroup.unitId) && (
