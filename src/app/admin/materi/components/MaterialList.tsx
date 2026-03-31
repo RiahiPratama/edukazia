@@ -16,6 +16,7 @@ type MaterialWithHierarchy = {
   lesson_name: string;
   unit_id: string;
   unit_name: string;
+  unit_position: number;
   chapter_id: string | null;
   chapter_title: string | null;
   level_id: string;
@@ -178,6 +179,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           lesson_name: lesson?.lesson_name || 'Unknown Lesson',
           unit_id: lesson?.unit_id || '',
           unit_name: unit?.unit_name || 'Unknown Unit',
+          unit_position: unit?.position || 0,
           chapter_id: unit?.chapter_id || null,
           chapter_title: chapter?.chapter_title || null,
           level_id: unit?.level_id || '',
@@ -496,10 +498,10 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                   {!isEditing ? (
                     <div className="flex items-center gap-2 ml-4">
                       <span className="text-sm text-gray-600">
-                        Urutan: <span className="font-semibold">{unitData?.position || 0}</span>
+                        Urutan: <span className="font-semibold">{unitData?.unit_position || 0}</span>
                       </span>
                       <button
-                        onClick={() => startEditPosition(unitGroup.unitId, unitData?.position || 0)}
+                        onClick={() => startEditPosition(unitGroup.unitId, unitData?.unit_position || 0)}
                         className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
                         title="Edit urutan"
                       >
