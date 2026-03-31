@@ -498,9 +498,11 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   };
 
   // MATERIAL EDIT FUNCTIONS
-  const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string) => {
+  const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string, category: string) => {
     setEditingMaterialId(materialId);
-    setEditingMaterialTitle(currentTitle);
+    // Auto-detect platform from URL, fallback to current title
+    const detectedTitle = detectPlatformFromUrl(currentUrl, category);
+    setEditingMaterialTitle(detectedTitle);
     setEditingMaterialUrl(currentUrl);
   };
 
@@ -510,21 +512,19 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setEditingMaterialUrl('');
   };
 
-  const saveMaterial = async (materialId: string) => {
-    if (!editingMaterialTitle.trim()) {
-      alert('❌ Nama material tidak boleh kosong!');
-      return;
-    }
-
+  const saveMaterial = async (materialId: string, category: string) => {
     if (!editingMaterialUrl.trim()) {
       alert('❌ Link tidak boleh kosong!');
       return;
     }
 
+    // Auto-detect title from URL
+    const autoTitle = detectPlatformFromUrl(editingMaterialUrl, category);
+
     setSavingMaterial(true);
     try {
       const formData = new FormData();
-      formData.append('title', editingMaterialTitle);
+      formData.append('title', autoTitle);
       formData.append('url', editingMaterialUrl);
 
       const response = await fetch(`/api/admin/materials/${materialId}`, {
@@ -842,31 +842,23 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <div className="flex items-center gap-2">
-                                                <input
-                                                  type="text"
-                                                  value={editingMaterialTitle}
-                                                  onChange={(e) => setEditingMaterialTitle(e.target.value)}
-                                                  placeholder="Nama material"
-                                                  className="w-48 px-3 py-2 border-2 border-blue-500 rounded text-sm font-semibold focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                                                />
-                                                <button
-                                                  onClick={() => setEditingMaterialTitle(detectPlatformFromUrl(editingMaterialUrl, material.category))}
-                                                  className="px-3 py-2 bg-purple-500 text-white text-xs font-semibold rounded hover:bg-purple-600 transition-colors"
-                                                  title="Auto-detect platform dari URL"
-                                                >
-                                                  🔍 Auto
-                                                </button>
+                                              <div className="px-3 py-2 bg-gray-100 border-2 border-gray-300 rounded text-sm font-bold text-gray-700 min-w-[150px]">
+                                                {editingMaterialTitle}
                                               </div>
+                                              <span className="text-xs text-gray-500">(auto dari URL)</span>
                                               <input
                                                 type="url"
                                                 value={editingMaterialUrl}
-                                                onChange={(e) => setEditingMaterialUrl(e.target.value)}
+                                                onChange={(e) => {
+                                                  setEditingMaterialUrl(e.target.value);
+                                                  // Auto-update title when URL changes
+                                                  setEditingMaterialTitle(detectPlatformFromUrl(e.target.value, material.category));
+                                                }}
                                                 placeholder="https://zoom.us/... atau https://meet.google.com/..."
                                                 className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                                               />
                                               <button
-                                                onClick={() => saveMaterial(material.id)}
+                                                onClick={() => saveMaterial(material.id, material.category)}
                                                 disabled={savingMaterial}
                                                 className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 text-sm"
                                               >
@@ -885,7 +877,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                           <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <span className="text-sm font-semibold text-gray-700">{material.title}</span>
+                                              <span className="text-sm font-semibold text-gray-700">
+                                                {detectPlatformFromUrl(materialUrl, material.category)}
+                                              </span>
                                               {material.is_published && (
                                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
                                               )}
@@ -903,9 +897,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                 </a>
                                               )}
                                               <button
-                                                onClick={() => startEditMaterial(material.id, material.title, materialUrl)}
+                                                onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category)}
                                                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                title="Edit material"
+                                                title="Edit link"
                                               >
                                                 <Edit className="w-4 h-4" />
                                               </button>
