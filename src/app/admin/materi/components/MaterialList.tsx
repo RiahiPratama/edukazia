@@ -546,8 +546,8 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                 </span>
               </div>
 
-            {/* Lessons under this unit */}
-            {expandedUnits.has(unitGroup.unitId) && (
+              {/* Lessons under this unit */}
+              {expandedUnits.has(unitGroup.unitId) && (
               <div className="border-t-2 border-gray-200">
                 {Object.values(unitGroup.lessons).map((lessonGroup) => {
                   // Get first material for this lesson (usually only 1)
@@ -608,8 +608,8 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               </div>
             )}
           </div>
-        ))}
-      </div>
+        );
+      })}
 
       {totalMaterials === 0 && (
         <div className="text-center py-12 text-gray-500">
