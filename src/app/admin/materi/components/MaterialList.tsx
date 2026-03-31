@@ -592,30 +592,36 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                               <button
                                 onClick={() => saveUnitPosition(unitGroup.unitId)}
                                 disabled={savingPosition}
-                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
-                                title="Simpan"
+                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Simpan perubahan"
                               >
                                 {savingPosition ? (
-                                  <div className="animate-spin w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full" />
+                                  <div className="flex items-center gap-2">
+                                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                                    <span>Saving...</span>
+                                  </div>
                                 ) : (
-                                  <span className="text-lg">✓</span>
+                                  'UPDATE'
                                 )}
                               </button>
                               <button
                                 onClick={cancelEditPosition}
                                 disabled={savingPosition}
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Batal"
                               >
-                                <span className="text-lg">✕</span>
+                                CANCEL
                               </button>
                             </div>
                           )}
                         </div>
 
-                        <span className="text-sm text-gray-600">
-                          {Object.keys(unitGroup.lessons).length} lesson
-                        </span>
+                        {/* Lesson count - ONLY show when NOT editing */}
+                        {!isEditing && (
+                          <span className="text-sm text-gray-600">
+                            {Object.keys(unitGroup.lessons).length} lesson
+                          </span>
+                        )}
                       </div>
 
                       {/* Lessons under this unit */}
