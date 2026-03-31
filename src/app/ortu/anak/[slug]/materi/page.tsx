@@ -108,6 +108,12 @@ export default async function MateriPage({
     .select('id, chapter_title, level_id')
     .in('id', chapterIds)
 
+  console.log('🔍 DEBUG Chapters:', {
+    chapterIds,
+    chapters,
+    unitsWithChapterIds: units.map(u => ({ name: u.unit_name, chapter_id: u.chapter_id }))
+  })
+
   // 7. Get all lessons for these units
   const unitIds = units.map(u => u.id)
   const { data: lessons } = await supabase
@@ -182,6 +188,13 @@ export default async function MateriPage({
       })
 
       const chapter = chapters?.find(c => c.id === unit.chapter_id)
+
+      console.log('🔍 Unit Transform:', {
+        unit_name: unit.unit_name,
+        chapter_id: unit.chapter_id,
+        found_chapter: chapter,
+        chapter_title: chapter?.chapter_title
+      })
 
       return {
         id: unit.id,
