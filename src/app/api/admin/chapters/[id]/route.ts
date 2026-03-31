@@ -17,26 +17,18 @@ export async function PATCH(
 
     // Parse form data
     const formData = await request.formData();
-    const unit_name = formData.get('unit_name') as string;
+    const chapter_title = formData.get('chapter_title') as string;
     const icon = formData.get('icon') as string;
-    const position = formData.get('position') as string;
 
     // Prepare update data
     const updateData: any = {};
     
-    if (unit_name && unit_name.trim()) {
-      updateData.unit_name = unit_name.trim();
+    if (chapter_title && chapter_title.trim()) {
+      updateData.chapter_title = chapter_title.trim();
     }
     
     if (icon && typeof icon === 'string') {
       updateData.icon = icon;
-    }
-    
-    if (position !== null && position !== '') {
-      const positionNum = parseInt(position);
-      if (!isNaN(positionNum)) {
-        updateData.position = positionNum;
-      }
     }
 
     // Validate - at least one field must be provided
@@ -47,18 +39,18 @@ export async function PATCH(
       );
     }
 
-    // Update unit
+    // Update chapter
     const { data, error } = await supabase
-      .from('units')
+      .from('chapters')
       .update(updateData)
       .eq('id', id)
       .select()
       .single();
 
     if (error) {
-      console.error('Error updating unit:', error);
+      console.error('Error updating chapter:', error);
       return NextResponse.json(
-        { error: 'Failed to update unit' },
+        { error: 'Failed to update chapter' },
         { status: 500 }
       );
     }
@@ -66,11 +58,11 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       data,
-      message: 'Unit updated successfully'
+      message: 'Chapter updated successfully'
     });
 
   } catch (error) {
-    console.error('Error in PATCH /api/admin/units/[id]:', error);
+    console.error('Error in PATCH /api/admin/chapters/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

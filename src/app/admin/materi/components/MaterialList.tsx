@@ -1,8 +1,31 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+
+// Available icons for chapters and units
+const ICON_OPTIONS = [
+  { value: 'Library', label: 'Library', Component: Library },
+  { value: 'Book', label: 'Book', Component: Book },
+  { value: 'BookOpen', label: 'BookOpen', Component: BookOpen },
+  { value: 'GraduationCap', label: 'GraduationCap', Component: GraduationCap },
+  { value: 'Award', label: 'Award', Component: Award },
+  { value: 'Star', label: 'Star', Component: Star },
+  { value: 'Target', label: 'Target', Component: Target },
+  { value: 'Lightbulb', label: 'Lightbulb', Component: Lightbulb },
+  { value: 'Brain', label: 'Brain', Component: Brain },
+  { value: 'Bookmark', label: 'Bookmark', Component: Bookmark },
+  { value: 'BookMarked', label: 'BookMarked', Component: BookMarked },
+  { value: 'Layers', label: 'Layers', Component: Layers },
+];
+
+// Helper to get icon component
+const getIconComponent = (iconName: string | null) => {
+  if (!iconName) return Library;
+  const icon = ICON_OPTIONS.find(opt => opt.value === iconName);
+  return icon ? icon.Component : Library;
+};
 
 type MaterialWithHierarchy = {
   id: string;
@@ -17,8 +40,10 @@ type MaterialWithHierarchy = {
   unit_id: string;
   unit_name: string;
   unit_position: number;
+  unit_icon: string | null;
   chapter_id: string | null;
   chapter_title: string | null;
+  chapter_icon: string | null;
   level_id: string;
   level_name: string;
 };
@@ -52,8 +77,17 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set());
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  
+  // Chapter edit states
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [editingChapterTitle, setEditingChapterTitle] = useState<string>('');
+  const [editingChapterIcon, setEditingChapterIcon] = useState<string>('Library');
+  const [savingChapter, setSavingChapter] = useState(false);
+  
+  // Unit edit states
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [editingUnitName, setEditingUnitName] = useState<string>('');
+  const [editingUnitIcon, setEditingUnitIcon] = useState<string>('Book');
   const [editingPosition, setEditingPosition] = useState<number>(0);
   const [savingPosition, setSavingPosition] = useState(false);
 
@@ -104,7 +138,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setError(null);
 
     try {
-      // STEP 1: Fetch materials (flat)
       const { data: materialsData, error: materialsError } = await supabase
         .from('materials')
         .select('id, title, category, position, is_published, content_data, created_at, lesson_id')
@@ -118,10 +151,8 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         return;
       }
 
-      // STEP 2: Get unique lesson IDs
       const lessonIds = [...new Set(materialsData.map(m => m.lesson_id).filter(Boolean))];
 
-      // STEP 3: Fetch lessons (flat)
       const { data: lessonsData, error: lessonsError } = await supabase
         .from('lessons')
         .select('id, lesson_name, unit_id')
@@ -129,40 +160,33 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
       if (lessonsError) throw lessonsError;
 
-      // STEP 4: Get unique unit IDs
       const unitIds = [...new Set(lessonsData?.map(l => l.unit_id).filter(Boolean) || [])];
 
-      // STEP 5: Fetch units (flat)
       const { data: unitsData, error: unitsError } = await supabase
         .from('units')
-        .select('id, unit_name, chapter_id, level_id, position')
+        .select('id, unit_name, chapter_id, level_id, position, icon')
         .in('id', unitIds);
 
       if (unitsError) throw unitsError;
 
-      // STEP 6: Get unique chapter IDs and level IDs
       const chapterIds = [...new Set(unitsData?.map(u => u.chapter_id).filter(Boolean) || [])];
       const levelIds = [...new Set(unitsData?.map(u => u.level_id).filter(Boolean) || [])];
 
-      // STEP 7: Fetch chapters (flat)
       const { data: chaptersData } = await supabase
         .from('chapters')
-        .select('id, chapter_title')
+        .select('id, chapter_title, icon')
         .in('id', chapterIds);
 
-      // STEP 8: Fetch levels (flat)
       const { data: levelsData } = await supabase
         .from('levels')
         .select('id, name')
         .in('id', levelIds);
 
-      // STEP 9: Create lookup maps
       const lessonsMap = new Map(lessonsData?.map(l => [l.id, l]) || []);
       const unitsMap = new Map(unitsData?.map(u => [u.id, u]) || []);
       const chaptersMap = new Map(chaptersData?.map(ch => [ch.id, ch]) || []);
       const levelsMap = new Map(levelsData?.map(lv => [lv.id, lv]) || []);
 
-      // STEP 10: Merge data in JavaScript
       const materialsWithHierarchy: MaterialWithHierarchy[] = materialsData.map(material => {
         const lesson = lessonsMap.get(material.lesson_id);
         const unit = lesson ? unitsMap.get(lesson.unit_id) : null;
@@ -182,8 +206,10 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           unit_id: lesson?.unit_id || '',
           unit_name: unit?.unit_name || 'Unknown Unit',
           unit_position: unit?.position || 0,
+          unit_icon: unit?.icon || null,
           chapter_id: unit?.chapter_id || null,
           chapter_title: chapter?.chapter_title || null,
+          chapter_icon: chapter?.icon || null,
           level_id: unit?.level_id || '',
           level_name: level?.name || 'Unknown Level',
         };
@@ -199,67 +225,35 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   };
 
   const fetchLevels = async () => {
-    const { data } = await supabase
-      .from('levels')
-      .select('id, name')
-      .order('sort_order');
-    
+    const { data } = await supabase.from('levels').select('id, name').order('sort_order');
     setLevels(data || []);
   };
 
   const fetchChapters = async (levelId: string) => {
-    const { data } = await supabase
-      .from('chapters')
-      .select('id, chapter_title')
-      .eq('level_id', levelId)
-      .order('order_number');
-    
+    const { data } = await supabase.from('chapters').select('id, chapter_title').eq('level_id', levelId).order('order_number');
     setChapters(data || []);
   };
 
   const fetchUnits = async (chapterId: string) => {
-    const { data } = await supabase
-      .from('units')
-      .select('id, unit_name')
-      .eq('chapter_id', chapterId)
-      .order('position');
-    
+    const { data } = await supabase.from('units').select('id, unit_name').eq('chapter_id', chapterId).order('position');
     setUnits(data || []);
   };
 
   const fetchAllUnits = async (levelId: string) => {
-    const { data } = await supabase
-      .from('units')
-      .select('id, unit_name')
-      .eq('level_id', levelId)
-      .order('position');
-    
+    const { data } = await supabase.from('units').select('id, unit_name').eq('level_id', levelId).order('position');
     setUnits(data || []);
   };
 
   const fetchLessons = async (unitId: string) => {
-    const { data } = await supabase
-      .from('lessons')
-      .select('id, lesson_name')
-      .eq('unit_id', unitId)
-      .order('position');
-    
+    const { data } = await supabase.from('lessons').select('id, lesson_name').eq('unit_id', unitId).order('position');
     setLessons(data || []);
   };
 
   const applyFilters = () => {
     let filtered = [...materials];
-
-    if (selectedLevel) {
-      filtered = filtered.filter(m => m.level_id === selectedLevel);
-    }
-    if (selectedUnit) {
-      filtered = filtered.filter(m => m.unit_id === selectedUnit);
-    }
-    if (selectedLesson) {
-      filtered = filtered.filter(m => m.lesson_id === selectedLesson);
-    }
-
+    if (selectedLevel) filtered = filtered.filter(m => m.level_id === selectedLevel);
+    if (selectedUnit) filtered = filtered.filter(m => m.unit_id === selectedUnit);
+    if (selectedLesson) filtered = filtered.filter(m => m.lesson_id === selectedLesson);
     setFilteredMaterials(filtered);
   };
 
@@ -268,11 +262,13 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       [chapterId: string]: {
         chapterId: string;
         chapterTitle: string;
+        chapterIcon: string;
         units: {
           [unitId: string]: {
             unitId: string;
             unitName: string;
             unitPosition: number;
+            unitIcon: string;
             lessons: {
               [lessonId: string]: {
                 lessonId: string;
@@ -290,26 +286,25 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       const unitId = material.unit_id || 'no-unit';
       const lessonId = material.lesson_id || 'no-lesson';
 
-      // Create chapter group if not exists
       if (!chapterGroups[chapterId]) {
         chapterGroups[chapterId] = {
           chapterId,
           chapterTitle: material.chapter_title || 'Chapter Tidak Diketahui',
+          chapterIcon: material.chapter_icon || 'Library',
           units: {}
         };
       }
 
-      // Create unit group within chapter if not exists
       if (!chapterGroups[chapterId].units[unitId]) {
         chapterGroups[chapterId].units[unitId] = {
           unitId,
           unitName: material.unit_name || 'Unit Tidak Diketahui',
           unitPosition: material.unit_position || 0,
+          unitIcon: material.unit_icon || 'Book',
           lessons: {}
         };
       }
 
-      // Create lesson group within unit if not exists
       if (!chapterGroups[chapterId].units[unitId].lessons[lessonId]) {
         chapterGroups[chapterId].units[unitId].lessons[lessonId] = {
           lessonId,
@@ -318,7 +313,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         };
       }
 
-      // Add material to lesson group
       chapterGroups[chapterId].units[unitId].lessons[lessonId].materials.push(material);
     });
 
@@ -345,6 +339,93 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setExpandedChapters(newExpanded);
   };
 
+  // CHAPTER EDIT FUNCTIONS
+  const startEditChapter = (chapterId: string, currentTitle: string, currentIcon: string) => {
+    setEditingChapterId(chapterId);
+    setEditingChapterTitle(currentTitle);
+    setEditingChapterIcon(currentIcon || 'Library');
+  };
+
+  const cancelEditChapter = () => {
+    setEditingChapterId(null);
+    setEditingChapterTitle('');
+    setEditingChapterIcon('Library');
+  };
+
+  const saveChapter = async (chapterId: string) => {
+    if (!editingChapterTitle.trim()) {
+      alert('❌ Nama chapter tidak boleh kosong!');
+      return;
+    }
+
+    setSavingChapter(true);
+    try {
+      const formData = new FormData();
+      formData.append('chapter_title', editingChapterTitle);
+      formData.append('icon', editingChapterIcon);
+
+      const response = await fetch(`/api/admin/chapters/${chapterId}`, {
+        method: 'PATCH',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to update');
+
+      alert('✅ Chapter berhasil diupdate!');
+      setEditingChapterId(null);
+      fetchMaterials();
+    } catch (error) {
+      alert('❌ Gagal mengupdate chapter');
+    } finally {
+      setSavingChapter(false);
+    }
+  };
+
+  // UNIT EDIT FUNCTIONS
+  const startEditPosition = (unitId: string, currentName: string, currentIcon: string, currentPosition: number) => {
+    setEditingUnitId(unitId);
+    setEditingUnitName(currentName);
+    setEditingUnitIcon(currentIcon || 'Book');
+    setEditingPosition(currentPosition);
+  };
+
+  const cancelEditPosition = () => {
+    setEditingUnitId(null);
+    setEditingUnitName('');
+    setEditingUnitIcon('Book');
+    setEditingPosition(0);
+  };
+
+  const saveUnitPosition = async (unitId: string) => {
+    if (!editingUnitName.trim()) {
+      alert('❌ Nama unit tidak boleh kosong!');
+      return;
+    }
+
+    setSavingPosition(true);
+    try {
+      const formData = new FormData();
+      formData.append('unit_name', editingUnitName);
+      formData.append('icon', editingUnitIcon);
+      formData.append('position', editingPosition.toString());
+
+      const response = await fetch(`/api/admin/units/${unitId}`, {
+        method: 'PATCH',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to update');
+
+      alert('✅ Unit berhasil diupdate!');
+      setEditingUnitId(null);
+      fetchMaterials();
+    } catch (error) {
+      alert('❌ Gagal mengupdate unit');
+    } finally {
+      setSavingPosition(false);
+    }
+  };
+
   const handleDelete = async (materialId: string) => {
     if (!confirm('Yakin ingin menghapus material ini?')) return;
 
@@ -359,47 +440,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       fetchMaterials();
     } catch (error) {
       alert('❌ Gagal menghapus material');
-    }
-  };
-
-  const startEditPosition = (unitId: string, currentName: string, currentPosition: number) => {
-    setEditingUnitId(unitId);
-    setEditingUnitName(currentName);
-    setEditingPosition(currentPosition);
-  };
-
-  const cancelEditPosition = () => {
-    setEditingUnitId(null);
-    setEditingUnitName('');
-    setEditingPosition(0);
-  };
-
-  const saveUnitPosition = async (unitId: string) => {
-    if (!editingUnitName.trim()) {
-      alert('❌ Nama unit tidak boleh kosong!');
-      return;
-    }
-
-    setSavingPosition(true);
-    try {
-      const formData = new FormData();
-      formData.append('unit_name', editingUnitName);
-      formData.append('position', editingPosition.toString());
-
-      const response = await fetch(`/api/admin/units/${unitId}`, {
-        method: 'PATCH',
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error('Failed to update');
-
-      alert('✅ Unit berhasil diupdate!');
-      setEditingUnitId(null);
-      fetchMaterials(); // Refresh to show new name & position
-    } catch (error) {
-      alert('❌ Gagal mengupdate unit');
-    } finally {
-      setSavingPosition(false);
     }
   };
 
@@ -453,252 +493,177 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     <div className="space-y-6">
       {/* Filters */}
       <div className="grid grid-cols-4 gap-4">
-        <select
-          value={selectedLevel}
-          onChange={(e) => setSelectedLevel(e.target.value)}
-          className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white"
-        >
+        <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white">
           <option value="">Semua Level</option>
-          {levels.map((level) => (
-            <option key={level.id} value={level.id}>{level.name}</option>
-          ))}
+          {levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}
         </select>
-
-        <select
-          value={selectedChapter}
-          onChange={(e) => setSelectedChapter(e.target.value)}
-          className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white"
-        >
+        <select value={selectedChapter} onChange={(e) => setSelectedChapter(e.target.value)} className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white">
           <option value="">Semua Chapter</option>
           <option value="ALL">📦 Semua Unit (Tanpa Filter)</option>
-          {chapters.map((ch) => (
-            <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>
-          ))}
+          {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
         </select>
-
-        <select
-          value={selectedUnit}
-          onChange={(e) => setSelectedUnit(e.target.value)}
-          className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white"
-        >
+        <select value={selectedUnit} onChange={(e) => setSelectedUnit(e.target.value)} className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white">
           <option value="">Semua Unit</option>
-          {units.map((unit) => (
-            <option key={unit.id} value={unit.id}>{unit.unit_name}</option>
-          ))}
+          {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.unit_name}</option>)}
         </select>
-
-        <select
-          value={selectedLesson}
-          onChange={(e) => setSelectedLesson(e.target.value)}
-          className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white"
-        >
+        <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white">
           <option value="">Semua Lesson</option>
-          {lessons.map((lesson) => (
-            <option key={lesson.id} value={lesson.id}>{lesson.lesson_name}</option>
-          ))}
+          {lessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.lesson_name}</option>)}
         </select>
       </div>
 
-      {/* Count */}
-      <div className="text-lg font-semibold text-gray-900">
-        {totalMaterials} Materi
-      </div>
+      <div className="text-lg font-semibold text-gray-900">{totalMaterials} Materi</div>
 
       {/* Material List Grouped by Chapter → Unit → Lesson */}
       <div className="space-y-4">
-        {Object.values(chapterGroups).map((chapterGroup) => (
-          <div key={chapterGroup.chapterId} className="bg-white rounded-xl border-2 border-[#5C4FE5] overflow-hidden">
-            {/* Chapter Header */}
-            <button
-              onClick={() => toggleChapter(chapterGroup.chapterId)}
-              className="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-50 transition-colors bg-gradient-to-r from-purple-50 to-white"
-            >
-              <div className="flex items-center gap-3">
-                {expandedChapters.has(chapterGroup.chapterId) ? (
-                  <ChevronDown className="w-6 h-6 text-[#5C4FE5]" />
-                ) : (
-                  <ChevronRight className="w-6 h-6 text-[#5C4FE5]" />
-                )}
-                <Library className="w-6 h-6 text-[#5C4FE5]" />
-                <span className="text-xl font-bold text-[#5C4FE5]">
-                  {chapterGroup.chapterTitle}
-                </span>
-              </div>
-              <span className="text-sm text-gray-600 font-semibold">
-                {Object.keys(chapterGroup.units).length} unit
-              </span>
-            </button>
+        {Object.values(chapterGroups).map((chapterGroup) => {
+          const ChapterIcon = getIconComponent(chapterGroup.chapterIcon);
+          const isEditingChapter = editingChapterId === chapterGroup.chapterId;
 
-            {/* Units under this chapter */}
-            {expandedChapters.has(chapterGroup.chapterId) && (
-              <div className="border-t-2 border-[#5C4FE5]">
-                {Object.values(chapterGroup.units).map((unitGroup) => {
-                  const unitData = materials.find(m => m.unit_id === unitGroup.unitId);
-                  const isEditing = editingUnitId === unitGroup.unitId;
-
-                  return (
-                    <div key={unitGroup.unitId} className="border-b-2 border-gray-200 last:border-b-0">
-                      {/* Unit Header */}
-                      <div className="px-8 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors bg-gray-50">
-                        <div className="flex items-center gap-3 flex-1">
-                          {!isEditing ? (
-                            <>
-                              <button
-                                onClick={() => toggleUnit(unitGroup.unitId)}
-                                className="flex items-center gap-3"
-                              >
-                                {expandedUnits.has(unitGroup.unitId) ? (
-                                  <ChevronDown className="w-5 h-5 text-gray-600" />
-                                ) : (
-                                  <ChevronRight className="w-5 h-5 text-gray-600" />
-                                )}
-                                <Book className="w-5 h-5 text-[#5C4FE5]" />
-                                <span className="text-lg font-semibold text-gray-900">
-                                  {unitGroup.unitName}
-                                </span>
-                              </button>
-
-                              <div className="flex items-center gap-2 ml-4">
-                                <span className="text-sm text-gray-600">
-                                  Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span>
-                                </span>
-                                <button
-                                  onClick={() => startEditPosition(unitGroup.unitId, unitGroup.unitName, unitGroup.unitPosition || 0)}
-                                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                  title="Edit nama & urutan"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="flex items-center gap-3 flex-1">
-                              <Book className="w-5 h-5 text-[#5C4FE5]" />
-                              <input
-                                type="text"
-                                value={editingUnitName}
-                                onChange={(e) => setEditingUnitName(e.target.value)}
-                                placeholder="Nama Unit"
-                                className="flex-1 px-3 py-1.5 border-2 border-[#5C4FE5] rounded text-base font-semibold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-400"
-                              />
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-600">Urutan:</span>
-                                <input
-                                  type="number"
-                                  value={editingPosition}
-                                  onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)}
-                                  min="0"
-                                  className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-                                />
-                              </div>
-                              <button
-                                onClick={() => saveUnitPosition(unitGroup.unitId)}
-                                disabled={savingPosition}
-                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Simpan perubahan"
-                              >
-                                {savingPosition ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                                    <span>Saving...</span>
-                                  </div>
-                                ) : (
-                                  'UPDATE'
-                                )}
-                              </button>
-                              <button
-                                onClick={cancelEditPosition}
-                                disabled={savingPosition}
-                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Batal"
-                              >
-                                CANCEL
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Lesson count - ONLY show when NOT editing */}
-                        {!isEditing && (
-                          <span className="text-sm text-gray-600">
-                            {Object.keys(unitGroup.lessons).length} lesson
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Lessons under this unit */}
-                      {expandedUnits.has(unitGroup.unitId) && (
-                      <div className="bg-white">
-                        {Object.values(unitGroup.lessons)
-                          .sort((a, b) => {
-                            return a.lessonName.localeCompare(b.lessonName);
-                          })
-                          .map((lessonGroup) => {
-                  // Get first material for this lesson (usually only 1)
-                  const material = lessonGroup.materials[0];
-                  if (!material) return null;
-
-                  return (
-                    <div 
-                      key={lessonGroup.lessonId} 
-                      className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="text-[#5C4FE5]">
-                          {getCategoryIcon(material.category)}
-                        </div>
-                        <FileCheck className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm font-semibold text-gray-700">
-                          {lessonGroup.lessonName}
-                        </span>
-                        {material.is_published && (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">
-                            Published
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {(material.category === 'live_zoom' || material.category === 'kosakata') && (
-                          <a
-                            href={getContentUrl(material)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Buka link"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
-                        {onEdit && (
-                          <button
-                            onClick={() => onEdit(material)}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
+          return (
+            <div key={chapterGroup.chapterId} className="bg-white rounded-xl border-2 border-[#5C4FE5] overflow-hidden">
+              {/* Chapter Header */}
+              {!isEditingChapter ? (
+                <div className="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-50 transition-colors bg-gradient-to-r from-purple-50 to-white">
+                  <button onClick={() => toggleChapter(chapterGroup.chapterId)} className="flex items-center gap-3">
+                    {expandedChapters.has(chapterGroup.chapterId) ? <ChevronDown className="w-6 h-6 text-[#5C4FE5]" /> : <ChevronRight className="w-6 h-6 text-[#5C4FE5]" />}
+                    <ChapterIcon className="w-6 h-6 text-[#5C4FE5]" />
+                    <span className="text-xl font-bold text-[#5C4FE5]">{chapterGroup.chapterTitle}</span>
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => startEditChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, chapterGroup.chapterIcon)} className="p-2 text-gray-600 hover:bg-white rounded-lg transition-colors" title="Edit chapter">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <span className="text-sm text-gray-600 font-semibold">{Object.keys(chapterGroup.units).length} unit</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full px-6 py-4 bg-gradient-to-r from-purple-50 to-white">
+                  <div className="flex items-center gap-3">
+                    <input type="text" value={editingChapterTitle} onChange={(e) => setEditingChapterTitle(e.target.value)} placeholder="Nama Chapter" className="flex-1 px-3 py-2 border-2 border-[#5C4FE5] rounded-lg text-lg font-bold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+                    <select value={editingChapterIcon} onChange={(e) => setEditingChapterIcon(e.target.value)} className="px-3 py-2 border-2 border-[#5C4FE5] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-semibold">
+                      {ICON_OPTIONS.map(opt => {
+                        const Icon = opt.Component;
+                        return <option key={opt.value} value={opt.value}>{opt.label}</option>;
+                      })}
+                    </select>
+                    <div className="flex gap-2">
+                      {ICON_OPTIONS.slice(0, 6).map(opt => {
+                        const Icon = opt.Component;
+                        return (
+                          <button key={opt.value} onClick={() => setEditingChapterIcon(opt.value)} className={`p-2 rounded-lg transition-all ${editingChapterIcon === opt.value ? 'bg-[#5C4FE5] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} title={opt.label}>
+                            <Icon className="w-5 h-5" />
                           </button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={() => saveChapter(chapterGroup.chapterId)} disabled={savingChapter} className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50">
+                      {savingChapter ? 'Saving...' : 'UPDATE'}
+                    </button>
+                    <button onClick={cancelEditChapter} disabled={savingChapter} className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50">CANCEL</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Units under this chapter */}
+              {expandedChapters.has(chapterGroup.chapterId) && (
+                <div className="border-t-2 border-[#5C4FE5]">
+                  {Object.values(chapterGroup.units).map((unitGroup) => {
+                    const UnitIcon = getIconComponent(unitGroup.unitIcon);
+                    const isEditingUnit = editingUnitId === unitGroup.unitId;
+
+                    return (
+                      <div key={unitGroup.unitId} className="border-b-2 border-gray-200 last:border-b-0">
+                        {/* Unit Header */}
+                        <div className="px-8 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors bg-gray-50">
+                          <div className="flex items-center gap-3 flex-1">
+                            {!isEditingUnit ? (
+                              <>
+                                <button onClick={() => toggleUnit(unitGroup.unitId)} className="flex items-center gap-3">
+                                  {expandedUnits.has(unitGroup.unitId) ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronRight className="w-5 h-5 text-gray-600" />}
+                                  <UnitIcon className="w-5 h-5 text-[#5C4FE5]" />
+                                  <span className="text-lg font-semibold text-gray-900">{unitGroup.unitName}</span>
+                                </button>
+                                <div className="flex items-center gap-2 ml-4">
+                                  <span className="text-sm text-gray-600">Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span></span>
+                                  <button onClick={() => startEditPosition(unitGroup.unitId, unitGroup.unitName, unitGroup.unitIcon, unitGroup.unitPosition || 0)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Edit nama, icon & urutan">
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-3 flex-1">
+                                <input type="text" value={editingUnitName} onChange={(e) => setEditingUnitName(e.target.value)} placeholder="Nama Unit" className="flex-1 px-3 py-1.5 border-2 border-[#5C4FE5] rounded text-base font-semibold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 placeholder-gray-400" />
+                                <select value={editingUnitIcon} onChange={(e) => setEditingUnitIcon(e.target.value)} className="px-2 py-1.5 border-2 border-[#5C4FE5] rounded focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 text-sm font-semibold">
+                                  {ICON_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                </select>
+                                <div className="flex gap-1">
+                                  {ICON_OPTIONS.slice(0, 4).map(opt => {
+                                    const Icon = opt.Component;
+                                    return (
+                                      <button key={opt.value} onClick={() => setEditingUnitIcon(opt.value)} className={`p-1.5 rounded transition-all ${editingUnitIcon === opt.value ? 'bg-[#5C4FE5] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} title={opt.label}>
+                                        <Icon className="w-4 h-4" />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-gray-600">Urutan:</span>
+                                  <input type="number" value={editingPosition} onChange={(e) => setEditingPosition(parseInt(e.target.value) || 0)} min="0" className="w-20 px-2 py-1 border-2 border-[#5C4FE5] rounded text-sm font-semibold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+                                </div>
+                                <button onClick={() => saveUnitPosition(unitGroup.unitId)} disabled={savingPosition} className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50">
+                                  {savingPosition ? 'Saving...' : 'UPDATE'}
+                                </button>
+                                <button onClick={cancelEditPosition} disabled={savingPosition} className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50">CANCEL</button>
+                              </div>
+                            )}
+                          </div>
+                          {!isEditingUnit && <span className="text-sm text-gray-600">{Object.keys(unitGroup.lessons).length} lesson</span>}
+                        </div>
+
+                        {/* Lessons under this unit */}
+                        {expandedUnits.has(unitGroup.unitId) && (
+                          <div className="bg-white">
+                            {Object.values(unitGroup.lessons).sort((a, b) => a.lessonName.localeCompare(b.lessonName)).map((lessonGroup) => {
+                              const material = lessonGroup.materials[0];
+                              if (!material) return null;
+
+                              return (
+                                <div key={lessonGroup.lessonId} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0">
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-[#5C4FE5]">{getCategoryIcon(material.category)}</div>
+                                    <FileCheck className="w-4 h-4 text-gray-500" />
+                                    <span className="text-sm font-semibold text-gray-700">{lessonGroup.lessonName}</span>
+                                    {material.is_published && <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                      <a href={getContentUrl(material)} target="_blank" rel="noopener noreferrer" className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Buka link">
+                                        <ExternalLink className="w-4 h-4" />
+                                      </a>
+                                    )}
+                                    {onEdit && (
+                                      <button onClick={() => onEdit(material)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" title="Edit">
+                                        <Edit className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    <button onClick={() => handleDelete(material.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
-                        <button
-                          onClick={() => handleDelete(material.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Hapus"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ))}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {totalMaterials === 0 && (
