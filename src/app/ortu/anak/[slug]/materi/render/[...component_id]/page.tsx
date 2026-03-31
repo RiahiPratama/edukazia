@@ -4,9 +4,13 @@ import { notFound } from 'next/navigation'
 export default async function RenderMaterialPage({
   params
 }: {
-  params: Promise<{ component_id: string }>
+  params: Promise<{ component_id: string[] }>
 }) {
   const { component_id } = await params
+  
+  // Join array to get full path (e.g., ["bacaan", "file.jsx"] -> "bacaan/file.jsx")
+  const componentPath = Array.isArray(component_id) ? component_id.join('/') : component_id
+  
   const supabase = await createClient()
 
   // Get authenticated user
@@ -18,37 +22,48 @@ export default async function RenderMaterialPage({
     .from('material_contents')
     .select(`
       material_id,
-      category,
       content_url,
       storage_path,
       materials (
         id,
-        title
+        title,
+        category
       )
     `)
-    .eq('storage_path', component_id)
+    .eq('storage_path', componentPath)
     .single()
 
   if (!materialContent) {
-    notFound()
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F6FF]">
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-red-600">Material not found</h1>
+          <p className="text-gray-600 mt-2">Storage path: {componentPath}</p>
+        </div>
+      </div>
+    )
   }
 
-  const category = materialContent.category
+  const material = materialContent.materials as any
+  const category = material?.category
 
   // Handle different categories
   if (category === 'bacaan') {
     // Bacaan: Fetch JSX component from storage
-    const { data: componentData } = await supabase
+    const { data: componentData, error: downloadError } = await supabase
       .storage
       .from('components')
-      .download(component_id)
+      .download(componentPath)
 
-    if (!componentData) {
+    if (downloadError || !componentData) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#F7F6FF]">
           <div className="text-center">
             <h1 className="text-xl font-bold text-red-600">Component not found</h1>
-            <p className="text-gray-600 mt-2">Storage path: {component_id}</p>
+            <p className="text-gray-600 mt-2">Storage path: {componentPath}</p>
+            {downloadError && (
+              <p className="text-sm text-red-500 mt-2">Error: {downloadError.message}</p>
+            )}
           </div>
         </div>
       )
@@ -57,12 +72,12 @@ export default async function RenderMaterialPage({
     const jsxCode = await componentData.text()
 
     return (
-      <div className="min-h-screen bg-[#F7F6FF]">
+      <div className="min-h-screen bg-white">
         <iframe
           srcDoc={jsxCode}
           className="w-full h-screen border-0"
-          sandbox="allow-scripts"
-          title={(materialContent.materials as any)?.title || 'Bacaan Material'}
+          sandbox="allow-scripts allow-same-origin"
+          title={material?.title || 'Bacaan Material'}
         />
       </div>
     )
@@ -71,16 +86,20 @@ export default async function RenderMaterialPage({
     const audioUrl = materialContent.content_url
 
     // Fetch audio file from storage if needed
-    const { data: audioData } = await supabase
+    const { data: audioData, error: audioError } = await supabase
       .storage
       .from('audio')
-      .download(component_id)
+      .download(componentPath)
 
-    if (!audioData) {
+    if (audioError || !audioData) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#F7F6FF]">
           <div className="text-center">
             <h1 className="text-xl font-bold text-red-600">Audio not found</h1>
+            <p className="text-gray-600 mt-2">Storage path: {componentPath}</p>
+            {audioError && (
+              <p className="text-sm text-red-500 mt-2">Error: {audioError.message}</p>
+            )}
           </div>
         </div>
       )
@@ -92,7 +111,7 @@ export default async function RenderMaterialPage({
       <div className="min-h-screen bg-[#F7F6FF] p-6">
         <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
           <h1 className="text-2xl font-bold text-[#5C4FE5] mb-6">
-            {(materialContent.materials as any)?.title || 'CEFR Material'}
+            {material?.title || 'CEFR Material'}
           </h1>
 
           {/* Audio Player */}
