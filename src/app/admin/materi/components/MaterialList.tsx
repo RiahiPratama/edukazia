@@ -579,6 +579,19 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
   };
 
+  // Get display name for material
+  const getMaterialDisplayName = (material: MaterialWithHierarchy): string => {
+    const materialUrl = getContentUrl(material);
+    
+    // For Bacaan & CEFR: show material title (file name)
+    if (material.category === 'bacaan' || material.category === 'cefr') {
+      return material.title || 'Bacaan';
+    }
+    
+    // For Live Zoom & Kosakata: auto-detect platform
+    return detectPlatformFromUrl(materialUrl, material.category);
+  };
+
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'live_zoom': return <Video className="w-5 h-5" />;
@@ -878,7 +891,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
                                               <span className="text-sm font-semibold text-gray-700">
-                                                {detectPlatformFromUrl(materialUrl, material.category)}
+                                                {getMaterialDisplayName(material)}
                                               </span>
                                               {material.is_published && (
                                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
@@ -896,13 +909,15 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                   <ExternalLink className="w-4 h-4" />
                                                 </a>
                                               )}
-                                              <button
-                                                onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category)}
-                                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                title="Edit link"
-                                              >
-                                                <Edit className="w-4 h-4" />
-                                              </button>
+                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                                <button
+                                                  onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category)}
+                                                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                  title="Edit link"
+                                                >
+                                                  <Edit className="w-4 h-4" />
+                                                </button>
+                                              )}
                                               <button
                                                 onClick={() => handleDelete(material.id)}
                                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

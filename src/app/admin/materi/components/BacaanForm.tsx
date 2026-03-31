@@ -189,13 +189,16 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
         for (const levelId of selectedLevels) {
           try {
             const formData = new FormData();
-            formData.append('title', newLessonName || selectedLesson);
+            // Use file name as title (remove extension)
+            const materialTitle = jsxFile ? jsxFile.name.replace(/\.(jsx|tsx)$/, '') : (newLessonName || selectedLesson);
+            formData.append('title', materialTitle);
             formData.append('type', 'bacaan');
             formData.append('category', 'bacaan');
             formData.append('course_id', selectedCourse);
             formData.append('level_id', levelId);
-            formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-            formData.append('judul_name', newJudulName);
+            // Send chapter info (judul = chapter)
+            formData.append('chapter_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
+            formData.append('chapter_name', newJudulName);
             formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
             formData.append('unit_name', newUnitName);
             formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
@@ -397,10 +400,11 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
           </div>
         </div>
 
-        <div>
+        {/* Order Number hidden for Bacaan - not needed for file uploads */}
+        {/* <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">Order Number *</label>
           <input type="number" value={orderNumber} onChange={(e) => setOrderNumber(parseInt(e.target.value))} min="1" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
-        </div>
+        </div> */}
 
         <div className="flex items-center gap-2">
           <input type="checkbox" id="isPublished" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]" />
