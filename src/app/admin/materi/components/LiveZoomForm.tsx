@@ -76,7 +76,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
     if (!editData) return;
     setLoadingEditData(true);
     try {
-      // Fetch level name (read-only)
       const { data: levelData } = await supabase
         .from('levels')
         .select('name')
@@ -84,7 +83,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         .single();
       if (levelData) setEditLevelName(levelData.name);
 
-      // Fetch unit data to get chapter_id
       const { data: unitData } = await supabase
         .from('units')
         .select('unit_name, position, chapter_id')
@@ -95,7 +93,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         setEditUnitName(unitData.unit_name);
         setEditUnitPosition(unitData.position || 0);
         
-        // Fetch chapter data if chapter_id exists
         if (unitData.chapter_id) {
           setEditChapterId(unitData.chapter_id);
           const { data: chapterData } = await supabase
@@ -107,7 +104,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         }
       }
 
-      // Fetch lesson data
       const { data: lessonData } = await supabase
         .from('lessons')
         .select('lesson_name, position')
@@ -135,6 +131,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   useEffect(() => {
     if (selectedChapter && selectedChapter !== 'NEW') {
+      // STRICT: Only fetch units FROM THIS CHAPTER
       fetchUnits(selectedChapter);
     } else {
       setUnits([]);
@@ -167,6 +164,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
   };
 
   const fetchUnits = async (chapterId: string) => {
+    // STRICT: Only units from this chapter
     const { data } = await supabase.from('units').select('*').eq('chapter_id', chapterId).order('position');
     setUnits(data || []);
   };
@@ -182,7 +180,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
     try {
       if (isEditing) {
-        // EDIT MODE - Update existing material
+        // EDIT MODE
         const formData = new FormData();
         formData.append('material_id', editData.id);
         formData.append('chapter_id', editChapterId || '');
@@ -205,17 +203,24 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         alert('✅ Material berhasil diupdate!');
         onSave();
       } else {
-        // CREATE MODE - Create new material for SINGLE level
+        // CREATE MODE - STRICT VALIDATION
         if (!selectedLevel) {
-          alert('Pilih level!');
+          alert('❌ Level harus dipilih!');
           setLoading(false);
           return;
+        }
+
+        if (!selectedChapter || selectedChapter === 'NEW') {
+          if (selectedChapter !== 'NEW') {
+            alert('❌ Chapter harus dipilih!');
+            setLoading(false);
+            return;
+          }
         }
 
         // Create Chapter if NEW
         let actualChapterId = selectedChapter;
         if (selectedChapter === 'NEW' && newChapterTitle) {
-          // Get next order_number for this level
           const { data: existingChapters } = await supabase
             .from('chapters')
             .select('order_number')
@@ -246,6 +251,13 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           actualChapterId = newChapter.id;
         }
 
+        // STRICT VALIDATION: Chapter must be selected
+        if (!actualChapterId || actualChapterId === 'NEW') {
+          alert('❌ Chapter harus dipilih atau dibuat!');
+          setLoading(false);
+          return;
+        }
+
         // Create Unit if NEW
         let actualUnitId = selectedUnit;
         if (selectedUnit === 'NEW' && newUnitName) {
@@ -253,7 +265,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             .from('units')
             .insert({
               level_id: selectedLevel,
-              chapter_id: actualChapterId,
+              chapter_id: actualChapterId, // STRICT: Must have chapter_id
               unit_name: newUnitName,
               unit_number: 0,
               position: 0,
@@ -272,7 +284,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         // Create Lesson if NEW
         let actualLessonId = selectedLesson;
         if (selectedLesson === 'NEW' && newLessonName && actualUnitId) {
-          // Get next position
           const { data: existingLessons } = await supabase
             .from('lessons')
             .select('position')
@@ -378,7 +389,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           {selectedLevel && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter *</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter * (WAJIB)</label>
                 <select
                   value={selectedChapter}
                   onChange={(e) => setSelectedChapter(e.target.value)}
@@ -396,11 +407,14 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
                     type="text"
                     value={newChapterTitle}
                     onChange={(e) => setNewChapterTitle(e.target.value)}
-                    placeholder="Nama Chapter Baru (contoh: Phonics Foundations)"
+                    placeholder="Nama Chapter Baru (contoh: Mover)"
                     required
                     className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
                   />
                 )}
+                <p className="text-xs text-gray-600 mt-2">
+                  🔒 Unit hanya akan menampilkan yang sesuai dengan Chapter yang dipilih
+                </p>
               </div>
 
               {selectedChapter && (
@@ -423,7 +437,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
                       type="text"
                       value={newUnitName}
                       onChange={(e) => setNewUnitName(e.target.value)}
-                      placeholder="Nama Unit Baru (contoh: 02 Weekend activities)"
+                      placeholder="Nama Unit Baru (contoh: 01 Clothes I like)"
                       required
                       className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
                     />
