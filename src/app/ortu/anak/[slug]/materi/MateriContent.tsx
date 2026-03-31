@@ -40,6 +40,14 @@ export default function MateriContent({ levelsData, studentName, studentId }: Ma
   const [selectedLevelId, setSelectedLevelId] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'>('live_zoom')
 
+  // DEBUG: Log levelsData
+  useEffect(() => {
+    console.log('📊 DEBUG levelsData:', {
+      count: levelsData.length,
+      levels: levelsData.map(l => ({ id: l.level_id, name: l.level_name }))
+    })
+  }, [levelsData])
+
   // Initialize with first level or load from localStorage
   useEffect(() => {
     const storedLevelId = localStorage.getItem('selected_level_id')
