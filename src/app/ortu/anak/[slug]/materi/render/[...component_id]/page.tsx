@@ -71,12 +71,67 @@ export default async function RenderMaterialPage({
 
     const jsxCode = await componentData.text()
 
+    // Strip import statements from JSX code
+    const cleanedJsxCode = jsxCode
+      .replace(/import\s+.*?from\s+['"]react['"];?\n?/g, '')
+      .replace(/import\s+.*?from\s+['"]lucide-react['"];?\n?/g, '')
+      .trim();
+
+    // Create HTML wrapper with React runtime + Babel for JSX transpilation
+    const htmlWrapper = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #F7F6FF;
+    }
+    #root {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // Map React hooks and lucide icons to global scope
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+    const { BookOpen, ChevronDown, ChevronUp, Globe, AlertTriangle, Check, X, Info, ChevronRight, ChevronLeft } = lucideReact;
+    
+    ${cleanedJsxCode}
+    
+    // Auto-detect component name and render
+    const Component = typeof PronunciationGuideAE !== 'undefined' ? PronunciationGuideAE : 
+                      typeof App !== 'undefined' ? App :
+                      () => <div className="p-8 text-center text-red-600">Component not found</div>;
+    
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<Component />);
+  </script>
+</body>
+</html>
+`
+
     return (
       <div className="min-h-screen bg-white">
         <iframe
-          srcDoc={jsxCode}
+          srcDoc={htmlWrapper}
           className="w-full h-screen border-0"
-          sandbox="allow-scripts allow-same-origin"
           title={material?.title || 'Bacaan Material'}
         />
       </div>
