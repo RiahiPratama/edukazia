@@ -158,6 +158,14 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         .order('created_at', { ascending: false });
 
       if (materialsError) throw materialsError;
+      
+      // 🔍 DEBUG: Check what data we're getting
+      console.log('🔍 Materials query result:', materialsData);
+      if (materialsData && materialsData.length > 0) {
+        console.log('🔍 First material full object:', materialsData[0]);
+        console.log('🔍 First material.material_contents:', materialsData[0].material_contents);
+      }
+      
       if (!materialsData || materialsData.length === 0) {
         setMaterials([]);
         setLoading(false);
