@@ -33,7 +33,8 @@ type MaterialWithHierarchy = {
   category: string;
   position: number;
   is_published: boolean;
-  content_data: any;
+  content_data: any;  // Deprecated - kept for backward compatibility
+  material_contents?: { content_url: string | null }[];  // NEW v4.1 schema
   created_at: string;
   lesson_id: string;
   lesson_name: string;
@@ -152,7 +153,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     try {
       const { data: materialsData, error: materialsError } = await supabase
         .from('materials')
-        .select('id, title, category, position, is_published, content_data, created_at, lesson_id')
+        .select('id, title, category, position, is_published, content_data, created_at, lesson_id, material_contents(content_url)')
         .eq('category', category)
         .order('created_at', { ascending: false });
 
@@ -603,6 +604,14 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   };
 
   const getContentUrl = (material: MaterialWithHierarchy) => {
+    // ✅ NEW v4.1: Get URL from material_contents table
+    const contentUrl = material.material_contents?.[0]?.content_url;
+    
+    if (contentUrl) {
+      return contentUrl;  // ✅ URL from new schema
+    }
+    
+    // 🔄 FALLBACK: Try old content_data for backward compatibility
     if (material.category === 'live_zoom') {
       return material.content_data?.url || material.content_data?.zoom_link || '#';
     }
