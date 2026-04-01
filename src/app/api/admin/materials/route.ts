@@ -367,6 +367,54 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================
+// GET - FETCH MATERIALS
+// ============================================================
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get('category');
+
+    let query = supabase
+      .from('materials')
+      .select('*, material_contents(content_url)')
+      .order('created_at', { ascending: false });
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    const { data: materials, error } = await query;
+
+    if (error) {
+      return NextResponse.json({ error: 'Failed to fetch materials' }, { status: 500 });
+    }
+
+    return NextResponse.json({ materials: materials || [] });
+
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// ============================================================
 // PATCH - UPDATE EXISTING MATERIAL (CHAPTER-AWARE)
 // ============================================================
 export async function PATCH(request: NextRequest) {
