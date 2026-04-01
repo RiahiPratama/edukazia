@@ -5,6 +5,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 const PROTECTED_PREFIXES = ['/admin', '/tutor', '/siswa', '/ortu']
 const AUTH_ONLY_ROUTES   = ['/login']
 
+// ✅ OPTIMIZATION: Cookie-based role cache (1 hour TTL)
+const ROLE_CACHE_KEY = 'edukazia_role_cache'
+const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+interface RoleCacheData {
+  role: string
+  isParentOrSelf: boolean
+  timestamp: number
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -54,46 +64,73 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(u)
   }
 
-  // ── Helper: get role + cek apakah punya parent_profile_id ──
+  // ✅ OPTIMIZATION: Helper get role with cookie cache + Promise.all
   async function getPortalInfo() {
     if (!user) return null
 
+    // Try cache first
+    const cached = request.cookies.get(ROLE_CACHE_KEY)?.value
+    if (cached) {
+      try {
+        const parsed: RoleCacheData = JSON.parse(cached)
+        const age = Date.now() - parsed.timestamp
+        if (age < CACHE_TTL_MS) {
+          // Cache hit! Return immediately (no DB query)
+          return { role: parsed.role, isParentOrSelf: parsed.isParentOrSelf }
+        }
+      } catch {
+        // Invalid cache, continue to fetch
+      }
+    }
+
+    // Cache miss - fetch from DB
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { data: profile } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', user.id).single()
+    // ✅ OPTIMIZATION: Combine 2 queries into Promise.all (parallel execution)
+    const [profileResult, studentResult] = await Promise.all([
+      supabaseAdmin.from('profiles').select('role').eq('id', user.id).single(),
+      supabaseAdmin.from('students').select('id').eq('parent_profile_id', user.id).limit(1)
+    ])
 
-    const role = profile?.role ?? 'student'
+    const role = profileResult.data?.role ?? 'student'
+    const isParentOrSelf = (studentResult.data ?? []).length > 0
 
-    // Cek apakah user ini punya parent_profile_id di tabel students
-    // (berlaku untuk student "Diri Sendiri" dan parent)
-    const { data: asParent } = await supabaseAdmin
-      .from('students').select('id')
-      .eq('parent_profile_id', user.id)
-      .limit(1)
-
-    const isParentOrSelf = (asParent ?? []).length > 0
+    // Store in cache
+    const cacheData: RoleCacheData = {
+      role,
+      isParentOrSelf,
+      timestamp: Date.now()
+    }
+    
+    supabaseResponse.cookies.set(ROLE_CACHE_KEY, JSON.stringify(cacheData), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: CACHE_TTL_MS / 1000 // seconds
+    })
 
     return { role, isParentOrSelf }
   }
 
+  // ✅ OPTIMIZATION: Call getPortalInfo only ONCE, reuse result
+  let portalInfo: Awaited<ReturnType<typeof getPortalInfo>> | null = null
+
   // ── Sudah login + buka /login → redirect ke portal ──
   if (user && AUTH_ONLY_ROUTES.includes(pathname)) {
-    const info = await getPortalInfo()
-    if (!info) return supabaseResponse
+    portalInfo = await getPortalInfo()
+    if (!portalInfo) return supabaseResponse
 
     const u = request.nextUrl.clone()
 
-    if (info.role === 'admin') {
+    if (portalInfo.role === 'admin') {
       u.pathname = '/admin/dashboard'
-    } else if (info.role === 'tutor') {
+    } else if (portalInfo.role === 'tutor') {
       u.pathname = '/tutor/dashboard'
-    } else if (info.role === 'parent' || info.isParentOrSelf) {
-      // parent role ATAU student yang punya parent_profile_id → /ortu
+    } else if (portalInfo.role === 'parent' || portalInfo.isParentOrSelf) {
       u.pathname = '/ortu/dashboard'
     } else {
       u.pathname = '/siswa/dashboard'
@@ -104,10 +141,13 @@ export async function middleware(request: NextRequest) {
 
   // ── Cek akses role ke route yang dituju ──
   if (user && isProtected) {
-    const info = await getPortalInfo()
-    if (!info) return supabaseResponse
+    // Reuse portalInfo if already fetched, otherwise fetch now
+    if (!portalInfo) {
+      portalInfo = await getPortalInfo()
+    }
+    if (!portalInfo) return supabaseResponse
 
-    const { role, isParentOrSelf } = info
+    const { role, isParentOrSelf } = portalInfo
 
     // Parent tidak boleh akses /siswa/*
     if (role === 'parent' && pathname.startsWith('/siswa')) {
