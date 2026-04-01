@@ -23,17 +23,17 @@ type KosakataFormProps = {
 export default function KosakataForm({ onSave, onCancel, editData }: KosakataFormProps) {
   const [courses, setCourses] = useState<any[]>([]);
   const [levels, setLevels] = useState<any[]>([]);
-  const [juduls, setJuduls] = useState<any[]>([]);
+  const [chapters, setChapters] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
-  const [selectedJudul, setSelectedJudul] = useState('');
+  const [selectedChapter, setSelectedChapter] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
 
-  const [newJudulName, setNewJudulName] = useState('');
+  const [newChapterTitle, setNewChapterTitle] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
   const [newLessonName, setNewLessonName] = useState('');
 
@@ -114,17 +114,13 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
     setLevels(data || []);
   };
 
-  const fetchJuduls = async (levelId: string) => {
-    const { data } = await supabase.from('juduls').select('*').eq('level_id', levelId);
-    const uniqueJuduls = data?.reduce((acc: any[], curr) => {
-      if (!acc.find(j => j.name === curr.name)) acc.push(curr);
-      return acc;
-    }, []) || [];
-    setJuduls(uniqueJuduls);
+  const fetchChapters = async (levelId: string) => {
+    const { data } = await supabase.from('chapters').select('*').eq('level_id', levelId).order('order_number');
+    setChapters(data || []);
   };
 
-  const fetchUnits = async (judulId: string) => {
-    const { data } = await supabase.from('units').select('*').eq('judul_id', judulId);
+  const fetchUnits = async (chapterId: string) => {
+    const { data } = await supabase.from('units').select('*').eq('chapter_id', chapterId).order('position');
     setUnits(data || []);
   };
 
@@ -166,8 +162,8 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
         formData.append('category', 'kosakata');
         formData.append('course_id', selectedCourse);
         formData.append('level_id', selectedLevel);
-        formData.append('judul_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-        formData.append('judul_name', newJudulName);
+        formData.append('chapter_id', selectedChapter === 'NEW' ? 'NEW' : selectedChapter);
+        formData.append('chapter_name', newChapterTitle);
         formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
         formData.append('unit_name', newUnitName);
         formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
@@ -207,25 +203,25 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Level *</label>
-            <select value={selectedLevel} onChange={(e) => { setSelectedLevel(e.target.value); fetchJuduls(e.target.value); }} required disabled={!selectedCourse} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+            <select value={selectedLevel} onChange={(e) => { setSelectedLevel(e.target.value); fetchChapters(e.target.value); }} required disabled={!selectedCourse} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
               <option value="">Pilih Level</option>
               {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Judul *</label>
-            <select value={selectedJudul} onChange={(e) => { setSelectedJudul(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required disabled={!selectedLevel} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
-              <option value="">Pilih Judul</option>
-              <option value="NEW">+ Buat Judul Baru</option>
-              {juduls.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Chapter *</label>
+            <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required disabled={!selectedLevel} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+              <option value="">Pilih Chapter</option>
+              <option value="NEW">+ Buat Chapter Baru</option>
+              {chapters.map((c) => <option key={c.id} value={c.id}>{c.chapter_title}</option>)}
             </select>
-            {selectedJudul === 'NEW' && <input type="text" value={newJudulName} onChange={(e) => setNewJudulName(e.target.value)} placeholder="Nama Judul Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
+            {selectedChapter === 'NEW' && <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru (contoh: Pronunciation)" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Unit *</label>
-            <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required disabled={!selectedJudul} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+            <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required disabled={!selectedChapter} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
               <option value="">Pilih Unit</option>
               <option value="NEW">+ Buat Unit Baru</option>
               {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
