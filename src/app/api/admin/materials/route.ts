@@ -227,6 +227,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // ✅ FETCH LESSON NAME TO USE AS MATERIAL TITLE
+    const { data: lessonData } = await supabase
+      .from('lessons')
+      .select('lesson_name')
+      .eq('id', actualLessonId)
+      .single();
+    
+    const materialTitle = lessonData?.lesson_name || title || 'Untitled Material';
+    console.log('📝 Material title from lesson:', materialTitle);
+
     // ============================================================
     // STEP 2: HANDLE FILE UPLOAD
     // ============================================================
@@ -273,7 +283,7 @@ export async function POST(request: NextRequest) {
     const { data: newMaterial, error: materialError } = await supabase
       .from('materials')
       .insert({
-        title,
+        title: materialTitle,  // ✅ Use lesson name as title
         category,
         lesson_id: actualLessonId,
         position,
@@ -504,10 +514,21 @@ export async function PATCH(request: NextRequest) {
       console.log('✅ Lesson updated');
     }
 
+    // ✅ FETCH LESSON NAME TO USE AS MATERIAL TITLE
+    const { data: lessonData } = await supabase
+      .from('lessons')
+      .select('lesson_name')
+      .eq('id', lessonId || existingMaterial.lesson_id)
+      .single();
+    
+    const materialTitle = lessonData?.lesson_name || existingMaterial.title || 'Untitled Material';
+    console.log('📝 Material title from lesson:', materialTitle);
+
     // ============================================================
     // UPDATE MATERIAL
     // ============================================================
     const materialUpdateData: any = {
+      title: materialTitle,  // ✅ Use lesson name as title
       position,
       is_published: isPublished,
       updated_at: new Date().toISOString(),
