@@ -70,13 +70,69 @@ async function fetchChildSummary(supabase: any, studentId: string, nowWIT: Date)
   const todayStart = new Date(nowWIT); todayStart.setHours(0, 0, 0, 0)
   const todayEnd   = new Date(nowWIT); todayEnd.setHours(23, 59, 59, 999)
 
-  const { data: todaySessions } = await supabase
+  // ✅ OPTIMIZED: Replace UNRELIABLE nested join with FLAT queries
+  // OLD: One query with nested joins (profiles!class_groups_tutor_id_fkey)
+  // NEW: Separate queries + manual join (RELIABLE)
+  const { data: todaySessionsRaw } = await supabase
     .from('sessions')
-    .select(`id, scheduled_at, status, zoom_link, class_groups(id, label, zoom_link, courses(id, name, color), profiles!class_groups_tutor_id_fkey(full_name))`)
+    .select('id, scheduled_at, status, zoom_link, class_group_id')
     .in('class_group_id', classGroupIds)
     .gte('scheduled_at', toUTC(todayStart))
     .lte('scheduled_at', toUTC(todayEnd))
     .order('scheduled_at')
+
+  // Get unique class_group_ids from today's sessions
+  const sessionCgIds = [...new Set((todaySessionsRaw ?? []).map(s => s.class_group_id).filter(Boolean))]
+  
+  // Fetch related data separately
+  const { data: sessionCgs } = sessionCgIds.length > 0
+    ? await supabase
+        .from('class_groups')
+        .select('id, label, zoom_link, course_id, tutor_id')
+        .in('id', sessionCgIds)
+    : { data: [] }
+
+  const sessionCourseIds = [...new Set((sessionCgs ?? []).map(cg => cg.course_id).filter(Boolean))]
+  const sessionTutorIds = [...new Set((sessionCgs ?? []).map(cg => cg.tutor_id).filter(Boolean))]
+
+  const [sessionCourses, sessionTutorProfiles] = await Promise.all([
+    sessionCourseIds.length > 0
+      ? supabase.from('courses').select('id, name, color').in('id', sessionCourseIds)
+      : Promise.resolve({ data: [] }),
+    sessionTutorIds.length > 0
+      ? supabase.from('tutors').select('id, profiles!tutors_profile_id_fkey(full_name)').in('id', sessionTutorIds)
+      : Promise.resolve({ data: [] })
+  ])
+
+  // Build maps
+  const sessionCourseMap: Record<string, any> = {}
+  ;(sessionCourses.data ?? []).forEach((c: any) => {
+    sessionCourseMap[c.id] = c
+  })
+
+  const sessionTutorMap: Record<string, any> = {}
+  ;(sessionTutorProfiles.data ?? []).forEach((t: any) => {
+    const fullName = Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name
+    sessionTutorMap[t.id] = { id: t.id, full_name: fullName }
+  })
+
+  // Build session CG map
+  const sessionCgMap: Record<string, any> = {}
+  ;(sessionCgs ?? []).forEach((cg: any) => {
+    sessionCgMap[cg.id] = {
+      id: cg.id,
+      label: cg.label,
+      zoom_link: cg.zoom_link,
+      courses: sessionCourseMap[cg.course_id] || null,
+      profiles: sessionTutorMap[cg.tutor_id] || null
+    }
+  })
+
+  // Attach class_groups to sessions
+  const todaySessions = (todaySessionsRaw ?? []).map((s: any) => ({
+    ...s,
+    class_groups: sessionCgMap[s.class_group_id] || null
+  }))
 
   // Kehadiran bulan ini
   const startOfMonth = new Date(nowWIT.getFullYear(), nowWIT.getMonth(), 1)
@@ -107,16 +163,27 @@ async function fetchChildSummary(supabase: any, studentId: string, nowWIT: Date)
 
   const lapCourseIds = (lapCg ?? []).map((cg: any) => cg.course_id).filter(Boolean)
   const lapTutorIds  = (lapCg ?? []).map((cg: any) => cg.tutor_id).filter(Boolean)
-  const { data: lapCourses } = lapCourseIds.length > 0
-    ? await supabase.from('courses').select('id, name, color').in('id', lapCourseIds) : { data: [] }
-  const { data: lapTutors } = lapTutorIds.length > 0
-    ? await supabase.from('profiles').select('id, full_name').in('id', lapTutorIds) : { data: [] }
+  
+  const [lapCourses, lapTutorProfiles] = await Promise.all([
+    lapCourseIds.length > 0
+      ? supabase.from('courses').select('id, name, color').in('id', lapCourseIds)
+      : Promise.resolve({ data: [] }),
+    lapTutorIds.length > 0
+      ? supabase.from('tutors').select('id, profiles!tutors_profile_id_fkey(full_name)').in('id', lapTutorIds)
+      : Promise.resolve({ data: [] })
+  ])
+
+  const lapTutorMap: Record<string, any> = {}
+  ;(lapTutorProfiles.data ?? []).forEach((t: any) => {
+    const fullName = Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name
+    lapTutorMap[t.id] = { id: t.id, full_name: fullName }
+  })
 
   const lapCgMap: Record<string, any> = {}
   ;(lapCg ?? []).forEach((cg: any) => {
     lapCgMap[cg.id] = {
-      courses:  (lapCourses ?? []).find((c: any) => c.id === cg.course_id) ?? null,
-      profiles: (lapTutors  ?? []).find((p: any) => p.id === cg.tutor_id) ?? null,
+      courses:  (lapCourses.data ?? []).find((c: any) => c.id === cg.course_id) ?? null,
+      profiles: lapTutorMap[cg.tutor_id] ?? null,
     }
   })
   const lapSessionMap: Record<string, any> = {}
@@ -125,7 +192,7 @@ async function fetchChildSummary(supabase: any, studentId: string, nowWIT: Date)
   })
   const laporanList = (laporanRaw ?? []).map((l: any) => ({ ...l, sessions: lapSessionMap[l.session_id] ?? null }))
 
-  return { enrollments, activeEnrollments, isExpired, classGroupIds, cgMap, activeEnrollmentsWithCG, todaySessions: todaySessions ?? [], laporanList, hadirPct, totalAtt, hadirCount }
+  return { enrollments, activeEnrollments, isExpired, classGroupIds, cgMap, activeEnrollmentsWithCG, todaySessions, laporanList, hadirPct, totalAtt, hadirCount }
 }
 
 function getInitials(name: string) {
