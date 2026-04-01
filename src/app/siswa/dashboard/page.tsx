@@ -82,7 +82,7 @@ async function fetchChildSummary(supabase: any, studentId: string, nowWIT: Date)
     .order('scheduled_at')
 
   // Get unique class_group_ids from today's sessions
-  const sessionCgIds = [...new Set((todaySessionsRaw ?? []).map(s => s.class_group_id).filter(Boolean))]
+  const sessionCgIds = [...new Set((todaySessionsRaw ?? []).map((s: any) => s.class_group_id).filter(Boolean))]
   
   // Fetch related data separately
   const { data: sessionCgs } = sessionCgIds.length > 0
@@ -92,8 +92,8 @@ async function fetchChildSummary(supabase: any, studentId: string, nowWIT: Date)
         .in('id', sessionCgIds)
     : { data: [] }
 
-  const sessionCourseIds = [...new Set((sessionCgs ?? []).map(cg => cg.course_id).filter(Boolean))]
-  const sessionTutorIds = [...new Set((sessionCgs ?? []).map(cg => cg.tutor_id).filter(Boolean))]
+  const sessionCourseIds = [...new Set((sessionCgs ?? []).map((cg: any) => cg.course_id).filter(Boolean))]
+  const sessionTutorIds = [...new Set((sessionCgs ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
 
   const [sessionCourses, sessionTutorProfiles] = await Promise.all([
     sessionCourseIds.length > 0
