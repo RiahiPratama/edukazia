@@ -858,9 +858,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                       {lessonGroup.materials.map((material) => {
                                         const isEditingMaterial = editingMaterialId === material.id;
                                         const materialUrl = getContentUrl(material);
-                                        
-                                        // DEBUG: Log URL to console
-                                        console.log('Material:', material.title, 'URL:', materialUrl, 'content_data:', material.content_data);
 
                                         return isEditingMaterial ? (
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
@@ -909,7 +906,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                               )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && materialUrl && materialUrl !== '#' && (
                                                 <a
                                                   href={materialUrl}
                                                   target="_blank"
@@ -919,6 +916,11 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                 >
                                                   <ExternalLink className="w-4 h-4" />
                                                 </a>
+                                              )}
+                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (!materialUrl || materialUrl === '#') && (
+                                                <div className="p-2 text-orange-600" title="⚠️ URL kosong! Klik Edit untuk menambahkan link">
+                                                  <AlertCircle className="w-4 h-4" />
+                                                </div>
                                               )}
                                               {(material.category === 'live_zoom' || material.category === 'kosakata') && (
                                                 <button
