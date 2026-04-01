@@ -70,46 +70,93 @@ export async function POST(request: NextRequest) {
 
     // 1. Create or get Chapter
     let actualChapterId = chapterId;
-    if (chapterId === 'NEW' && chapterName) {
-      console.log('🆕 Creating new Chapter:', chapterName);
+    
+    if (chapterId === 'NEW') {
+      if (chapterName && chapterName.trim()) {
+        // Create NEW chapter with provided name
+        console.log('🆕 Creating new Chapter:', chapterName);
 
-      // Get max chapter_number and order_number for this level
-      const { data: existingChapters } = await supabase
-        .from('chapters')
-        .select('chapter_number, order_number')
-        .eq('level_id', levelId)
-        .order('chapter_number', { ascending: false })
-        .limit(1);
+        // Get max chapter_number and order_number for this level
+        const { data: existingChapters } = await supabase
+          .from('chapters')
+          .select('chapter_number, order_number')
+          .eq('level_id', levelId)
+          .order('chapter_number', { ascending: false })
+          .limit(1);
 
-      const nextChapterNumber = existingChapters && existingChapters.length > 0 
-        ? (existingChapters[0].chapter_number || 0) + 1 
-        : 1;
+        const nextChapterNumber = existingChapters && existingChapters.length > 0 
+          ? (existingChapters[0].chapter_number || 0) + 1 
+          : 1;
 
-      const nextOrderNumber = existingChapters && existingChapters.length > 0 
-        ? (existingChapters[0].order_number || 0) + 1 
-        : 1;
+        const nextOrderNumber = existingChapters && existingChapters.length > 0 
+          ? (existingChapters[0].order_number || 0) + 1 
+          : 1;
 
-      const { data: newChapter, error: chapterError } = await supabase
-        .from('chapters')
-        .insert({
-          level_id: levelId,
-          chapter_title: chapterName,
-          chapter_number: nextChapterNumber,
-          order_number: nextOrderNumber,
-        })
-        .select()
-        .single();
+        const { data: newChapter, error: chapterError } = await supabase
+          .from('chapters')
+          .insert({
+            level_id: levelId,
+            chapter_title: chapterName,
+            chapter_number: nextChapterNumber,
+            order_number: nextOrderNumber,
+          })
+          .select()
+          .single();
 
-      if (chapterError) {
-        console.error('Chapter creation error:', chapterError);
-        return NextResponse.json({
-          error: 'Failed to create chapter',
-          details: chapterError.message
-        }, { status: 500 });
+        if (chapterError) {
+          console.error('Chapter creation error:', chapterError);
+          return NextResponse.json({
+            error: 'Failed to create chapter',
+            details: chapterError.message
+          }, { status: 500 });
+        }
+
+        actualChapterId = newChapter.id;
+        console.log('✅ Chapter created:', actualChapterId, 'number:', nextChapterNumber);
+      } else {
+        // NO chapter name provided → use existing chapter for this level
+        console.log('⚠️ No chapter name provided, using existing chapter for level:', levelId);
+        
+        const { data: existingChapter } = await supabase
+          .from('chapters')
+          .select('id')
+          .eq('level_id', levelId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (existingChapter) {
+          actualChapterId = existingChapter.id;
+          console.log('✅ Using existing chapter:', actualChapterId);
+        } else {
+          // No existing chapter → create default chapter
+          console.log('🆕 No existing chapter, creating default chapter');
+          
+          const { data: defaultChapter, error: defaultChapterError } = await supabase
+            .from('chapters')
+            .insert({
+              level_id: levelId,
+              chapter_title: 'Default Chapter',
+              chapter_number: 1,
+              order_number: 1,
+            })
+            .select()
+            .single();
+
+          if (defaultChapterError) {
+            console.error('Default chapter creation error:', defaultChapterError);
+            actualChapterId = null;
+          } else {
+            actualChapterId = defaultChapter.id;
+            console.log('✅ Default chapter created:', actualChapterId);
+          }
+        }
       }
-
-      actualChapterId = newChapter.id;
-      console.log('✅ Chapter created:', actualChapterId, 'number:', nextChapterNumber);
+    }
+    
+    // Final validation: ensure actualChapterId is valid UUID or null
+    if (actualChapterId === 'NEW' || !actualChapterId) {
+      actualChapterId = null;
     }
 
     // 2. Create or get Unit
