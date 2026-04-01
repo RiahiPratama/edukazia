@@ -43,26 +43,20 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
 
   const { slug } = await params
 
-  // Lookup studentId dari slug + verifikasi milik ortu ini
-  const { data: slugRow } = await supabase
+  // ✅ OPTIMIZED: Combine duplicate queries into ONE
+  // OLD: Two separate queries (lines 47-62)
+  // NEW: Single query with all needed data
+  const { data: student } = await supabase
     .from('students')
-    .select('id')
+    .select(`id, grade, school, relation_role, slug,
+      profiles!students_profile_id_fkey(full_name)`)
     .eq('slug', slug)
     .eq('parent_profile_id', session.user.id)
     .single()
 
-  const studentId = slugRow?.id ?? null
-  if (!studentId) redirect('/ortu/dashboard')
-
-  const { data: student } = await supabase
-    .from('students')
-    .select(`id, grade, school, relation_role,
-      profiles!students_profile_id_fkey(full_name)`)
-    .eq('id', studentId)
-    .single()
-
   if (!student) redirect('/ortu/dashboard')
-
+  
+  const studentId = student.id
   const studentName = (Array.isArray(student.profiles) ? student.profiles[0] : student.profiles)?.full_name ?? '(Tanpa nama)'
 
   // Enrollments
@@ -78,21 +72,22 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     ? await supabase.from('class_groups').select('id, label, tutor_id, zoom_link').in('id', cgIds)
     : { data: [] }
 
+  // ✅ OPTIMIZED: Reduce tutor resolution from 3 queries to 2
+  // OLD: classGroups → tutors → profiles (3 queries)
+  // NEW: classGroups → tutors+profiles (2 queries)
   const tutorIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
-  const { data: tutorRows } = tutorIds.length > 0
-    ? await supabase.from('tutors').select('id, profile_id').in('id', tutorIds)
+  const { data: tutorProfiles } = tutorIds.length > 0
+    ? await supabase
+        .from('tutors')
+        .select('id, profiles!tutors_profile_id_fkey(full_name)')
+        .in('id', tutorIds)
     : { data: [] }
 
-  const tutorProfileIds = [...new Set((tutorRows ?? []).map((t: any) => t.profile_id).filter(Boolean))]
-  const { data: tutors } = tutorProfileIds.length > 0
-    ? await supabase.from('profiles').select('id, full_name').in('id', tutorProfileIds)
-    : { data: [] }
-
-  // Map tutorId (tutors.id) → full_name
+  // Build tutor name map
   const tutorNameMap: Record<string, string> = {}
-  ;(tutorRows ?? []).forEach((t: any) => {
-    const prof = (tutors ?? []).find((p: any) => p.id === t.profile_id)
-    if (prof) tutorNameMap[t.id] = prof.full_name
+  ;(tutorProfiles ?? []).forEach((t: any) => {
+    const name = Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name
+    if (name) tutorNameMap[t.id] = name
   })
 
   // Waktu WIT
@@ -276,8 +271,8 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         nextSession={nextSession}
         studentId={studentId}
         classGroups={classGroups ?? []}
-        tutors={tutors ?? []}
-        tutorRows={tutorRows ?? []}
+        tutors={tutorProfiles ?? []}
+        tutorRows={tutorProfiles ?? []}
       />
 
       {/* Kelas aktif */}
