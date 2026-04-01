@@ -27,14 +27,18 @@ const getIconComponent = (iconName: string | null) => {
   return icon ? icon.Component : Library;
 };
 
+// ✅ FIX 1: Type diperbarui — tambah storage fields, hapus content_data legacy
 type MaterialWithHierarchy = {
   id: string;
   title: string;
   category: string;
   position: number;
   is_published: boolean;
-  content_data: any;  // Deprecated - kept for backward compatibility
-  material_contents?: { content_url: string | null }[];  // NEW v4.1 schema
+  material_contents?: {
+    content_url: string | null;
+    storage_bucket: string | null;
+    storage_path: string | null;
+  }[];
   created_at: string;
   lesson_id: string;
   lesson_name: string;
@@ -151,21 +155,22 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     setError(null);
 
     try {
+      // ✅ FIX 2: Query diperbarui — hapus content_data, tambah storage_bucket & storage_path
       const { data: materialsData, error: materialsError } = await supabase
         .from('materials')
-        .select('id, title, category, position, is_published, content_data, created_at, lesson_id, material_contents(content_url)')
+        .select(`
+          id, title, category, position, is_published, created_at, lesson_id,
+          material_contents (
+            content_url,
+            storage_bucket,
+            storage_path
+          )
+        `)
         .eq('category', category)
         .order('created_at', { ascending: false });
 
       if (materialsError) throw materialsError;
-      
-      // 🔍 DEBUG: Check what data we're getting
-      console.log('🔍 Materials query result:', materialsData);
-      if (materialsData && materialsData.length > 0) {
-        console.log('🔍 First material full object:', materialsData[0]);
-        console.log('🔍 First material.material_contents:', materialsData[0].material_contents);
-      }
-      
+
       if (!materialsData || materialsData.length === 0) {
         setMaterials([]);
         setLoading(false);
@@ -208,6 +213,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       const chaptersMap = new Map(chaptersData?.map(ch => [ch.id, ch]) || []);
       const levelsMap = new Map(levelsData?.map(lv => [lv.id, lv]) || []);
 
+      // ✅ FIX 3: Mapping diperbarui — tambah material_contents, hapus content_data
       const materialsWithHierarchy: MaterialWithHierarchy[] = materialsData.map(material => {
         const lesson = lessonsMap.get(material.lesson_id);
         const unit = lesson ? unitsMap.get(lesson.unit_id) : null;
@@ -220,7 +226,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           category: material.category,
           position: material.position,
           is_published: material.is_published,
-          content_data: material.content_data,
+          material_contents: material.material_contents, // ✅ ini yang selama ini hilang
           created_at: material.created_at,
           lesson_id: material.lesson_id,
           lesson_name: lesson?.lesson_name || 'Unknown Lesson',
@@ -509,7 +515,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   // MATERIAL EDIT FUNCTIONS
   const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string, category: string) => {
     setEditingMaterialId(materialId);
-    // Auto-detect platform from URL, fallback to current title
     const detectedTitle = detectPlatformFromUrl(currentUrl, category);
     setEditingMaterialTitle(detectedTitle);
     setEditingMaterialUrl(currentUrl);
@@ -527,7 +532,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       return;
     }
 
-    // Auto-detect title from URL
     const autoTitle = detectPlatformFromUrl(editingMaterialUrl, category);
 
     setSavingMaterial(true);
@@ -559,46 +563,42 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     
     const urlLower = url.toLowerCase();
     
-    // Live meeting platforms
-    if (urlLower.includes('zoom.us') || urlLower.includes('zoom.com')) {
-      return 'Live Zoom';
-    }
-    if (urlLower.includes('meet.google.com') || urlLower.includes('meet.app.goo.gl')) {
-      return 'Live GMeet';
-    }
-    if (urlLower.includes('teams.microsoft.com') || urlLower.includes('teams.live.com')) {
-      return 'Live MS Teams';
-    }
-    if (urlLower.includes('webex.com')) {
-      return 'Live Webex';
-    }
+    if (urlLower.includes('zoom.us') || urlLower.includes('zoom.com')) return 'Live Zoom';
+    if (urlLower.includes('meet.google.com') || urlLower.includes('meet.app.goo.gl')) return 'Live GMeet';
+    if (urlLower.includes('teams.microsoft.com') || urlLower.includes('teams.live.com')) return 'Live MS Teams';
+    if (urlLower.includes('webex.com')) return 'Live Webex';
+    if (urlLower.includes('canva.com')) return 'Kosakata Canva';
+    if (urlLower.includes('docs.google.com') || urlLower.includes('drive.google.com')) return 'Kosakata GDocs';
+    if (urlLower.includes('figma.com')) return 'Kosakata Figma';
     
-    // Kosakata/content platforms
-    if (urlLower.includes('canva.com')) {
-      return 'Kosakata Canva';
-    }
-    if (urlLower.includes('docs.google.com') || urlLower.includes('drive.google.com')) {
-      return 'Kosakata GDocs';
-    }
-    if (urlLower.includes('figma.com')) {
-      return 'Kosakata Figma';
-    }
-    
-    // Default fallback
     return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
+  };
+
+  // ✅ FIX 5a: Untuk live_zoom & kosakata — ambil URL eksternal dari content_url
+  const getExternalUrl = (material: MaterialWithHierarchy): string => {
+    const contentUrl = material.material_contents?.[0]?.content_url;
+    if (contentUrl && contentUrl.startsWith('http')) return contentUrl;
+    return '#';
+  };
+
+  // ✅ FIX 5b: Untuk bacaan & cefr — generate public URL dari Supabase Storage
+  const getStorageUrl = (material: MaterialWithHierarchy): string => {
+    const mc = material.material_contents?.[0];
+    if (!mc?.storage_bucket || !mc?.storage_path) return '#';
+
+    const { data } = supabase.storage
+      .from(mc.storage_bucket)
+      .getPublicUrl(mc.storage_path);
+
+    return data.publicUrl;
   };
 
   // Get display name for material
   const getMaterialDisplayName = (material: MaterialWithHierarchy): string => {
-    const materialUrl = getContentUrl(material);
-    
-    // For Bacaan & CEFR: show material title (file name)
     if (material.category === 'bacaan' || material.category === 'cefr') {
       return material.title || 'Bacaan';
     }
-    
-    // For Live Zoom & Kosakata: auto-detect platform
-    return detectPlatformFromUrl(materialUrl, material.category);
+    return detectPlatformFromUrl(getExternalUrl(material), material.category);
   };
 
   const getCategoryIcon = (cat: string) => {
@@ -609,24 +609,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       case 'cefr': return <Headphones className="w-5 h-5" />;
       default: return <FileText className="w-5 h-5" />;
     }
-  };
-
-  const getContentUrl = (material: MaterialWithHierarchy) => {
-    // ✅ NEW v4.1: Get URL from material_contents table
-    const contentUrl = material.material_contents?.[0]?.content_url;
-    
-    if (contentUrl) {
-      return contentUrl;  // ✅ URL from new schema
-    }
-    
-    // 🔄 FALLBACK: Try old content_data for backward compatibility
-    if (material.category === 'live_zoom') {
-      return material.content_data?.url || material.content_data?.zoom_link || '#';
-    }
-    if (material.category === 'kosakata') {
-      return material.content_data?.url || material.content_data?.canva_link || '#';
-    }
-    return '#';
   };
 
   if (loading) {
@@ -866,7 +848,10 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                     <div className="pl-8">
                                       {lessonGroup.materials.map((material) => {
                                         const isEditingMaterial = editingMaterialId === material.id;
-                                        const materialUrl = getContentUrl(material);
+
+                                        // ✅ FIX 6: Pisah URL berdasarkan kategori
+                                        const isUrlBased = material.category === 'live_zoom' || material.category === 'kosakata';
+                                        const materialUrl = isUrlBased ? getExternalUrl(material) : getStorageUrl(material);
 
                                         return isEditingMaterial ? (
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
@@ -881,7 +866,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                 value={editingMaterialUrl}
                                                 onChange={(e) => {
                                                   setEditingMaterialUrl(e.target.value);
-                                                  // Auto-update title when URL changes
                                                   setEditingMaterialTitle(detectPlatformFromUrl(e.target.value, material.category));
                                                 }}
                                                 placeholder="https://zoom.us/... atau https://meet.google.com/..."
@@ -910,12 +894,19 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                               <span className="text-sm font-semibold text-gray-700">
                                                 {getMaterialDisplayName(material)}
                                               </span>
+                                              {/* ✅ Tampilkan nama file untuk bacaan & cefr */}
+                                              {(material.category === 'bacaan' || material.category === 'cefr') && (
+                                                <span className="text-xs text-gray-400 font-mono">
+                                                  {material.material_contents?.[0]?.storage_path?.split('/').pop() || '-'}
+                                                </span>
+                                              )}
                                               {material.is_published && (
                                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">Published</span>
                                               )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                              {/* Tombol buka link — hanya untuk live_zoom & kosakata */}
+                                              {isUrlBased && (
                                                 <a
                                                   href={materialUrl}
                                                   target="_blank"
@@ -926,7 +917,8 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                   <ExternalLink className="w-4 h-4" />
                                                 </a>
                                               )}
-                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (
+                                              {/* Tombol edit — hanya untuk live_zoom & kosakata */}
+                                              {isUrlBased && (
                                                 <button
                                                   onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category)}
                                                   className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
