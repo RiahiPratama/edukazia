@@ -44,8 +44,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   const { slug } = await params
 
   // ✅ OPTIMIZED: Combine duplicate queries into ONE
-  // OLD: Two separate queries (lines 47-62)
-  // NEW: Single query with all needed data
   const { data: student } = await supabase
     .from('students')
     .select(`id, grade, school, relation_role, slug,
@@ -73,8 +71,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     : { data: [] }
 
   // ✅ OPTIMIZED: Reduce tutor resolution from 3 queries to 2
-  // OLD: classGroups → tutors → profiles (3 queries)
-  // NEW: classGroups → tutors+profiles (2 queries)
   const tutorIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
   const { data: tutorProfiles } = tutorIds.length > 0
     ? await supabase
@@ -83,7 +79,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         .in('id', tutorIds)
     : { data: [] }
 
-  // Build tutor name map
   const tutorNameMap: Record<string, string> = {}
   ;(tutorProfiles ?? []).forEach((t: any) => {
     const name = Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name
@@ -98,48 +93,40 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   const todayStart = new Date(nowWIT); todayStart.setHours(0, 0, 0, 0)
   const todayEnd   = new Date(nowWIT); todayEnd.setHours(23, 59, 59, 999)
 
-  // Next 30 days untuk cari sesi berikutnya
-  const futureEnd = new Date(nowWIT); futureEnd.setDate(futureEnd.getDate() + 30)
-
-  const { data: sessions } = cgIds.length > 0
+  // ✅ OPTIMIZED: Combine 2 session queries into ONE
+  // OLD: Separate queries for "today+future" and "completed" sessions
+  // NEW: One query that gets both, then filter in JavaScript
+  const { data: allSessions } = cgIds.length > 0
     ? await supabase
         .from('sessions')
         .select('id, class_group_id, scheduled_at, status, zoom_link')
         .in('class_group_id', cgIds)
-        .gte('scheduled_at', toUTC(todayStart))
-        .lte('scheduled_at', toUTC(futureEnd))
-        .order('scheduled_at')
-    : { data: [] }
-
-  // Session hari ini
-  const todaySessions = (sessions ?? []).filter((s: any) => {
-    const sDate = new Date(s.scheduled_at)
-    const sWIT  = new Date(sDate.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
-    return sWIT >= todayStart && sWIT <= todayEnd && s.status === 'scheduled'
-  })
-
-  // Sesi berikutnya (di luar hari ini)
-  const nextSession = (sessions ?? []).find((s: any) => {
-    const sDate = new Date(s.scheduled_at)
-    const sWIT  = new Date(sDate.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
-    return sWIT > todayEnd && s.status === 'scheduled'
-  })
-
-  // Sessions completed untuk progress & laporan
-  const { data: completedSessions } = cgIds.length > 0
-    ? await supabase
-        .from('sessions')
-        .select('id, class_group_id, scheduled_at, status')
-        .in('class_group_id', cgIds)
-        .eq('status', 'completed')
+        .or(`and(scheduled_at.gte.${toUTC(todayStart)},status.eq.scheduled),status.eq.completed`)
         .order('scheduled_at', { ascending: false })
-        .limit(20)
+        .limit(50)
     : { data: [] }
 
-  const allSessionIds = [
-    ...(sessions ?? []).map((s: any) => s.id),
-    ...(completedSessions ?? []).map((s: any) => s.id),
-  ]
+  // Filter in JavaScript for better performance
+  const todaySessions = (allSessions ?? []).filter((s: any) => {
+    if (s.status !== 'scheduled') return false
+    const sDate = new Date(s.scheduled_at)
+    const sWIT  = new Date(sDate.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+    return sWIT >= todayStart && sWIT <= todayEnd
+  })
+
+  const futureEnd = new Date(nowWIT); futureEnd.setDate(futureEnd.getDate() + 30)
+  const nextSession = (allSessions ?? []).find((s: any) => {
+    if (s.status !== 'scheduled') return false
+    const sDate = new Date(s.scheduled_at)
+    const sWIT  = new Date(sDate.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+    return sWIT > todayEnd && sWIT <= new Date(futureEnd)
+  })
+
+  const completedSessions = (allSessions ?? [])
+    .filter((s: any) => s.status === 'completed')
+    .slice(0, 20)
+
+  const allSessionIds = (allSessions ?? []).map((s: any) => s.id)
 
   const { data: attendances } = allSessionIds.length > 0
     ? await supabase
@@ -149,7 +136,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         .in('session_id', allSessionIds)
     : { data: [] }
 
-  const completedIds = (completedSessions ?? []).map((s: any) => s.id)
+  const completedIds = completedSessions.map((s: any) => s.id)
   const { data: reports } = completedIds.length > 0
     ? await supabase
         .from('session_reports')
@@ -170,7 +157,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         .limit(10)
     : { data: [] }
 
-  // Susun review materi — gabungan recording_url dari laporan + materials live_zoom
+  // Susun review materi
   const reviewItems: Array<{
     id: string
     title: string
@@ -180,11 +167,10 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     classLabel: string
   }> = []
 
-  // Dari session_reports.recording_url
   ;(reports ?? [])
     .filter((r: any) => r.recording_url)
     .forEach((r: any) => {
-      const sesi = (completedSessions ?? []).find((s: any) => s.id === r.session_id)
+      const sesi = completedSessions.find((s: any) => s.id === r.session_id)
       const cg   = (classGroups ?? []).find((c: any) => c.id === sesi?.class_group_id)
       reviewItems.push({
         id:         r.session_id,
@@ -196,12 +182,10 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
       })
     })
 
-  // Dari materials live_zoom
   ;(materiLiveZoom ?? [])
     .filter((m: any) => m.url)
     .forEach((m: any) => {
       const cg = (classGroups ?? []).find((c: any) => c.id === m.class_group_id)
-      // Hindari duplikat kalau sudah ada di recording
       const alreadyIn = reviewItems.some(r => r.url === m.url)
       if (!alreadyIn) {
         reviewItems.push({
@@ -215,7 +199,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
       }
     })
 
-  // Sort by date descending
   reviewItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   const hadirCount = (attendances ?? []).filter((a: any) => a.status === 'hadir').length
@@ -265,7 +248,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         </div>
       </div>
 
-      {/* ── JADWAL HARI INI - WITH COUNTDOWN ── */}
       <OrtuAnakJadwalHariIni
         todaySessions={todaySessions}
         nextSession={nextSession}
@@ -286,7 +268,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
           {(enrollments ?? []).map((e: any) => {
             const cg    = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
             const tutorName = cg ? (tutorNameMap[cg.tutor_id] ?? '—') : '—'
-            const cgCompleted = (completedSessions ?? []).filter((s: any) => s.class_group_id === e.class_group_id)
+            const cgCompleted = completedSessions.filter((s: any) => s.class_group_id === e.class_group_id)
             const hadirInCG  = cgCompleted.filter((s: any) =>
               (attendances ?? []).find((a: any) => a.session_id === s.id && a.status === 'hadir')
             ).length
@@ -320,7 +302,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         </div>
       )}
 
-      {/* ── REVIEW MATERI ── */}
+      {/* Review Materi */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
@@ -344,7 +326,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
                 rel="noopener noreferrer"
                 className="bg-white border border-stone-100 rounded-xl overflow-hidden flex items-center gap-3 px-3 py-2.5 hover:border-[#CECBF6] transition-colors group"
                 style={{ borderLeft: '3px solid #5C4FE5' }}>
-                {/* Icon */}
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                   style={{
@@ -362,8 +343,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
                     </svg>
                   )}
                 </div>
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-semibold text-stone-700 truncate group-hover:text-[#5C4FE5] transition-colors">
                     {item.title}
@@ -373,8 +352,6 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
                     {item.date && ` · ${fmtDate(item.date)}`}
                   </p>
                 </div>
-
-                {/* Arrow */}
                 <div className="flex-shrink-0">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                     <path d="M5 3l4 4-4 4" stroke="#9CA3AF" strokeWidth="1.3" strokeLinecap="round"/>
@@ -412,7 +389,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
               Lihat semua →
             </Link>
           </div>
-          {(completedSessions ?? [])
+          {completedSessions
             .filter((s: any) => (reports ?? []).find((r: any) => r.session_id === s.id))
             .slice(0, 3)
             .map((s: any) => {
