@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     // ============================================================
 
     // 1. Create or get Chapter
-    let actualChapterId = chapterId;
+    let actualChapterId: string | null = chapterId;
     
     if (chapterId === 'NEW') {
       if (chapterName && chapterName.trim()) {
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Create or get Unit
-    let actualUnitId = unitId;
+    let actualUnitId: string | null = unitId;
     if (unitId === 'NEW' && unitName) {
       console.log('🆕 Creating new Unit:', unitName);
 
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Create or get Lesson
-    let actualLessonId = lessonId;
+    let actualLessonId: string | null = lessonId;
     if (lessonId === 'NEW' && lessonName) {
       console.log('🆕 Creating new Lesson:', lessonName);
 
