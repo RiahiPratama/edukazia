@@ -370,6 +370,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
       return;
     }
 
+    // Validate chapterId is a real UUID, not a placeholder
+    if (chapterId === 'no-chapter' || chapterId === 'no-unit' || chapterId === 'no-lesson') {
+      alert('❌ Chapter ini tidak memiliki ID yang valid. Silakan buat chapter baru dari form tambah materi.');
+      return;
+    }
+
     setSavingChapter(true);
     try {
       const formData = new FormData();
@@ -680,9 +686,11 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                     <span className="text-xl font-bold text-[#5C4FE5]">{chapterGroup.chapterTitle}</span>
                   </button>
                   <div className="flex items-center gap-3">
-                    <button onClick={() => startEditChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, chapterGroup.chapterIcon)} className="p-2 text-gray-600 hover:bg-white rounded-lg transition-colors" title="Edit chapter">
-                      <Edit className="w-4 h-4" />
-                    </button>
+                    {chapterGroup.chapterId !== 'no-chapter' && chapterGroup.chapterId !== 'no-unit' && (
+                      <button onClick={() => startEditChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, chapterGroup.chapterIcon)} className="p-2 text-gray-600 hover:bg-white rounded-lg transition-colors" title="Edit chapter">
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    )}
                     <span className="text-sm text-gray-600 font-semibold">{Object.keys(chapterGroup.units).length} unit</span>
                   </div>
                 </div>
