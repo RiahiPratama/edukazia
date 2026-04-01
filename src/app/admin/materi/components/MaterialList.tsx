@@ -906,7 +906,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                               )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && materialUrl && materialUrl !== '#' && (
+                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (
                                                 <a
                                                   href={materialUrl}
                                                   target="_blank"
@@ -916,11 +916,6 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                 >
                                                   <ExternalLink className="w-4 h-4" />
                                                 </a>
-                                              )}
-                                              {(material.category === 'live_zoom' || material.category === 'kosakata') && (!materialUrl || materialUrl === '#') && (
-                                                <div className="p-2 text-orange-600" title="⚠️ URL kosong! Klik Edit untuk menambahkan link">
-                                                  <AlertCircle className="w-4 h-4" />
-                                                </div>
                                               )}
                                               {(material.category === 'live_zoom' || material.category === 'kosakata') && (
                                                 <button
