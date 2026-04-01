@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AlertCircle } from 'lucide-react';
 
+// ✅ FIX 1: Type diperbarui — hapus content_data & order_number, tambah material_contents
 type Material = {
   id: string;
   title: string;
-  content_data: any;
-  order_number: number;
+  material_contents?: { content_url: string | null }[];
+  position: number;
   is_published: boolean;
   level_id: string;
   unit_id: string;
@@ -62,11 +63,22 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
     fetchCourses();
   }, []);
 
+  // ✅ FIX 2: Helper detect platform dari URL
+  const detectPlatformFromUrl = (inputUrl: string): string => {
+    if (!inputUrl) return 'canva';
+    const lower = inputUrl.toLowerCase();
+    if (lower.includes('zoom.us') || lower.includes('zoom.com')) return 'zoom';
+    if (lower.includes('meet.google.com')) return 'google_meet';
+    return 'canva';
+  };
+
   useEffect(() => {
     if (editData) {
-      setPlatform(editData.content_data?.platform || 'canva');
-      setUrl(editData.content_data?.url || '');
-      setOrderNumber(editData.order_number || 1);
+      // ✅ FIX 3: Baca URL dari material_contents, bukan content_data
+      const contentUrl = editData.material_contents?.[0]?.content_url || '';
+      setUrl(contentUrl);
+      setPlatform(detectPlatformFromUrl(contentUrl));
+      setOrderNumber(editData.position || 1);
       setIsPublished(editData.is_published || false);
       fetchEditModeData();
     }

@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Check, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
+// ✅ FIX 1: Type diperbarui — hapus content_data & order_number, tambah material_contents
 type Material = {
   id: string;
   title: string;
-  content_data: any;
-  order_number: number;
+  material_contents?: { content_url: string | null }[];
+  position: number;
   is_published: boolean;
   unit_id: string;
   lesson_id: string;
@@ -42,7 +43,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
   const [orderNumber, setOrderNumber] = useState(1);
   const [isPublished, setIsPublished] = useState(false);
 
-  // NEW: Edit mode fields
+  // Edit mode fields
   const [editChapterId, setEditChapterId] = useState('');
   const [editChapterTitle, setEditChapterTitle] = useState('');
   const [editUnitName, setEditUnitName] = useState('');
@@ -57,31 +58,48 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
   const supabase = createClient();
   const isEditing = !!editData;
 
+  // ✅ FIX 3: Helper detect fileType dari URL — tidak perlu content_data lagi
+  const detectFileTypeFromUrl = (inputUrl: string): string => {
+    if (!inputUrl) return 'google_drive';
+    const lower = inputUrl.toLowerCase();
+    if (lower.includes('canva.com')) return 'canva';
+    if (lower.includes('docs.google.com') || lower.includes('drive.google.com')) return 'google_drive';
+    return 'pdf';
+  };
+
   useEffect(() => {
     fetchCourses();
   }, []);
 
+  // ✅ FIX 2: Baca URL dari material_contents, bukan content_data
   useEffect(() => {
     if (editData) {
-      setFileType(editData.content_data?.file_type || 'google_drive');
-      setUrl(editData.content_data?.url || '');
-      setOrderNumber(editData.order_number || 1);
+      const contentUrl = editData.material_contents?.[0]?.content_url || '';
+      setUrl(contentUrl);
+      setFileType(detectFileTypeFromUrl(contentUrl));
+      setOrderNumber(editData.position || 1);
       setIsPublished(editData.is_published || false);
       setEditMaterialTitle(editData.title || '');
       fetchEditModeData();
     }
   }, [editData]);
 
+  // ✅ FIX 4: fetchEditModeData sudah tidak perlu fetch material_contents
+  // karena URL sudah tersedia di editData.material_contents dari parent
   const fetchEditModeData = async () => {
     if (!editData) return;
     setLoadingEditData(true);
     try {
-      const { data: unitData } = await supabase.from('units').select('unit_name, position, chapter_id').eq('id', editData.unit_id).single();
+      const { data: unitData } = await supabase
+        .from('units')
+        .select('unit_name, position, chapter_id')
+        .eq('id', editData.unit_id)
+        .single();
+
       if (unitData) {
         setEditUnitName(unitData.unit_name);
         setEditUnitPosition(unitData.position || 1);
-        
-        // Fetch chapter data if chapter_id exists
+
         if (unitData.chapter_id) {
           setEditChapterId(unitData.chapter_id);
           const { data: chapterData } = await supabase
@@ -92,13 +110,19 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
           if (chapterData) setEditChapterTitle(chapterData.chapter_title);
         }
       }
-      const { data: lessonData } = await supabase.from('lessons').select('lesson_name, position').eq('id', editData.lesson_id).single();
+
+      const { data: lessonData } = await supabase
+        .from('lessons')
+        .select('lesson_name, position')
+        .eq('id', editData.lesson_id)
+        .single();
+
       if (lessonData) {
         setEditLessonName(lessonData.lesson_name);
         setEditLessonPosition(lessonData.position || 1);
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching edit data:', error);
     } finally {
       setLoadingEditData(false);
     }
@@ -143,7 +167,9 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
         formData.append('chapter_title', editChapterTitle);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ file_type: fileType, url }));
+        // content_data di sini adalah nama field FormData (bukan kolom DB)
+        // route.ts membaca ini untuk extract URL → content_url di material_contents
+        formData.append('content_data', JSON.stringify({ url }));
         formData.append('unit_id', editData.unit_id);
         formData.append('lesson_id', editData.lesson_id);
         formData.append('unit_name', editUnitName);
@@ -157,8 +183,14 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
         alert('✅ Material berhasil diupdate!');
         onSave();
       } else {
+        // Validasi
+        if (!selectedLevel) { alert('❌ Level harus dipilih!'); setLoading(false); return; }
+        if (!selectedChapter) { alert('❌ Chapter harus dipilih!'); setLoading(false); return; }
+        if (!selectedUnit) { alert('❌ Unit harus dipilih!'); setLoading(false); return; }
+        if (!selectedLesson) { alert('❌ Lesson harus dipilih!'); setLoading(false); return; }
+        if (!url) { alert('❌ URL tidak boleh kosong!'); setLoading(false); return; }
+
         formData.append('title', newLessonName || selectedLesson);
-        formData.append('type', fileType);
         formData.append('category', 'kosakata');
         formData.append('course_id', selectedCourse);
         formData.append('level_id', selectedLevel);
@@ -170,7 +202,9 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
         formData.append('lesson_name', newLessonName);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ file_type: fileType, url }));
+        // content_data di sini adalah nama field FormData (bukan kolom DB)
+        // route.ts membaca ini untuk extract URL → content_url di material_contents
+        formData.append('content_data', JSON.stringify({ url }));
 
         const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
         const result = await response.json();
@@ -186,7 +220,12 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
   };
 
   if (loadingEditData) {
-    return <div className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div><p className="text-gray-600 mt-4">Memuat data...</p></div>;
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin w-8 h-8 border-4 border-[#5C4FE5] border-t-transparent rounded-full mx-auto"></div>
+        <p className="text-gray-600 mt-4">Memuat data...</p>
+      </div>
+    );
   }
 
   return (
@@ -216,7 +255,9 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
               <option value="NEW">+ Buat Chapter Baru</option>
               {chapters.map((c) => <option key={c.id} value={c.id}>{c.chapter_title}</option>)}
             </select>
-            {selectedChapter === 'NEW' && <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru (contoh: Pronunciation)" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
+            {selectedChapter === 'NEW' && (
+              <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru (contoh: Pronunciation)" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />
+            )}
           </div>
 
           <div>
@@ -226,7 +267,9 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
               <option value="NEW">+ Buat Unit Baru</option>
               {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
             </select>
-            {selectedUnit === 'NEW' && <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
+            {selectedUnit === 'NEW' && (
+              <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />
+            )}
           </div>
 
           <div>
@@ -236,7 +279,9 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
               <option value="NEW">+ Buat Lesson Baru</option>
               {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
             </select>
-            {selectedLesson === 'NEW' && <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />}
+            {selectedLesson === 'NEW' && (
+              <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />
+            )}
           </div>
         </>
       )}
@@ -272,13 +317,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-900 mb-2">Chapter Title *</label>
-                <input
-                  type="text"
-                  value={editChapterTitle}
-                  onChange={(e) => setEditChapterTitle(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-                />
+                <input type="text" value={editChapterTitle} onChange={(e) => setEditChapterTitle(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
               </div>
             </div>
           )}
@@ -318,7 +357,12 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">File Type *</label>
-          <select value={fileType} onChange={(e) => setFileType(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]">
+          <select
+            value={fileType}
+            onChange={(e) => setFileType(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          >
             <option value="google_drive">Google Drive</option>
             <option value="canva">Canva</option>
             <option value="pdf">PDF Link</option>
@@ -327,7 +371,17 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">URL Link *</label>
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]" />
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setFileType(detectFileTypeFromUrl(e.target.value));
+            }}
+            placeholder="https://..."
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+          />
         </div>
 
         <div>
@@ -343,7 +397,9 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
       <div className="flex gap-3 pt-4 border-t-2 border-gray-200">
         <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Batal</button>
-        <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50">{loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}</button>
+        <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-semibold">
+          {loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
+        </button>
       </div>
     </form>
   );
