@@ -43,6 +43,8 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
   const [isPublished, setIsPublished] = useState(false);
 
   // NEW: Edit mode fields
+  const [editChapterId, setEditChapterId] = useState('');
+  const [editChapterTitle, setEditChapterTitle] = useState('');
   const [editUnitName, setEditUnitName] = useState('');
   const [editUnitPosition, setEditUnitPosition] = useState(1);
   const [editLessonName, setEditLessonName] = useState('');
@@ -74,10 +76,21 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
     if (!editData) return;
     setLoadingEditData(true);
     try {
-      const { data: unitData } = await supabase.from('units').select('unit_name, position').eq('id', editData.unit_id).single();
+      const { data: unitData } = await supabase.from('units').select('unit_name, position, chapter_id').eq('id', editData.unit_id).single();
       if (unitData) {
         setEditUnitName(unitData.unit_name);
         setEditUnitPosition(unitData.position || 1);
+        
+        // Fetch chapter data if chapter_id exists
+        if (unitData.chapter_id) {
+          setEditChapterId(unitData.chapter_id);
+          const { data: chapterData } = await supabase
+            .from('chapters')
+            .select('chapter_title')
+            .eq('id', unitData.chapter_id)
+            .single();
+          if (chapterData) setEditChapterTitle(chapterData.chapter_title);
+        }
       }
       const { data: lessonData } = await supabase.from('lessons').select('lesson_name, position').eq('id', editData.lesson_id).single();
       if (lessonData) {
@@ -130,6 +143,8 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
       if (isEditing) {
         formData.append('material_id', editData.id);
         formData.append('title', editMaterialTitle);
+        formData.append('chapter_id', editChapterId || '');
+        formData.append('chapter_title', editChapterTitle);
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
         formData.append('content_data', JSON.stringify({ file_type: fileType, url }));
@@ -246,6 +261,31 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
             <label className="block text-sm font-medium text-gray-900 mb-2">Material Title *</label>
             <input type="text" value={editMaterialTitle} onChange={(e) => setEditMaterialTitle(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
           </div>
+
+          {editChapterId && (
+            <div className="border-t-2 border-gray-200 pt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">📚 Chapter Settings</h3>
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                <div className="flex gap-3">
+                  <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-semibold mb-1">⚠️ Perhatian:</p>
+                    <p>Mengubah nama Chapter akan mempengaruhi <strong>SEMUA materials, units, dan lessons</strong> dalam Chapter ini.</p>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Chapter Title *</label>
+                <input
+                  type="text"
+                  value={editChapterTitle}
+                  onChange={(e) => setEditChapterTitle(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="border-t-2 border-gray-200 pt-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">📦 Unit Settings</h3>
