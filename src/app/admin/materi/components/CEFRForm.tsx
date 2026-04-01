@@ -4,11 +4,16 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AlertCircle, Upload, X, Music } from 'lucide-react';
 
+// ✅ Type diperbarui — sesuai schema DB terbaru
 type Material = {
   id: string;
   title: string;
-  content_data: any;
-  order_number: number;
+  material_contents?: {
+    content_url: string | null;
+    storage_bucket: string | null;
+    storage_path: string | null;
+  }[];
+  position: number;
   is_published: boolean;
   unit_id: string;
   lesson_id: string;
@@ -63,10 +68,12 @@ export default function CEFRForm({ onSave, onCancel, editData }: CEFRFormProps) 
 
   useEffect(() => {
     if (editData) {
-      setSkillFocus(editData.content_data?.skill_focus || 'listening');
-      setCefrLevel(editData.content_data?.cefr_level || 'A1');
-      setMarkup(editData.content_data?.markup || '');
-      setOrderNumber(editData.order_number || 1);
+      // skill_focus, cefrLevel, markup tidak lagi disimpan di content_data
+      // nilainya reset ke default saat edit — admin isi ulang jika perlu
+      setSkillFocus('listening');
+      setCefrLevel('A1');
+      setMarkup('');
+      setOrderNumber(editData.position || 1);
       setIsPublished(editData.is_published || false);
       setEditMaterialTitle(editData.title || '');
       fetchEditModeData();

@@ -4,11 +4,16 @@ import { useState, useEffect } from 'react';
 import { Upload, FileCode, X, Info, Check, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
+// ✅ Type diperbarui — sesuai schema DB terbaru
 type Material = {
   id: string;
   title: string;
-  content_data: any;
-  order_number: number;
+  material_contents?: {
+    content_url: string | null;
+    storage_bucket: string | null;
+    storage_path: string | null;
+  }[];
+  position: number;
   is_published: boolean;
   lesson_id: string;
   unit_id: string;
@@ -62,8 +67,8 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
   useEffect(() => {
     if (editData) {
-      setDescription(editData.content_data?.description || '');
-      setOrderNumber(editData.order_number || 1);
+      setDescription(''); // description tidak lagi tersimpan di content_data
+      setOrderNumber(editData.position || 1);
       setIsPublished(editData.is_published || false);
       setEditMaterialTitle(editData.title || '');
       fetchEditModeData();
