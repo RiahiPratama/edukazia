@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
       .eq('id', studentId)
       .single()
 
-    const studentEmail = Array.isArray(student?.profiles) 
-      ? student.profiles[0]?.email 
-      : student?.profiles?.email
+    const studentEmail = (Array.isArray((student as any)?.profiles) 
+      ? (student as any).profiles[0]?.email 
+      : (student as any)?.profiles?.email) as string
 
     if (!studentEmail) {
       return NextResponse.json(
