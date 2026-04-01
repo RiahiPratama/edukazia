@@ -10,18 +10,21 @@ import MaterialList from './components/MaterialList';
 
 type TabType = 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
 
+// ✅ Type diperbarui — sesuai schema DB terbaru
 type Material = {
   id: string;
   title: string;
-  type: string;
   category: string;
-  course_id: string;
   level_id: string;
   unit_id: string;
   lesson_id: string;
-  order_number: number;
+  position: number;
   is_published: boolean;
-  content_data: any;
+  material_contents?: {
+    content_url: string | null;
+    storage_bucket: string | null;
+    storage_path: string | null;
+  }[];
   created_at: string;
 };
 
