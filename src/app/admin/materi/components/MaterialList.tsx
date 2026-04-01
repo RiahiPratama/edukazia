@@ -858,6 +858,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                       {lessonGroup.materials.map((material) => {
                                         const isEditingMaterial = editingMaterialId === material.id;
                                         const materialUrl = getContentUrl(material);
+                                        
+                                        // DEBUG: Log URL to console
+                                        console.log('Material:', material.title, 'URL:', materialUrl, 'content_data:', material.content_data);
 
                                         return isEditingMaterial ? (
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
