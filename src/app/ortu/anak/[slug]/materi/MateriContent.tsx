@@ -50,7 +50,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
     url: string
     title: string
     loading: boolean
-    type: 'pdf' | 'slides'
+    type: 'pdf' | 'slides' | 'google'
     slideUrls: string[]
   }>({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] })
 
