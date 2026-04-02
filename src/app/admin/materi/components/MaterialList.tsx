@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 // Available icons for chapters and units
@@ -64,9 +64,10 @@ type Lesson = { id: string; lesson_name: string; };
 type MaterialListProps = {
   category: 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
   onEdit?: (material: any) => void;
+  onEditContent?: (lessonId: string, lessonName: string) => void; // ✅ CEFR block editor
 };
 
-export default function MaterialList({ category, onEdit }: MaterialListProps) {
+export default function MaterialList({ category, onEdit, onEditContent }: MaterialListProps) {
   const [materials, setMaterials] = useState<MaterialWithHierarchy[]>([]);
   const [filteredMaterials, setFilteredMaterials] = useState<MaterialWithHierarchy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1051,8 +1052,18 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                   <Edit className="w-4 h-4" />
                                                 </button>
                                               )}
-                                              {/* ✅ Tombol Ganti File — hanya untuk bacaan & cefr */}
-                                              {!isUrlBased && (
+                                              {/* ✅ Tombol Edit Konten Block Editor — hanya untuk CEFR */}
+                                              {material.category === 'cefr' && onEditContent && (
+                                                <button
+                                                  onClick={() => onEditContent(material.lesson_id, material.lesson_name)}
+                                                  className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                                                  title="Edit konten block"
+                                                >
+                                                  <LayoutList className="w-4 h-4" />
+                                                </button>
+                                              )}
+                                              {/* ✅ Tombol Ganti File — hanya untuk bacaan */}
+                                              {material.category === 'bacaan' && (
                                                 <button
                                                   onClick={() => startReplaceFile(material.id)}
                                                   className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"

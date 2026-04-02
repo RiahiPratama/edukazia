@@ -74,6 +74,11 @@ export default function MateriTutorPage() {
     setRefreshKey(prev => prev + 1);
   };
 
+  // ✅ CEFR: buka block editor langsung dari daftar materi
+  const handleCEFREditContent = (lessonId: string, lessonName: string) => {
+    setCefrEditorLesson({ id: lessonId, name: lessonName });
+  };
+
   const renderForm = () => {
     switch (activeTab) {
       case 'live_zoom':
@@ -181,7 +186,12 @@ export default function MateriTutorPage() {
               {showForm ? (
                 renderForm()
               ) : (
-                <MaterialList key={refreshKey} category={activeTab} onEdit={handleEdit} />
+                <MaterialList
+                  key={refreshKey}
+                  category={activeTab}
+                  onEdit={handleEdit}
+                  onEditContent={activeTab === 'cefr' ? handleCEFREditContent : undefined}
+                />
               )}
             </>
           )}
