@@ -416,14 +416,28 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
                     ))}
                   </select>
                   {selectedUnit === 'NEW' && (
-                    <input
-                      type="text"
-                      value={newUnitName}
-                      onChange={(e) => setNewUnitName(e.target.value)}
-                      placeholder="Nama Unit Baru (contoh: 01 Clothes I like)"
-                      required
-                      className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
-                    />
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={newUnitName}
+                        onChange={(e) => setNewUnitName(e.target.value)}
+                        placeholder="Nama Unit Baru (contoh: 01 Clothes I like)"
+                        required
+                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
+                      />
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Unit *</label>
+                        <input
+                          type="number"
+                          value={newUnitPosition}
+                          onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)}
+                          min="1"
+                          required
+                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
+                        />
+                        <span className="text-xs text-gray-500">Menentukan urutan tampil unit di daftar materi</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
