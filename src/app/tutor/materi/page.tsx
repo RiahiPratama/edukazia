@@ -15,6 +15,7 @@ type Material = {
   id: string
   title: string
   category: string
+  content_url: string | null
   canva_url: string | null
   slides_url: string | null
   student_content_url: string | null
@@ -130,7 +131,7 @@ export default function TutorMateriPage() {
 
     const { data: contents } = await supabase
       .from('material_contents')
-      .select('material_id, canva_url, slides_url, student_content_url')
+      .select('material_id, content_url, canva_url, slides_url, student_content_url')
       .in('material_id', materialIds)
 
     // Check time-based access for freelancer
@@ -200,6 +201,7 @@ export default function TutorMateriPage() {
               id: m.id,
               title: m.title,
               category: m.category,
+              content_url: (content as any)?.content_url || null,
               canva_url: content?.canva_url || null,
               slides_url: content?.slides_url || null,
               student_content_url: (content as any)?.student_content_url || null,
@@ -239,29 +241,44 @@ export default function TutorMateriPage() {
       return
     }
 
-    const url = tutorInfo?.is_owner ? material.canva_url : material.slides_url
+    // Tentukan URL berdasarkan kategori & tutor type
+    let url: string | null = null
+    if (material.category === 'live_zoom') {
+      url = tutorInfo?.is_owner ? material.canva_url : material.slides_url
+    } else {
+      // kosakata, bacaan, cefr → pakai content_url
+      url = material.content_url
+    }
+
     if (!url) return
 
+    // Canva → buka tab baru
     if (url.includes('canva')) {
       window.open(url, '_blank')
       return
     }
 
-    // Google Slides — embed via modal
-    setEmbedModal({ open: true, url: '', title: material.title, loading: true })
-    try {
-      const res = await fetch('/api/materials/pdf-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storage_path: url }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setEmbedModal({ open: true, url: data.signed_url, title: material.title, loading: false })
-    } catch {
-      alert('❌ Gagal membuka materi')
-      setEmbedModal({ open: false, url: '', title: '', loading: false })
+    // Google URL → embed via modal
+    if (url.includes('google.com')) {
+      setEmbedModal({ open: true, url: '', title: material.title, loading: true })
+      try {
+        const res = await fetch('/api/materials/pdf-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storage_path: url }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        setEmbedModal({ open: true, url: data.signed_url, title: material.title, loading: false })
+      } catch {
+        alert('❌ Gagal membuka materi')
+        setEmbedModal({ open: false, url: '', title: '', loading: false })
+      }
+      return
     }
+
+    // URL lain → buka tab baru
+    window.open(url, '_blank')
   }
 
   const getCategoryInfo = (category: string) => {
@@ -385,17 +402,15 @@ export default function TutorMateriPage() {
                                     </span>
                                   </div>
                                 </div>
-                                {material.category === 'live_zoom' && (
-                                  <button onClick={() => openMaterial(material)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ml-2
-                                      ${status === 'allowed' ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]' :
-                                        status === 'time_locked' ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed' :
-                                        'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                                    {status === 'allowed' ? <><ExternalLink className="w-3 h-3"/>Buka</> :
-                                      status === 'time_locked' ? <><Clock className="w-3 h-3"/>Terkunci</> :
-                                      <><Lock className="w-3 h-3"/>Belum Tersedia</>}
-                                  </button>
-                                )}
+                                <button onClick={() => openMaterial(material)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ml-2
+                                    ${status === 'allowed' ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]' :
+                                      status === 'time_locked' ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed' :
+                                      'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                                  {status === 'allowed' ? <><ExternalLink className="w-3 h-3"/>Buka</> :
+                                    status === 'time_locked' ? <><Clock className="w-3 h-3"/>Terkunci</> :
+                                    <><Lock className="w-3 h-3"/>Belum Tersedia</>}
+                                </button>
                               </div>
                             )
                           })
