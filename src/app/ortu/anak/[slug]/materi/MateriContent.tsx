@@ -311,7 +311,9 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
                                   <p className="font-medium text-gray-900 mb-3">{lessonTitle}</p>
                                   <div className="flex flex-wrap gap-2 pl-4">
                                     {materials.map(material => {
-                                      const isClickable = material.pdf_storage_path || material.gdrive_url || material.component_id
+                                      const isClickable = material.pdf_storage_path || 
+                                        (material.gdrive_url && (isGoogleUrl(material.gdrive_url) || material.category !== 'live_zoom')) || 
+                                        material.component_id
                                       return (
                                         <div key={material.id} className="flex items-center gap-2">
                                           {material.completed && <CheckCircle2 className="w-4 h-4 text-green-500" />}
@@ -325,28 +327,21 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
                                                 {getCategoryIcon(material.category)}
                                                 {getCategoryLabel(material.category)}
                                               </button>
-                                            ) : material.gdrive_url ? (
-                                              isGoogleUrl(material.gdrive_url) ? (
-                                                // ✅ Google URL → buka via enrollment gate
-                                                <button
-                                                  onClick={() => openGoogleEmbed(material.id, material.title)}
-                                                  className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
-                                                >
-                                                  {getCategoryIcon(material.category)}
-                                                  {getCategoryLabel(material.category)}
-                                                </button>
-                                              ) : (
-                                                // Non-Google URL (Canva, dll) → buka tab baru
-                                                <a
-                                                  href={material.gdrive_url}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
-                                                >
-                                                  {getCategoryIcon(material.category)}
-                                                  {getCategoryLabel(material.category)}
-                                                </a>
-                                              )
+                                            ) : material.gdrive_url && isGoogleUrl(material.gdrive_url) ? (
+                                              // ✅ Google Slides → buka via enrollment gate
+                                              <button
+                                                onClick={() => openGoogleEmbed(material.id, material.title)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
+                                              >
+                                                {getCategoryIcon(material.category)}
+                                                {getCategoryLabel(material.category)}
+                                              </button>
+                                            ) : material.category === 'live_zoom' && material.gdrive_url && !isGoogleUrl(material.gdrive_url) ? (
+                                              // ❌ Canva URL untuk Live Zoom → BLOCKED untuk siswa
+                                              <span className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 rounded-lg font-semibold text-sm cursor-not-allowed" title="Materi sedang disiapkan">
+                                                {getCategoryIcon(material.category)}
+                                                Segera Hadir
+                                              </span>
                                             ) : material.component_id ? (
                                               <Link
                                                 href={`/ortu/anak/${studentSlug}/materi/render/${material.component_id}`}
