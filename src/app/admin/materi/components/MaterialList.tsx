@@ -296,6 +296,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         chapterId: string;
         chapterTitle: string;
         chapterIcon: string;
+        chapterOrder: number;
         units: {
           [unitId: string]: {
             unitId: string;
@@ -306,6 +307,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               [lessonId: string]: {
                 lessonId: string;
                 lessonName: string;
+                lessonPosition: number;
                 materials: MaterialWithHierarchy[];
               }
             }
