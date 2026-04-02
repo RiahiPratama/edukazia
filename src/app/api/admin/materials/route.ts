@@ -38,7 +38,10 @@ export async function POST(request: NextRequest) {
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
     const lessonPositionNew = parseInt(formData.get('lesson_position_new') as string) || 1;
-    const unitPositionNew = parseInt(formData.get('unit_position_new') as string) || 1; // ✅ posisi lesson dari admin
+    const unitPositionNew = parseInt(formData.get('unit_position_new') as string) || 1;
+    const canvaUrl = formData.get('canva_url') as string || '';
+    const slidesUrl = formData.get('slides_url') as string || '';
+    const pdfFile = formData.get('pdf_file') as File | null; // ✅ posisi lesson dari admin
     const position = parseInt(formData.get('order_number') as string) || 1;
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
@@ -344,6 +347,23 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // ✅ Upload PDF jika ada
+    let pdfStoragePath: string | null = null;
+    if (pdfFile && pdfFile.size > 0) {
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(7);
+      const pdfFileName = `${timestamp}-${random}.pdf`;
+      const { error: pdfError } = await supabase.storage
+        .from('materials-pdf')
+        .upload(pdfFileName, pdfFile, { contentType: 'application/pdf', upsert: false });
+      if (!pdfError) {
+        pdfStoragePath = pdfFileName;
+        console.log('✅ PDF uploaded:', pdfFileName);
+      } else {
+        console.error('PDF upload error:', pdfError);
+      }
+    }
+
     const { data: materialContent, error: contentError } = await supabase
       .from('material_contents')
       .insert({
@@ -352,7 +372,9 @@ export async function POST(request: NextRequest) {
         content_url: contentUrl,
         storage_bucket: storageBucket,
         storage_path: storagePath,
-        // ✅ audio_bucket, audio_path, content_data sudah di-drop dari DB
+        canva_url: canvaUrl || null,
+        slides_url: slidesUrl || null,
+        pdf_storage_path: pdfStoragePath,
       })
       .select()
       .single();

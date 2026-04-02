@@ -43,6 +43,11 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   const [platform, setPlatform] = useState('canva');
   const [url, setUrl] = useState('');
+  // ✅ 3 URL fields untuk akses berbeda
+  const [canvaUrl, setCanvaUrl] = useState('');
+  const [slidesUrl, setSlidesUrl] = useState('');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfUploading, setPdfUploading] = useState(false);
   const [orderNumber, setOrderNumber] = useState(1);
   const [isPublished, setIsPublished] = useState(false);
 
@@ -207,7 +212,10 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         formData.append('lesson_position', editLessonPosition.toString());
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ platform, url }));
+        formData.append('content_data', JSON.stringify({ platform, url: canvaUrl || url }));
+        formData.append('canva_url', canvaUrl);
+        formData.append('slides_url', slidesUrl);
+        if (pdfFile) formData.append('pdf_file', pdfFile);
 
         const response = await fetch('/api/admin/materials', { method: 'PATCH', body: formData });
         const result = await response.json();
@@ -307,7 +315,10 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         formData.append('lesson_position_new', newLessonPosition.toString());
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
-        formData.append('content_data', JSON.stringify({ platform, url }));
+        formData.append('content_data', JSON.stringify({ platform, url: canvaUrl || url }));
+        formData.append('canva_url', canvaUrl);
+        formData.append('slides_url', slidesUrl);
+        if (pdfFile) formData.append('pdf_file', pdfFile);
 
         const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
         const result = await response.json();
@@ -599,30 +610,55 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
       <div className={isEditing ? 'border-t-2 border-gray-200 pt-6' : ''}>
         {isEditing && <h3 className="text-lg font-semibold text-gray-900 mb-4">📄 Material Content</h3>}
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">Platform *</label>
-          <select
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value)}
-            required
-            className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-          >
-            <option value="canva">Canva</option>
-            <option value="zoom">Zoom</option>
-            <option value="google_meet">Google Meet</option>
-          </select>
+        {/* Info banner */}
+        <div className="bg-purple-50 border-2 border-[#5C4FE5]/30 rounded-xl p-4 mb-4">
+          <p className="text-sm font-semibold text-[#5C4FE5] mb-1">📋 Konten per Tipe Akses</p>
+          <p className="text-xs text-gray-600">Isi sesuai kebutuhan. Tidak semua field wajib diisi sekaligus.</p>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">URL Link *</label>
+        {/* Canva URL — untuk Owner */}
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <label className="block text-sm font-bold text-orange-700 mb-1">
+            🎨 Canva URL <span className="text-xs font-normal">(untuk Tutor Owner)</span>
+          </label>
           <input
             type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://..."
-            required
-            className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
+            value={canvaUrl}
+            onChange={(e) => setCanvaUrl(e.target.value)}
+            placeholder="https://canva.link/..."
+            className="w-full px-3 py-2.5 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400 bg-white text-gray-900 font-medium"
           />
+        </div>
+
+        {/* PDF Upload — untuk Siswa */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <label className="block text-sm font-bold text-blue-700 mb-1">
+            📄 PDF File <span className="text-xs font-normal">(untuk Siswa EduKazia)</span>
+          </label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg bg-white text-gray-900 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-blue-100 file:text-blue-700 file:font-medium"
+          />
+          {pdfFile && (
+            <p className="text-xs text-blue-600 mt-1">📎 {pdfFile.name} ({(pdfFile.size / 1024 / 1024).toFixed(2)} MB)</p>
+          )}
+        </div>
+
+        {/* Google Slides URL — untuk Freelancer & B2B */}
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <label className="block text-sm font-bold text-green-700 mb-1">
+            📊 Google Slides URL <span className="text-xs font-normal">(untuk Tutor Freelancer & B2B)</span>
+          </label>
+          <input
+            type="url"
+            value={slidesUrl}
+            onChange={(e) => setSlidesUrl(e.target.value)}
+            placeholder="https://docs.google.com/presentation/d/..."
+            className="w-full px-3 py-2.5 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-400 bg-white text-gray-900 font-medium"
+          />
+          <p className="text-xs text-green-600 mt-1">⚠️ Pastikan file di-share ke service account EduKazia</p>
         </div>
 
         <div>
