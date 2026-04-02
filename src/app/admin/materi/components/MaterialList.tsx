@@ -114,8 +114,8 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   const [editingMaterialTitle, setEditingMaterialTitle] = useState<string>('');
   const [editingMaterialUrl, setEditingMaterialUrl] = useState<string>('');
   const [editingCanvaUrl, setEditingCanvaUrl] = useState<string>('');
+  const [editingStudentUrl, setEditingStudentUrl] = useState<string>('');
   const [editingSlidesUrl, setEditingSlidesUrl] = useState<string>('');
-  const [editingPdfFile, setEditingPdfFile] = useState<File | null>(null);
   const [savingMaterial, setSavingMaterial] = useState(false);
 
   // File replacement states (bacaan & cefr)
@@ -578,8 +578,8 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     setEditingMaterialTitle(detectedTitle);
     setEditingMaterialUrl(currentUrl);
     setEditingCanvaUrl(canvaUrl || '');
+    setEditingStudentUrl('');
     setEditingSlidesUrl(slidesUrl || '');
-    setEditingPdfFile(null);
   };
 
   const cancelEditMaterial = () => {
@@ -587,8 +587,8 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     setEditingMaterialTitle('');
     setEditingMaterialUrl('');
     setEditingCanvaUrl('');
+    setEditingStudentUrl('');
     setEditingSlidesUrl('');
-    setEditingPdfFile(null);
   };
 
   const saveMaterial = async (materialId: string, category: string) => {
@@ -1041,10 +1041,10 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                   </div>
                                                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
                                                     <label className="text-xs font-bold text-blue-700">📄 Konten Siswa – Google Drive PDF</label>
-                                                    <input type="file" accept="application/pdf"
-                                                      onChange={e => setEditingPdfFile(e.target.files?.[0] || null)}
-                                                      className="w-full text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 file:text-xs" />
-                                                    {editingPdfFile && <p className="text-xs text-blue-600">📎 {editingPdfFile.name}</p>}
+                                                    <input type="url" value={editingStudentUrl}
+                                                      onChange={e => setEditingStudentUrl(e.target.value)}
+                                                      placeholder="https://drive.google.com/file/d/..."
+                                                      className="w-full px-2 py-1.5 border border-blue-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-blue-400" />
                                                   </div>
                                                   <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
                                                     <label className="text-xs font-bold text-green-700">📊 Google Slides (Freelancer & B2B)</label>
