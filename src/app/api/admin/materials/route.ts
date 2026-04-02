@@ -197,6 +197,8 @@ export async function POST(request: NextRequest) {
 
     // 3. Create or get Lesson
     let actualLessonId: string | null = lessonId;
+    let newlyCreatedLessonId: string | null = null; // ✅ track untuk rollback kalau gagal
+
     if (lessonId === 'NEW' && lessonName) {
       console.log('🆕 Creating new Lesson:', lessonName);
 
@@ -219,6 +221,7 @@ export async function POST(request: NextRequest) {
       }
 
       actualLessonId = newLesson.id;
+      newlyCreatedLessonId = newLesson.id; // ✅ simpan untuk rollback
       console.log('✅ Lesson created:', actualLessonId);
     }
 
@@ -295,6 +298,11 @@ export async function POST(request: NextRequest) {
 
     if (materialError) {
       console.error('Material creation error:', materialError);
+      // ✅ Rollback lesson kalau material gagal
+      if (newlyCreatedLessonId) {
+        await supabase.from('lessons').delete().eq('id', newlyCreatedLessonId);
+        console.log('🔄 Lesson rolled back:', newlyCreatedLessonId);
+      }
       return NextResponse.json({
         error: 'Failed to create material',
         details: materialError.message
@@ -350,7 +358,12 @@ export async function POST(request: NextRequest) {
 
     if (contentError) {
       console.error('Material content creation error:', contentError);
+      // ✅ Rollback material + lesson kalau material_contents gagal
       await supabase.from('materials').delete().eq('id', newMaterial.id);
+      if (newlyCreatedLessonId) {
+        await supabase.from('lessons').delete().eq('id', newlyCreatedLessonId);
+        console.log('🔄 Lesson rolled back:', newlyCreatedLessonId);
+      }
       return NextResponse.json({
         error: 'Failed to create material content',
         details: contentError.message

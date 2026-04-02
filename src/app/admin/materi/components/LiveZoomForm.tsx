@@ -294,47 +294,16 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           actualUnitId = newUnit.id;
         }
 
-        // Create Lesson if NEW
-        let actualLessonId = selectedLesson;
-        if (selectedLesson === 'NEW' && newLessonName && actualUnitId) {
-          const { data: existingLessons } = await supabase
-            .from('lessons')
-            .select('position')
-            .eq('unit_id', actualUnitId)
-            .order('position', { ascending: false })
-            .limit(1);
-
-          const nextPosition = existingLessons && existingLessons.length > 0
-            ? (existingLessons[0].position + 1)
-            : 0;
-
-          const { data: newLesson, error: lessonError } = await supabase
-            .from('lessons')
-            .insert({
-              unit_id: actualUnitId,
-              lesson_name: newLessonName,
-              position: newLessonPosition, // ✅ dari input admin
-            })
-            .select()
-            .single();
-
-          if (lessonError) {
-            alert(`❌ Gagal membuat lesson: ${lessonError.message}`);
-            setLoading(false);
-            return;
-          }
-          actualLessonId = newLesson.id;
-        }
-
-        // Create Material
+        // ✅ Lesson dibuat oleh route.ts (bukan client) agar bisa di-rollback kalau gagal
         const formData = new FormData();
         formData.append('title', newLessonName || selectedLesson);
-        formData.append('type', 'live_zoom');
         formData.append('category', 'live_zoom');
         formData.append('course_id', selectedCourse);
         formData.append('level_id', selectedLevel);
         formData.append('unit_id', actualUnitId);
-        formData.append('lesson_id', actualLessonId);
+        formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
+        formData.append('lesson_name', newLessonName);
+        formData.append('lesson_position_new', newLessonPosition.toString());
         formData.append('order_number', orderNumber.toString());
         formData.append('is_published', isPublished.toString());
         formData.append('content_data', JSON.stringify({ platform, url }));
