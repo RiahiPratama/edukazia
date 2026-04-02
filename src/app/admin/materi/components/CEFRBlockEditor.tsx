@@ -44,34 +44,11 @@ type AudioSentenceBlock = {
   storage_bucket: string;
 };
 
-type CollapsibleGroupItem = {
-  id: string;
-  text: string;
-  translation: string;
-  storage_path: string | null;
-  storage_bucket: string;
-};
+type CollapsibleGroupItem = { id: string; text: string; translation: string; storage_path: string | null; storage_bucket: string };
+type InlineSegment = { id: string; text: string; highlighted: boolean; color: 'blue'|'yellow'|'green'|'red'; storage_path: string | null; storage_bucket: string };
 
-type CollapsibleGroupBlock = {
-  id: string; type: 'collapsible_group';
-  header: string;
-  color: 'blue' | 'yellow' | 'green' | 'red';
-  items: CollapsibleGroupItem[];
-};
-
-type InlineSegment = {
-  id: string;
-  text: string;
-  highlighted: boolean;
-  color: 'blue' | 'yellow' | 'green' | 'red';
-  storage_path: string | null;
-  storage_bucket: string;
-};
-
-type InlineHighlightBlock = {
-  id: string; type: 'inline_highlight';
-  segments: InlineSegment[];
-};
+type CollapsibleGroupBlock = { id: string; type: 'collapsible_group'; header: string; color: 'blue'|'yellow'|'green'|'red'; items: CollapsibleGroupItem[] };
+type InlineHighlightBlock = { id: string; type: 'inline_highlight'; segments: InlineSegment[] };
 
 type Block = HeadingBlock | ParagraphBlock | HighlightBlock | TableBlock | AudioSentenceBlock | CollapsibleGroupBlock | InlineHighlightBlock;
 
@@ -100,7 +77,7 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   table: 'Tabel',
   audio_sentence: 'Kalimat + Audio',
   collapsible_group: 'Grup Dropdown',
-  inline_highlight: 'Teks Inline + Audio',
+  inline_highlight: 'Teks Inline+Audio',
 };
 
 const BLOCK_ICONS: Record<BlockType, any> = {
@@ -293,35 +270,28 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
       return { ...b, items: [...b.items, newItem] };
     }));
   };
-
   const updateGroupItem = (blockId: string, itemId: string, updates: Partial<CollapsibleGroupItem>) => {
     setBlocks(prev => prev.map(b => {
       if (b.id !== blockId || b.type !== 'collapsible_group') return b;
       return { ...b, items: b.items.map(item => item.id === itemId ? { ...item, ...updates } : item) };
     }));
   };
-
   const deleteGroupItem = (blockId: string, itemId: string) => {
     setBlocks(prev => prev.map(b => {
       if (b.id !== blockId || b.type !== 'collapsible_group') return b;
       return { ...b, items: b.items.filter(item => item.id !== itemId) };
     }));
   };
-
   const uploadGroupItemAudio = async (blockId: string, itemId: string, file: File) => {
     setUploadingAudioId(`${blockId}_${itemId}`);
     try {
-      const formData = new FormData();
-      formData.append('audio', file);
+      const formData = new FormData(); formData.append('audio', file);
       const res = await fetch('/api/admin/cefr/audio', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
-      updateGroupItem(blockId, itemId, { storage_path: data.storage_path, storage_bucket: 'audio' });
-    } catch (err) {
-      alert('❌ Gagal upload audio');
-    } finally {
-      setUploadingAudioId(null);
-    }
+      updateGroupItem(blockId, itemId, { storage_path: data.storage_path });
+    } catch { alert('❌ Gagal upload audio'); }
+    finally { setUploadingAudioId(null); }
   };
 
   // ── Inline Highlight Operations ───────────────────────────
@@ -332,35 +302,28 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
       return { ...b, segments: [...b.segments, newSeg] };
     }));
   };
-
   const updateSegment = (blockId: string, segId: string, updates: Partial<InlineSegment>) => {
     setBlocks(prev => prev.map(b => {
       if (b.id !== blockId || b.type !== 'inline_highlight') return b;
       return { ...b, segments: b.segments.map(s => s.id === segId ? { ...s, ...updates } : s) };
     }));
   };
-
   const deleteSegment = (blockId: string, segId: string) => {
     setBlocks(prev => prev.map(b => {
       if (b.id !== blockId || b.type !== 'inline_highlight') return b;
       return { ...b, segments: b.segments.filter(s => s.id !== segId) };
     }));
   };
-
   const uploadSegmentAudio = async (blockId: string, segId: string, file: File) => {
     setUploadingAudioId(`${blockId}_${segId}`);
     try {
-      const formData = new FormData();
-      formData.append('audio', file);
+      const formData = new FormData(); formData.append('audio', file);
       const res = await fetch('/api/admin/cefr/audio', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
-      updateSegment(blockId, segId, { storage_path: data.storage_path, storage_bucket: 'audio' });
-    } catch (err) {
-      alert('❌ Gagal upload audio');
-    } finally {
-      setUploadingAudioId(null);
-    }
+      updateSegment(blockId, segId, { storage_path: data.storage_path });
+    } catch { alert('❌ Gagal upload audio'); }
+    finally { setUploadingAudioId(null); }
   };
 
   // ── Table Operations ──────────────────────────────────────
@@ -570,6 +533,115 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
             </div>
           </div>
         )}
+
+        {/* ✅ COLLAPSIBLE GROUP */}
+        {block.type === 'collapsible_group' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-xs font-semibold text-gray-600">Warna Header:</label>
+              {(['blue','yellow','green','red'] as const).map(c => (
+                <button key={c} onClick={() => updateBlock(block.id, { color: c })}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full border-2 capitalize
+                    ${(block as any).color === c ? 'border-gray-700' : 'border-gray-200'}
+                    ${c === 'blue' ? 'bg-blue-100 text-blue-700' : c === 'yellow' ? 'bg-yellow-100 text-yellow-700' : c === 'green' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {c}
+                </button>
+              ))}
+            </div>
+            <input type="text" value={(block as any).header || ''}
+              onChange={e => updateBlock(block.id, { header: e.target.value } as any)}
+              placeholder="Teks header dropdown (contoh: Contoh langsung peraga)..."
+              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-[#5C4FE5] bg-white"
+            />
+            <div className="space-y-2 pl-4 border-l-4 border-[#5C4FE5]/30">
+              {((block as any).items || []).map((item: any, idx: number) => {
+                const audioKey = `${block.id}_${item.id}`;
+                return (
+                  <div key={item.id} className="bg-gray-50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-500">Item {idx + 1}</span>
+                      <button onClick={() => deleteGroupItem(block.id, item.id)} className="p-1 text-red-400 hover:text-red-600">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" value={item.text} onChange={e => updateGroupItem(block.id, item.id, { text: e.target.value })}
+                        placeholder="I am a student." className="px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white focus:ring-1 focus:ring-[#5C4FE5]" />
+                      <input type="text" value={item.translation} onChange={e => updateGroupItem(block.id, item.id, { translation: e.target.value })}
+                        placeholder="Saya seorang siswa." className="px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white focus:ring-1 focus:ring-[#5C4FE5]" />
+                    </div>
+                    {item.storage_path ? (
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className="font-mono">{item.storage_path.split('/').pop()}</span>
+                        <button onClick={() => updateGroupItem(block.id, item.id, { storage_path: null })} className="text-red-400"><X className="w-3 h-3" /></button>
+                      </div>
+                    ) : (
+                      <label className={`inline-flex items-center gap-2 px-3 py-1.5 border border-dashed rounded cursor-pointer text-xs ${uploadingAudioId === audioKey ? 'border-purple-400 bg-purple-50' : 'border-gray-300 hover:border-[#5C4FE5]'}`}>
+                        {uploadingAudioId === audioKey ? <><Loader2 className="w-3 h-3 text-[#5C4FE5] animate-spin" />Uploading...</> : <><Upload className="w-3 h-3 text-gray-400" />Upload Audio</>}
+                        <input type="file" accept="audio/*" className="hidden" disabled={!!uploadingAudioId}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadGroupItemAudio(block.id, item.id, f); }} />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+              <button onClick={() => addGroupItem(block.id)}
+                className="w-full py-2 border-2 border-dashed border-[#5C4FE5]/40 text-[#5C4FE5] text-sm font-medium rounded-lg hover:bg-purple-50 transition-colors">
+                + Tambah Item
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ INLINE HIGHLIGHT */}
+        {block.type === 'inline_highlight' && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 font-medium px-1">
+              Preview: {((block as any).segments || []).map((s: any) => s.text).join(' ')}
+            </p>
+            <div className="space-y-2">
+              {((block as any).segments || []).map((seg: any, idx: number) => {
+                const segKey = `${block.id}_${seg.id}`;
+                return (
+                  <div key={seg.id} className={`flex items-center gap-2 p-2 rounded-lg border flex-wrap ${seg.highlighted ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
+                    <span className="text-xs text-gray-400 w-4">{idx + 1}</span>
+                    <input type="text" value={seg.text} onChange={e => updateSegment(block.id, seg.id, { text: e.target.value })}
+                      placeholder="Teks..." className="flex-1 min-w-[120px] px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 bg-white focus:ring-1 focus:ring-[#5C4FE5]" />
+                    <label className="flex items-center gap-1 text-xs font-medium text-gray-600 cursor-pointer">
+                      <input type="checkbox" checked={seg.highlighted} onChange={e => updateSegment(block.id, seg.id, { highlighted: e.target.checked })} className="w-3 h-3" />
+                      Highlight
+                    </label>
+                    {seg.highlighted && (
+                      <div className="flex items-center gap-1">
+                        {(['blue','yellow','green','red'] as const).map(c => (
+                          <button key={c} onClick={() => updateSegment(block.id, seg.id, { color: c })}
+                            className={`w-4 h-4 rounded-full border-2 ${seg.color === c ? 'border-gray-700' : 'border-transparent'} ${c === 'blue' ? 'bg-blue-400' : c === 'yellow' ? 'bg-yellow-400' : c === 'green' ? 'bg-green-400' : 'bg-red-400'}`} />
+                        ))}
+                        {seg.storage_path ? (
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <span className="font-mono truncate max-w-[80px]">{seg.storage_path.split('/').pop()}</span>
+                            <button onClick={() => updateSegment(block.id, seg.id, { storage_path: null })} className="text-red-400"><X className="w-3 h-3" /></button>
+                          </div>
+                        ) : (
+                          <label className={`flex items-center gap-1 px-2 py-0.5 border border-dashed rounded cursor-pointer text-xs ${uploadingAudioId === segKey ? 'border-purple-400' : 'border-gray-300 hover:border-[#5C4FE5]'}`}>
+                            {uploadingAudioId === segKey ? <Loader2 className="w-3 h-3 text-[#5C4FE5] animate-spin" /> : <><Upload className="w-3 h-3 text-gray-400" /><span>Audio</span></>}
+                            <input type="file" accept="audio/*" className="hidden" disabled={!!uploadingAudioId}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadSegmentAudio(block.id, seg.id, f); }} />
+                          </label>
+                        )}
+                      </div>
+                    )}
+                    <button onClick={() => deleteSegment(block.id, seg.id)} className="p-1 text-red-400 hover:text-red-600"><X className="w-3 h-3" /></button>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={() => addSegment(block.id)}
+              className="w-full py-1.5 border-2 border-dashed border-[#5C4FE5]/40 text-[#5C4FE5] text-xs font-medium rounded-lg hover:bg-purple-50 transition-colors">
+              + Tambah Segmen
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -641,7 +713,7 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
         {showAddMenu && (
           <div className="absolute bottom-full mb-2 left-0 right-0 bg-white border-2 border-[#5C4FE5] rounded-xl shadow-xl p-3 z-10">
             <p className="text-xs font-semibold text-gray-500 mb-2 px-1">Pilih tipe block:</p>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-7 gap-2">
               {(Object.keys(BLOCK_LABELS) as BlockType[]).map(type => {
                 const Icon = BLOCK_ICONS[type];
                 return (
