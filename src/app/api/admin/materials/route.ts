@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
     const unitName = formData.get('unit_name') as string;
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
+    const lessonPositionNew = parseInt(formData.get('lesson_position_new') as string) || 1; // ✅ posisi lesson dari admin
     const position = parseInt(formData.get('order_number') as string) || 1;
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
         .insert({
           unit_id: actualUnitId,
           lesson_name: lessonName,
-          position: 0,
+          position: lessonPositionNew, // ✅ dari input admin, bukan hardcode 0
         })
         .select()
         .single();
@@ -308,6 +309,7 @@ export async function POST(request: NextRequest) {
 
     let contentType: 'url' | 'component' | 'audio' = 'url';
     let contentUrl: string | null = null;
+    let audioPath: string | null = null;
     let storagePath: string | null = null;
 
     if (category === 'live_zoom') {
@@ -321,7 +323,7 @@ export async function POST(request: NextRequest) {
       storagePath = uploadedFilePath;
     } else if (category === 'cefr') {
       contentType = 'audio';
-      storagePath = uploadedFilePath; // ✅ cefr pakai storage_path
+      audioPath = uploadedFilePath;
     }
 
     const { data: materialContent, error: contentError } = await supabase
@@ -332,6 +334,9 @@ export async function POST(request: NextRequest) {
         content_url: contentUrl,
         storage_bucket: storageBucket,
         storage_path: storagePath,
+        audio_bucket: storageBucket,
+        audio_path: audioPath,
+        content_data: contentData,
       })
       .select()
       .single();
@@ -593,15 +598,22 @@ export async function PATCH(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Update material_contents — hanya update content_url
+    // Update material_contents
     if (contentDataStr) {
       const existingContent = existingMaterial.material_contents?.[0];
-      const newContentUrl = contentData.url || contentData.zoom_link || contentData.canva_link || null;
+      
+      const contentUpdate: any = {
+        content_data: contentData,
+      };
 
-      if (existingContent && newContentUrl) {
+      if (contentData.url || contentData.zoom_link || contentData.canva_link) {
+        contentUpdate.content_url = contentData.url || contentData.zoom_link || contentData.canva_link;
+      }
+
+      if (existingContent) {
         await supabase
           .from('material_contents')
-          .update({ content_url: newContentUrl })
+          .update(contentUpdate)
           .eq('id', existingContent.id);
       }
     }

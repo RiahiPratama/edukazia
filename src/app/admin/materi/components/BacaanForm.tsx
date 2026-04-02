@@ -41,6 +41,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const [newJudulName, setNewJudulName] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
   const [newLessonName, setNewLessonName] = useState('');
+  const [newLessonPosition, setNewLessonPosition] = useState(1);
 
   const [description, setDescription] = useState('');
   const [jsxFile, setJsxFile] = useState<File | null>(null);
@@ -208,6 +209,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
             formData.append('unit_name', newUnitName);
             formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
             formData.append('lesson_name', newLessonName);
+            formData.append('lesson_position_new', newLessonPosition.toString()); // ✅ posisi lesson baru
             formData.append('order_number', orderNumber.toString());
             formData.append('is_published', isPublished.toString());
             formData.append('content_data', JSON.stringify({ description }));
@@ -319,7 +321,23 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                 <option value="NEW">+ Buat Lesson Baru</option>
                 {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
               </select>
-              {selectedLesson === 'NEW' && <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
+              {selectedLesson === 'NEW' && (
+                <div className="mt-2 space-y-2">
+                  <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Lesson *</label>
+                    <input
+                      type="number"
+                      value={newLessonPosition}
+                      onChange={(e) => setNewLessonPosition(parseInt(e.target.value) || 1)}
+                      min="1"
+                      required
+                      className="w-24 px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
+                    />
+                    <span className="text-xs text-gray-500">Menentukan urutan tampil lesson di daftar materi</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
