@@ -137,9 +137,9 @@ export default async function MateriPage({
   const lessonIds = lessons?.map(l => l.id) || []
   const { data: materials } = await supabase
     .from('materials')
-    .select('id, title, position, lesson_id, category, canva_urls, content_data, template_id, is_published')
+    .select('id, title, position, lesson_id, category, is_published')
     .in('lesson_id', lessonIds)
-    .eq('is_published', true) // Only published materials
+    .eq('is_published', true)
     .order('position')
 
   // 9. Get material contents for all materials
@@ -172,17 +172,17 @@ export default async function MateriPage({
           const content = materialContents?.find(c => c.material_id === material.id)
           const isCompleted = progress?.some(p => p.material_id === material.id)
           
-          // Extract URL based on category
+          // ✅ Extract URL dari material_contents (schema v4.1)
           let materialUrl = null
           let componentId = null
-          
-          if (material.category === 'live_zoom' && material.canva_urls) {
-            const urls = Array.isArray(material.canva_urls) ? material.canva_urls : []
-            materialUrl = urls[0] || null
-          } else if (material.category === 'kosakata') {
+
+          if (material.category === 'live_zoom' || material.category === 'kosakata') {
             materialUrl = content?.content_url || null
-          } else if (material.category === 'bacaan' || material.category === 'cefr') {
-            componentId = material.template_id || content?.storage_path || null
+          } else if (material.category === 'bacaan') {
+            componentId = content?.storage_path || null
+          } else if (material.category === 'cefr') {
+            // CEFR pakai lesson_contents (block editor) — lesson_id jadi identifier
+            componentId = material.lesson_id || null
           }
           
           return {
