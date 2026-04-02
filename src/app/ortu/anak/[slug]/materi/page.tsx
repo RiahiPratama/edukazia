@@ -248,6 +248,17 @@ export default async function MateriPage({
     }
   }).filter((l): l is NonNullable<typeof l> => l !== null)
 
+  // 🔍 DEBUG — hapus setelah fix
+  console.log('🔍 levelIds:', levelIds)
+  console.log('🔍 units count:', units?.length)
+  console.log('🔍 lessons count:', lessons?.length)
+  console.log('🔍 materials count:', materials?.length)
+  console.log('🔍 levelsData:', JSON.stringify(levelsData.map(l => ({
+    level_name: l.level_name,
+    units_count: l.units.length,
+    materials_count: l.units.flatMap(u => u.materials).length
+  }))))
+
   return (
     <div className="min-h-screen bg-[#F7F6FF]">
       <MateriContent
