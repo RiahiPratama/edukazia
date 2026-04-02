@@ -49,8 +49,10 @@ type MaterialWithHierarchy = {
   chapter_id: string | null;
   chapter_title: string | null;
   chapter_icon: string | null;
+  chapter_order: number;     // ✅ untuk sorting chapter
   level_id: string;
   level_name: string;
+  level_sort_order: number;  // ✅ untuk sorting level
 };
 
 type Level = { id: string; name: string; };
@@ -200,13 +202,15 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
       const { data: chaptersData } = await supabase
         .from('chapters')
-        .select('id, chapter_title, icon')
-        .in('id', chapterIds);
+        .select('id, chapter_title, icon, order_number')
+        .in('id', chapterIds)
+        .order('order_number', { ascending: true });
 
       const { data: levelsData } = await supabase
         .from('levels')
-        .select('id, name')
-        .in('id', levelIds);
+        .select('id, name, sort_order')
+        .in('id', levelIds)
+        .order('sort_order', { ascending: true });
 
       const lessonsMap = new Map(lessonsData?.map(l => [l.id, l]) || []);
       const unitsMap = new Map(unitsData?.map(u => [u.id, u]) || []);
@@ -237,8 +241,10 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           chapter_id: unit?.chapter_id || null,
           chapter_title: chapter?.chapter_title || null,
           chapter_icon: chapter?.icon || null,
+          chapter_order: chapter?.order_number || 0,
           level_id: unit?.level_id || '',
           level_name: level?.name || 'Unknown Level',
+          level_sort_order: level?.sort_order || 0,
         };
       });
 
@@ -318,6 +324,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           chapterId,
           chapterTitle: material.chapter_title || 'Chapter Tidak Diketahui',
           chapterIcon: material.chapter_icon || 'Library',
+          chapterOrder: material.chapter_order || 0,
           units: {}
         };
       }
@@ -336,6 +343,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         chapterGroups[chapterId].units[unitId].lessons[lessonId] = {
           lessonId,
           lessonName: material.lesson_name || 'Lesson Tidak Diketahui',
+          lessonPosition: material.position || 0, // ✅ pakai position material sebagai lesson order
           materials: []
         };
       }
@@ -664,7 +672,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
       {/* Material List Grouped by Chapter → Unit → Lesson */}
       <div className="space-y-4">
-        {Object.values(chapterGroups).map((chapterGroup) => {
+        {Object.values(chapterGroups)
+          .sort((a, b) => (a.chapterOrder || 0) - (b.chapterOrder || 0))
+          .map((chapterGroup) => {
           const ChapterIcon = getIconComponent(chapterGroup.chapterIcon);
           const isEditingChapter = editingChapterId === chapterGroup.chapterId;
 
@@ -716,7 +726,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               {/* Units under this chapter */}
               {expandedChapters.has(chapterGroup.chapterId) && (
                 <div className="border-t-2 border-[#5C4FE5]">
-                  {Object.values(chapterGroup.units).map((unitGroup) => {
+                  {Object.values(chapterGroup.units)
+                    .sort((a, b) => (a.unitPosition || 0) - (b.unitPosition || 0))
+                    .map((unitGroup) => {
                     const UnitIcon = getIconComponent(unitGroup.unitIcon);
                     const isEditingUnit = editingUnitId === unitGroup.unitId;
 
@@ -772,14 +784,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                         {/* Lessons under this unit */}
                         {expandedUnits.has(unitGroup.unitId) && (
                           <div className="bg-white">
-                            {Object.values(unitGroup.lessons).sort((a, b) => {
-                              const posA = a.materials[0]?.position || 0;
-                              const posB = b.materials[0]?.position || 0;
-                              return posA - posB;
-                            }).map((lessonGroup) => {
+                            {Object.values(unitGroup.lessons)
+                              .sort((a, b) => (a.lessonPosition || 0) - (b.lessonPosition || 0))
+                              .map((lessonGroup) => {
                               if (lessonGroup.materials.length === 0) return null;
                               
-                              const lessonPosition = lessonGroup.materials[0]?.position || 0;
+                              const lessonPosition = lessonGroup.lessonPosition || 0;
                               const isEditingLesson = editingLessonId === lessonGroup.lessonId;
 
                               return (
