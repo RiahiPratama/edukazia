@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import SlideViewer from './SlideViewer'
 import { BookOpen, Video, FileText, Headphones, ChevronDown, ChevronRight, CheckCircle2, X, Loader2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
@@ -53,7 +52,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
     loading: boolean
     type: 'pdf' | 'slides'
     slideUrls: string[]
-  }>({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })
+  }>({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] })
 
   // ✅ Google embed modal
   const [embedModal, setEmbedModal] = useState<{
@@ -135,7 +134,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
       }
     } catch (err) {
       alert(`❌ Gagal membuka materi`)
-      setPdfModal({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })
+      setPdfModal({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] })
     }
   }
 
@@ -385,22 +384,13 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
       )}
     </div>
 
-    {/* ✅ Slide Viewer */}
-    {pdfModal.open && pdfModal.type === 'slides' && !pdfModal.loading && (
-      <SlideViewer
-        slideUrls={pdfModal.slideUrls}
-        title={pdfModal.title}
-        onClose={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })}
-      />
-    )}
-
-    {/* ✅ PDF Modal (fallback untuk PDF biasa) */}
-    {pdfModal.open && pdfModal.type === 'pdf' && (
+    {/* ✅ Google Drive / PDF Modal */}
+    {pdfModal.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-bold text-gray-900 truncate">{pdfModal.title}</h2>
-            <button onClick={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })}
+            <button onClick={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] })}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
               <X className="w-5 h-5" />
             </button>
