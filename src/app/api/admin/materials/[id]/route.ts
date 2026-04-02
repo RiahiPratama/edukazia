@@ -133,13 +133,9 @@ export async function PATCH(
     const formData = await request.formData();
     const title = formData.get('title') as string;
     const url = formData.get('url') as string;
-
-    if (!url || !url.trim()) {
-      return NextResponse.json(
-        { error: 'URL is required' },
-        { status: 400 }
-      );
-    }
+    const canvaUrl = formData.get('canva_url') as string || '';
+    const slidesUrl = formData.get('slides_url') as string || '';
+    const pdfFile = formData.get('pdf_file') as File | null;
 
     // Get current material
     const { data: currentMaterial } = await supabase
@@ -172,9 +168,29 @@ export async function PATCH(
       .single();
 
     if (mc) {
+      // ✅ Upload PDF jika ada file baru
+      let pdfStoragePath: string | null | undefined = undefined;
+      if (pdfFile && pdfFile.size > 0) {
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(7);
+        const { error: pdfError } = await supabase.storage
+          .from('materials-pdf')
+          .upload(`${timestamp}-${random}.pdf`, pdfFile, { contentType: 'application/pdf' });
+        if (!pdfError) {
+          pdfStoragePath = `${timestamp}-${random}.pdf`;
+        }
+      }
+
+      const updateData: any = {
+        content_url: canvaUrl || url?.trim() || '',
+      };
+      if (canvaUrl !== undefined) updateData.canva_url = canvaUrl || null;
+      if (slidesUrl !== undefined) updateData.slides_url = slidesUrl || null;
+      if (pdfStoragePath !== undefined) updateData.pdf_storage_path = pdfStoragePath;
+
       await supabase
         .from('material_contents')
-        .update({ content_url: url.trim() })
+        .update(updateData)
         .eq('id', mc.id);
     }
 

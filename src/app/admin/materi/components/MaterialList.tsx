@@ -110,6 +110,9 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [editingMaterialTitle, setEditingMaterialTitle] = useState<string>('');
   const [editingMaterialUrl, setEditingMaterialUrl] = useState<string>('');
+  const [editingCanvaUrl, setEditingCanvaUrl] = useState<string>('');
+  const [editingSlidesUrl, setEditingSlidesUrl] = useState<string>('');
+  const [editingPdfFile, setEditingPdfFile] = useState<File | null>(null);
   const [savingMaterial, setSavingMaterial] = useState(false);
 
   // File replacement states (bacaan & cefr)
@@ -172,7 +175,10 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           material_contents (
             content_url,
             storage_bucket,
-            storage_path
+            storage_path,
+            canva_url,
+            slides_url,
+            pdf_storage_path
           )
         `)
         .eq('category', category)
@@ -532,32 +538,36 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   };
 
   // MATERIAL EDIT FUNCTIONS
-  const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string, category: string) => {
+  const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string, category: string, canvaUrl?: string, slidesUrl?: string) => {
     setEditingMaterialId(materialId);
     const detectedTitle = detectPlatformFromUrl(currentUrl, category);
     setEditingMaterialTitle(detectedTitle);
     setEditingMaterialUrl(currentUrl);
+    setEditingCanvaUrl(canvaUrl || '');
+    setEditingSlidesUrl(slidesUrl || '');
+    setEditingPdfFile(null);
   };
 
   const cancelEditMaterial = () => {
     setEditingMaterialId(null);
     setEditingMaterialTitle('');
     setEditingMaterialUrl('');
+    setEditingCanvaUrl('');
+    setEditingSlidesUrl('');
+    setEditingPdfFile(null);
   };
 
   const saveMaterial = async (materialId: string, category: string) => {
-    if (!editingMaterialUrl.trim()) {
-      alert('❌ Link tidak boleh kosong!');
-      return;
-    }
-
-    const autoTitle = detectPlatformFromUrl(editingMaterialUrl, category);
+    const autoTitle = detectPlatformFromUrl(editingCanvaUrl || editingMaterialUrl || editingSlidesUrl, category);
 
     setSavingMaterial(true);
     try {
       const formData = new FormData();
       formData.append('title', autoTitle);
-      formData.append('url', editingMaterialUrl);
+      formData.append('url', editingCanvaUrl || editingMaterialUrl || '');
+      formData.append('canva_url', editingCanvaUrl);
+      formData.append('slides_url', editingSlidesUrl);
+      if (editingPdfFile) formData.append('pdf_file', editingPdfFile);
 
       const response = await fetch(`/api/admin/materials/${materialId}`, {
         method: 'PATCH',
@@ -567,7 +577,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       if (!response.ok) throw new Error('Failed to update');
 
       alert('✅ Material berhasil diupdate!');
-      setEditingMaterialId(null);
+      cancelEditMaterial();
       fetchMaterials();
     } catch (error) {
       alert('❌ Gagal mengupdate material');
@@ -979,37 +989,58 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                             </div>
                                           </div>
                                         ) : isEditingMaterial ? (
-                                          <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
-                                            <div className="flex items-center gap-3">
-                                              <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <div className="px-3 py-2 bg-gray-100 border-2 border-gray-300 rounded text-sm font-bold text-gray-700 min-w-[150px]">
-                                                {editingMaterialTitle}
+                                          <div key={material.id} className="px-6 py-4 bg-blue-50 border-b border-gray-100">
+                                            <div className="space-y-3">
+                                              {/* Live Zoom — 3 fields */}
+                                              {material.category === 'live_zoom' ? (
+                                                <>
+                                                  <div className="flex items-center gap-2">
+                                                    <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
+                                                    <span className="text-sm font-bold text-gray-700">Edit Konten Live Zoom</span>
+                                                  </div>
+                                                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1">
+                                                    <label className="text-xs font-bold text-orange-700">🎨 Canva URL (Owner)</label>
+                                                    <input type="url" value={editingCanvaUrl}
+                                                      onChange={e => setEditingCanvaUrl(e.target.value)}
+                                                      placeholder="https://canva.link/..."
+                                                      className="w-full px-3 py-2 border border-orange-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-orange-400" />
+                                                  </div>
+                                                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                                                    <label className="text-xs font-bold text-blue-700">📄 PDF File (Siswa)</label>
+                                                    <input type="file" accept="application/pdf"
+                                                      onChange={e => setEditingPdfFile(e.target.files?.[0] || null)}
+                                                      className="w-full text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 file:text-xs" />
+                                                    {editingPdfFile && <p className="text-xs text-blue-600">📎 {editingPdfFile.name}</p>}
+                                                  </div>
+                                                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
+                                                    <label className="text-xs font-bold text-green-700">📊 Google Slides (Freelancer & B2B)</label>
+                                                    <input type="url" value={editingSlidesUrl}
+                                                      onChange={e => setEditingSlidesUrl(e.target.value)}
+                                                      placeholder="https://docs.google.com/presentation/d/..."
+                                                      className="w-full px-3 py-2 border border-green-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-green-400" />
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                /* Non-live_zoom: 1 URL saja */
+                                                <div className="flex items-center gap-3">
+                                                  <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
+                                                  <input type="url" value={editingMaterialUrl}
+                                                    onChange={e => { setEditingMaterialUrl(e.target.value); setEditingMaterialTitle(detectPlatformFromUrl(e.target.value, material.category)); }}
+                                                    placeholder="https://..."
+                                                    className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900" />
+                                                </div>
+                                              )}
+                                              {/* Action buttons */}
+                                              <div className="flex gap-2 justify-end">
+                                                <button onClick={cancelEditMaterial} disabled={savingMaterial}
+                                                  className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm">
+                                                  CANCEL
+                                                </button>
+                                                <button onClick={() => saveMaterial(material.id, material.category)} disabled={savingMaterial}
+                                                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg transition-all disabled:opacity-50 text-sm">
+                                                  {savingMaterial ? 'Saving...' : 'UPDATE'}
+                                                </button>
                                               </div>
-                                              <span className="text-xs text-gray-500">(auto dari URL)</span>
-                                              <input
-                                                type="url"
-                                                value={editingMaterialUrl}
-                                                onChange={(e) => {
-                                                  setEditingMaterialUrl(e.target.value);
-                                                  setEditingMaterialTitle(detectPlatformFromUrl(e.target.value, material.category));
-                                                }}
-                                                placeholder="https://zoom.us/... atau https://meet.google.com/..."
-                                                className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                                              />
-                                              <button
-                                                onClick={() => saveMaterial(material.id, material.category)}
-                                                disabled={savingMaterial}
-                                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 text-sm"
-                                              >
-                                                {savingMaterial ? 'Saving...' : 'UPDATE'}
-                                              </button>
-                                              <button
-                                                onClick={cancelEditMaterial}
-                                                disabled={savingMaterial}
-                                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
-                                              >
-                                                CANCEL
-                                              </button>
                                             </div>
                                           </div>
                                         ) : (
@@ -1045,7 +1076,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                               {/* Tombol edit URL — hanya untuk live_zoom & kosakata */}
                                               {isUrlBased && (
                                                 <button
-                                                  onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category)}
+                                                  onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category, material.material_contents?.[0]?.canva_url || '', material.material_contents?.[0]?.slides_url || '')}
                                                   className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                                                   title="Edit link"
                                                 >
