@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
     const lessonPositionNew = parseInt(formData.get('lesson_position_new') as string) || 1;
     const unitPositionNew = parseInt(formData.get('unit_position_new') as string) || 1;
     const canvaUrl = formData.get('canva_url') as string || '';
+    const studentContentUrl = formData.get('student_content_url') as string || '';
     const slidesUrl = formData.get('slides_url') as string || '';
     const pdfFile = formData.get('pdf_file') as File | null; // ✅ posisi lesson dari admin
     const position = parseInt(formData.get('order_number') as string) || 1;
@@ -373,8 +374,8 @@ export async function POST(request: NextRequest) {
         storage_bucket: storageBucket,
         storage_path: storagePath,
         canva_url: canvaUrl || null,
+        student_content_url: studentContentUrl || null,
         slides_url: slidesUrl || null,
-        pdf_storage_path: pdfStoragePath,
       })
       .select()
       .single();

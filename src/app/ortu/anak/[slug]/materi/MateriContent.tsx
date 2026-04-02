@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import SlideViewer from './SlideViewer'
 import { BookOpen, Video, FileText, Headphones, ChevronDown, ChevronRight, CheckCircle2, X, Loader2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
@@ -10,7 +11,7 @@ type Material = {
   category: string
   gdrive_url: string | null
   component_id: string | null
-  pdf_storage_path: string | null
+  student_content_url: string | null
   slides_url: string | null
   completed: boolean
   lesson_title: string
@@ -44,13 +45,15 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
   const [openChapters, setOpenChapters] = useState<Set<string>>(new Set())
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
 
-  // ✅ PDF Modal state
+  // ✅ PDF/Slide Modal state
   const [pdfModal, setPdfModal] = useState<{
     open: boolean
     url: string
     title: string
     loading: boolean
-  }>({ open: false, url: '', title: '', loading: false })
+    type: 'pdf' | 'slides'
+    slideUrls: string[]
+  }>({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })
 
   // ✅ Google embed modal
   const [embedModal, setEmbedModal] = useState<{
@@ -113,9 +116,9 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
     return url.includes('docs.google.com') || url.includes('drive.google.com')
   }
 
-  // ✅ Buka PDF via signed URL
+  // ✅ Buka PDF/Slides via signed URL
   const openPDF = async (pdfStoragePath: string, title: string) => {
-    setPdfModal({ open: true, url: '', title, loading: true })
+    setPdfModal({ open: true, url: '', title, loading: true, type: 'pdf', slideUrls: [] })
     try {
       const res = await fetch('/api/materials/pdf-url', {
         method: 'POST',
@@ -124,10 +127,15 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setPdfModal({ open: true, url: data.signed_url, title, loading: false })
+
+      if (data.type === 'slides') {
+        setPdfModal({ open: true, url: '', title, loading: false, type: 'slides', slideUrls: data.slide_urls })
+      } else {
+        setPdfModal({ open: true, url: data.signed_url, title, loading: false, type: 'pdf', slideUrls: [] })
+      }
     } catch (err) {
-      alert(`❌ Gagal membuka PDF`)
-      setPdfModal({ open: false, url: '', title: '', loading: false })
+      alert(`❌ Gagal membuka materi`)
+      setPdfModal({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })
     }
   }
 
@@ -311,17 +319,17 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
                                   <p className="font-medium text-gray-900 mb-3">{lessonTitle}</p>
                                   <div className="flex flex-wrap gap-2 pl-4">
                                     {materials.map(material => {
-                                      const isClickable = material.pdf_storage_path || 
+                                      const isClickable = material.student_content_url || 
                                         (material.gdrive_url && (isGoogleUrl(material.gdrive_url) || material.category !== 'live_zoom')) || 
                                         material.component_id
                                       return (
                                         <div key={material.id} className="flex items-center gap-2">
                                           {material.completed && <CheckCircle2 className="w-4 h-4 text-green-500" />}
                                           {isClickable ? (
-                                            material.pdf_storage_path ? (
+                                            material.student_content_url ? (
                                               // ✅ PDF tersedia → buka PDF viewer
                                               <button
-                                                onClick={() => openPDF(material.pdf_storage_path!, material.title)}
+                                                onClick={() => openPDF(material.student_content_url!, material.title)}
                                                 className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
                                               >
                                                 {getCategoryIcon(material.category)}
@@ -377,13 +385,22 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
       )}
     </div>
 
-    {/* ✅ PDF Modal */}
-    {pdfModal.open && (
+    {/* ✅ Slide Viewer */}
+    {pdfModal.open && pdfModal.type === 'slides' && !pdfModal.loading && (
+      <SlideViewer
+        slideUrls={pdfModal.slideUrls}
+        title={pdfModal.title}
+        onClose={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })}
+      />
+    )}
+
+    {/* ✅ PDF Modal (fallback untuk PDF biasa) */}
+    {pdfModal.open && pdfModal.type === 'pdf' && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-bold text-gray-900 truncate">{pdfModal.title}</h2>
-            <button onClick={() => setPdfModal({ open: false, url: '', title: '', loading: false })}
+            <button onClick={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'pdf', slideUrls: [] })}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
               <X className="w-5 h-5" />
             </button>
@@ -391,15 +408,22 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
           <div className="flex-1 overflow-hidden rounded-b-2xl">
             {pdfModal.loading ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
-                  <p className="text-gray-600 font-medium">Memuat PDF...</p>
-                </div>
+                <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
               </div>
             ) : (
               <iframe src={pdfModal.url} className="w-full h-full border-0" title={pdfModal.title} />
             )}
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* Loading overlay */}
+    {pdfModal.open && pdfModal.loading && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+        <div className="bg-white rounded-2xl p-8 text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
+          <p className="text-gray-600 font-medium">Memuat materi...</p>
         </div>
       </div>
     )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 // Available icons for chapters and units
@@ -40,7 +40,7 @@ type MaterialWithHierarchy = {
     storage_path: string | null;
     canva_url?: string | null;
     slides_url?: string | null;
-    pdf_storage_path?: string | null;
+    student_content_url?: string | null;
   }[];
   created_at: string;
   lesson_id: string;
@@ -122,6 +122,10 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   const [replacingFileId, setReplacingFileId] = useState<string | null>(null);
   const [replacingFile, setReplacingFile] = useState<File | null>(null);
   const [savingFile, setSavingFile] = useState(false);
+
+  // PDF Convert states
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [convertProgress, setConvertProgress] = useState<string>('');
 
   const supabase = createClient();
 
@@ -540,6 +544,33 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     }
   };
 
+  // PDF CONVERT FUNCTION
+  const convertPDF = async (materialId: string, pdfFile: File) => {
+    setConvertingId(materialId);
+    setConvertProgress('Mengupload PDF...');
+    try {
+      const formData = new FormData();
+      formData.append('pdf', pdfFile);
+      formData.append('material_id', materialId);
+
+      setConvertProgress('Mengkonversi halaman...');
+      const res = await fetch('/api/admin/materials/pdf-convert', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+
+      alert(`✅ ${data.message}`);
+      fetchMaterials();
+    } catch (err) {
+      alert(`❌ Gagal convert: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setConvertingId(null);
+      setConvertProgress('');
+    }
+  };
+
   // MATERIAL EDIT FUNCTIONS
   const startEditMaterial = (materialId: string, currentTitle: string, currentUrl: string, category: string, canvaUrl?: string, slidesUrl?: string) => {
     setEditingMaterialId(materialId);
@@ -569,8 +600,8 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       formData.append('title', autoTitle);
       formData.append('url', editingCanvaUrl || editingMaterialUrl || '');
       formData.append('canva_url', editingCanvaUrl);
+      formData.append('student_content_url', editingStudentUrl || '');
       formData.append('slides_url', editingSlidesUrl);
-      if (editingPdfFile) formData.append('pdf_file', editingPdfFile);
 
       const response = await fetch(`/api/admin/materials/${materialId}`, {
         method: 'PATCH',
@@ -1009,7 +1040,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                       className="w-full px-3 py-2 border border-orange-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-orange-400" />
                                                   </div>
                                                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-                                                    <label className="text-xs font-bold text-blue-700">📄 PDF File (Siswa)</label>
+                                                    <label className="text-xs font-bold text-blue-700">📄 Konten Siswa – Google Drive PDF</label>
                                                     <input type="file" accept="application/pdf"
                                                       onChange={e => setEditingPdfFile(e.target.files?.[0] || null)}
                                                       className="w-full text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 file:text-xs" />
@@ -1085,6 +1116,21 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                 >
                                                   <Edit className="w-4 h-4" />
                                                 </button>
+                                              )}
+                                              {/* ✅ Tombol Convert PDF — hanya untuk live_zoom */}
+                                              {material.category === 'live_zoom' && (
+                                                convertingId === material.id ? (
+                                                  <div className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <span>{convertProgress || 'Converting...'}</span>
+                                                  </div>
+                                                ) : (
+                                                  <label className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer" title="Upload & Convert PDF ke Slides">
+                                                    <FileImage className="w-4 h-4" />
+                                                    <input type="file" accept="application/pdf" className="hidden"
+                                                      onChange={e => { const f = e.target.files?.[0]; if (f) convertPDF(material.id, f); }} />
+                                                  </label>
+                                                )
                                               )}
                                               {/* ✅ Tombol Edit Konten Block Editor — hanya untuk CEFR */}
                                               {material.category === 'cefr' && onEditContent && (
