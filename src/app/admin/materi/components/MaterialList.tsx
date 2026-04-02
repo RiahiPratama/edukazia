@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 // Available icons for chapters and units
@@ -105,11 +105,16 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
   const [editingLessonPosition, setEditingLessonPosition] = useState<number>(0);
   const [savingLesson, setSavingLesson] = useState(false);
 
-  // Material edit states
+  // Material edit states (URL-based)
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [editingMaterialTitle, setEditingMaterialTitle] = useState<string>('');
   const [editingMaterialUrl, setEditingMaterialUrl] = useState<string>('');
   const [savingMaterial, setSavingMaterial] = useState(false);
+
+  // File replacement states (bacaan & cefr)
+  const [replacingFileId, setReplacingFileId] = useState<string | null>(null);
+  const [replacingFile, setReplacingFile] = useState<File | null>(null);
+  const [savingFile, setSavingFile] = useState(false);
 
   const supabase = createClient();
 
@@ -570,6 +575,65 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
     }
   };
 
+  // ✅ Ganti file untuk bacaan & cefr
+  const startReplaceFile = (materialId: string) => {
+    setReplacingFileId(materialId);
+    setReplacingFile(null);
+  };
+
+  const cancelReplaceFile = () => {
+    setReplacingFileId(null);
+    setReplacingFile(null);
+  };
+
+  const saveReplaceFile = async (material: MaterialWithHierarchy) => {
+    if (!replacingFile) {
+      alert('❌ Pilih file terlebih dahulu!');
+      return;
+    }
+
+    setSavingFile(true);
+    try {
+      const mc = material.material_contents?.[0];
+      if (!mc?.storage_bucket) throw new Error('Storage bucket tidak ditemukan');
+
+      // Upload file baru
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(7);
+      const ext = replacingFile.name.split('.').pop()?.toLowerCase() || 'jsx';
+      const folder = material.category === 'bacaan' ? 'bacaan' : 'cefr';
+      const newPath = `${folder}/${timestamp}-${random}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(mc.storage_bucket)
+        .upload(newPath, replacingFile);
+
+      if (uploadError) throw new Error(uploadError.message);
+
+      // Hapus file lama kalau ada
+      if (mc.storage_path) {
+        await supabase.storage.from(mc.storage_bucket).remove([mc.storage_path]);
+      }
+
+      // Update storage_path di material_contents
+      const { error: updateError } = await supabase
+        .from('material_contents')
+        .update({ storage_path: newPath })
+        .eq('material_id', material.id);
+
+      if (updateError) throw new Error(updateError.message);
+
+      alert('✅ File berhasil diganti!');
+      setReplacingFileId(null);
+      setReplacingFile(null);
+      fetchMaterials();
+    } catch (error) {
+      alert(`❌ Gagal ganti file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setSavingFile(false);
+    }
+  };
+
   // Platform detection helper
   const detectPlatformFromUrl = (url: string, category: string): string => {
     if (!url) return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
@@ -877,7 +941,43 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                         const isUrlBased = material.category === 'live_zoom' || material.category === 'kosakata';
                                         const materialUrl = isUrlBased ? getExternalUrl(material) : getStorageUrl(material);
 
-                                        return isEditingMaterial ? (
+                                        const isReplacingFile = replacingFileId === material.id;
+
+                                        return isReplacingFile ? (
+                                          // ✅ UI Ganti File untuk bacaan & cefr
+                                          <div key={material.id} className="px-6 py-3 bg-orange-50 border-b border-gray-100">
+                                            <div className="flex items-center gap-3">
+                                              <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
+                                              <span className="text-sm font-semibold text-gray-700">{getMaterialDisplayName(material)}</span>
+                                              <label className="flex items-center gap-2 px-3 py-2 border-2 border-dashed border-orange-400 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors">
+                                                <Upload className="w-4 h-4 text-orange-600" />
+                                                <span className="text-sm text-orange-700 font-medium">
+                                                  {replacingFile ? replacingFile.name : 'Pilih file baru (.jsx)'}
+                                                </span>
+                                                <input
+                                                  type="file"
+                                                  accept=".jsx,.tsx"
+                                                  className="hidden"
+                                                  onChange={(e) => setReplacingFile(e.target.files?.[0] || null)}
+                                                />
+                                              </label>
+                                              <button
+                                                onClick={() => saveReplaceFile(material)}
+                                                disabled={savingFile || !replacingFile}
+                                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg transition-all disabled:opacity-50 text-sm"
+                                              >
+                                                {savingFile ? 'Mengupload...' : 'GANTI'}
+                                              </button>
+                                              <button
+                                                onClick={cancelReplaceFile}
+                                                disabled={savingFile}
+                                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
+                                              >
+                                                CANCEL
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : isEditingMaterial ? (
                                           <div key={material.id} className="px-6 py-3 bg-blue-50 border-b border-gray-100">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
@@ -918,7 +1018,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                               <span className="text-sm font-semibold text-gray-700">
                                                 {getMaterialDisplayName(material)}
                                               </span>
-                                              {/* ✅ Tampilkan nama file untuk bacaan & cefr */}
+                                              {/* Tampilkan nama file untuk bacaan & cefr */}
                                               {(material.category === 'bacaan' || material.category === 'cefr') && (
                                                 <span className="text-xs text-gray-400 font-mono">
                                                   {material.material_contents?.[0]?.storage_path?.split('/').pop() || '-'}
@@ -941,7 +1041,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                   <ExternalLink className="w-4 h-4" />
                                                 </a>
                                               )}
-                                              {/* Tombol edit — hanya untuk live_zoom & kosakata */}
+                                              {/* Tombol edit URL — hanya untuk live_zoom & kosakata */}
                                               {isUrlBased && (
                                                 <button
                                                   onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category)}
@@ -949,6 +1049,16 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                                                   title="Edit link"
                                                 >
                                                   <Edit className="w-4 h-4" />
+                                                </button>
+                                              )}
+                                              {/* ✅ Tombol Ganti File — hanya untuk bacaan & cefr */}
+                                              {!isUrlBased && (
+                                                <button
+                                                  onClick={() => startReplaceFile(material.id)}
+                                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                                  title="Ganti file"
+                                                >
+                                                  <Upload className="w-4 h-4" />
                                                 </button>
                                               )}
                                               <button
