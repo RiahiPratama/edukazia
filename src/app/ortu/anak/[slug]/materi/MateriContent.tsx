@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BookOpen, Video, FileText, Headphones, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react'
+import { BookOpen, Video, FileText, Headphones, ChevronDown, ChevronRight, CheckCircle2, X, Loader2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
 type Material = {
@@ -41,6 +41,14 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
   const [activeTab, setActiveTab] = useState<'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'>('live_zoom')
   const [openChapters, setOpenChapters] = useState<Set<string>>(new Set())
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
+
+  // ✅ Google embed modal
+  const [embedModal, setEmbedModal] = useState<{
+    open: boolean;
+    url: string;
+    title: string;
+    loading: boolean;
+  }>({ open: false, url: '', title: '', loading: false })
 
   // Initialize with first level
   useEffect(() => {
@@ -87,6 +95,30 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
       newOpen.add(unitId)
     }
     setOpenUnits(newOpen)
+  }
+
+  // ✅ Detect Google URL
+  const isGoogleUrl = (url: string | null) => {
+    if (!url) return false;
+    return url.includes('docs.google.com') || url.includes('drive.google.com')
+  }
+
+  // ✅ Buka Google file via enrollment gate
+  const openGoogleEmbed = async (materialId: string, title: string) => {
+    setEmbedModal({ open: true, url: '', title, loading: true })
+    try {
+      const res = await fetch('/api/google/embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialId, studentSlug }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setEmbedModal({ open: true, url: data.embedUrl, title, loading: false })
+    } catch (err) {
+      alert(`❌ Gagal membuka materi: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      setEmbedModal({ open: false, url: '', title: '', loading: false })
+    }
   }
 
   const getCategoryIcon = (category: string) => {
@@ -256,15 +288,27 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
                                           {material.completed && <CheckCircle2 className="w-4 h-4 text-green-500" />}
                                           {isClickable ? (
                                             material.gdrive_url ? (
-                                              <a
-                                                href={material.gdrive_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
-                                              >
-                                                {getCategoryIcon(material.category)}
-                                                {getCategoryLabel(material.category)}
-                                              </a>
+                                              isGoogleUrl(material.gdrive_url) ? (
+                                                // ✅ Google URL → buka via enrollment gate
+                                                <button
+                                                  onClick={() => openGoogleEmbed(material.id, material.title)}
+                                                  className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
+                                                >
+                                                  {getCategoryIcon(material.category)}
+                                                  {getCategoryLabel(material.category)}
+                                                </button>
+                                              ) : (
+                                                // Non-Google URL (Canva, dll) → buka tab baru
+                                                <a
+                                                  href={material.gdrive_url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="flex items-center gap-2 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg font-semibold hover:bg-[#4a3ec7] transition-colors text-sm"
+                                                >
+                                                  {getCategoryIcon(material.category)}
+                                                  {getCategoryLabel(material.category)}
+                                                </a>
+                                              )
                                             ) : material.component_id ? (
                                               <Link
                                                 href={`/ortu/anak/${studentSlug}/materi/render/${material.component_id}`}
@@ -299,5 +343,45 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
         </div>
       )}
     </div>
+
+    {/* ✅ Google Embed Modal */}
+    {embedModal.open && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+          {/* Modal Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-bold text-gray-900 truncate">{embedModal.title}</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEmbedModal({ open: false, url: '', title: '', loading: false })}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Content */}
+          <div className="flex-1 overflow-hidden rounded-b-2xl">
+            {embedModal.loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
+                  <p className="text-gray-600 font-medium">Memuat materi...</p>
+                </div>
+              </div>
+            ) : (
+              <iframe
+                src={embedModal.url}
+                className="w-full h-full border-0"
+                allow="autoplay"
+                title={embedModal.title}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    )}
   )
 }
