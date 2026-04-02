@@ -42,6 +42,7 @@ type MaterialWithHierarchy = {
   created_at: string;
   lesson_id: string;
   lesson_name: string;
+  lesson_position: number; // ✅ untuk sorting lesson
   unit_id: string;
   unit_name: string;
   unit_position: number;
@@ -183,8 +184,9 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
 
       const { data: lessonsData, error: lessonsError } = await supabase
         .from('lessons')
-        .select('id, lesson_name, unit_id')
-        .in('id', lessonIds);
+        .select('id, lesson_name, unit_id, position')
+        .in('id', lessonIds)
+        .order('position', { ascending: true });
 
       if (lessonsError) throw lessonsError;
 
@@ -234,6 +236,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
           created_at: material.created_at,
           lesson_id: material.lesson_id,
           lesson_name: lesson?.lesson_name || 'Unknown Lesson',
+          lesson_position: lesson?.position || 0, // ✅ dari tabel lessons
           unit_id: lesson?.unit_id || '',
           unit_name: unit?.unit_name || 'Unknown Unit',
           unit_position: unit?.position || 0,
@@ -345,7 +348,7 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
         chapterGroups[chapterId].units[unitId].lessons[lessonId] = {
           lessonId,
           lessonName: material.lesson_name || 'Lesson Tidak Diketahui',
-          lessonPosition: material.position || 0, // ✅ pakai position material sebagai lesson order
+          lessonPosition: material.lesson_position || 0, // ✅ dari tabel lessons
           materials: []
         };
       }
