@@ -38,6 +38,9 @@ type MaterialWithHierarchy = {
     content_url: string | null;
     storage_bucket: string | null;
     storage_path: string | null;
+    canva_url?: string | null;
+    slides_url?: string | null;
+    pdf_storage_path?: string | null;
   }[];
   created_at: string;
   lesson_id: string;
