@@ -40,6 +40,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
   const [newChapterTitle, setNewChapterTitle] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitPosition, setNewUnitPosition] = useState(1);
   const [newLessonName, setNewLessonName] = useState('');
   const [newLessonPosition, setNewLessonPosition] = useState(1);
 
@@ -212,6 +213,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
             formData.append('chapter_name', newChapterTitle);
             formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
             formData.append('unit_name', newUnitName);
+        formData.append('unit_position_new', newUnitPosition.toString());
             formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
             formData.append('lesson_name', newLessonName);
             formData.append('lesson_position_new', newLessonPosition.toString()); // ✅ posisi lesson baru
@@ -314,7 +316,16 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                 <option value="NEW">+ Buat Unit Baru</option>
                 {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
               </select>
-              {selectedUnit === 'NEW' && <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
+              {selectedUnit === 'NEW' && (
+                <div className="mt-2 space-y-2">
+                  <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Unit *</label>
+                    <input type="number" value={newUnitPosition} onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)} min="1" required className="w-24 px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
+                    <span className="text-xs text-gray-500">Menentukan urutan tampil unit di daftar materi</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

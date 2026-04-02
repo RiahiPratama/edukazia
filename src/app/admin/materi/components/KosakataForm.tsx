@@ -36,6 +36,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
   const [newChapterTitle, setNewChapterTitle] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitPosition, setNewUnitPosition] = useState(1);
   const [newLessonName, setNewLessonName] = useState('');
   const [newLessonPosition, setNewLessonPosition] = useState(1);
 
@@ -199,6 +200,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
         formData.append('chapter_name', newChapterTitle);
         formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
         formData.append('unit_name', newUnitName);
+        formData.append('unit_position_new', newUnitPosition.toString());
         formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
         formData.append('lesson_name', newLessonName);
         formData.append('lesson_position_new', newLessonPosition.toString()); // ✅ posisi lesson baru

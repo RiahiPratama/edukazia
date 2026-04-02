@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
     const unitName = formData.get('unit_name') as string;
     const lessonId = formData.get('lesson_id') as string;
     const lessonName = formData.get('lesson_name') as string;
-    const lessonPositionNew = parseInt(formData.get('lesson_position_new') as string) || 1; // ✅ posisi lesson dari admin
+    const lessonPositionNew = parseInt(formData.get('lesson_position_new') as string) || 1;
+    const unitPositionNew = parseInt(formData.get('unit_position_new') as string) || 1; // ✅ posisi lesson dari admin
     const position = parseInt(formData.get('order_number') as string) || 1;
     const isPublished = formData.get('is_published') === 'true';
     const contentDataStr = formData.get('content_data') as string;
@@ -169,10 +170,10 @@ export async function POST(request: NextRequest) {
         .from('units')
         .insert({
           level_id: levelId,
-          chapter_id: actualChapterId || null, // Link to chapter!
+          chapter_id: actualChapterId || null,
           unit_name: unitName,
           unit_number: 0,
-          position: 0,
+          position: unitPositionNew, // ✅ dari input admin
         })
         .select()
         .single();

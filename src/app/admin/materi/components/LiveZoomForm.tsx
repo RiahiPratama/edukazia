@@ -37,6 +37,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   const [newChapterTitle, setNewChapterTitle] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitPosition, setNewUnitPosition] = useState(1);
   const [newLessonName, setNewLessonName] = useState('');
   const [newLessonPosition, setNewLessonPosition] = useState(1);
 
