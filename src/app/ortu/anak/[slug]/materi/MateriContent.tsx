@@ -171,6 +171,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
   const chapterGroups = groupByChapter(filteredUnits)
 
   return (
+    <>
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
@@ -383,5 +384,6 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
         </div>
       </div>
     )}
+    </>
   )
 }
