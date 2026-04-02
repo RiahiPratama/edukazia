@@ -29,7 +29,7 @@ export default async function RenderPage({
       .eq('id', lessonId)
       .single()
 
-    // Fetch blocks dari lesson_contents
+    // Fetch konten dari lesson_contents
     const { data: lessonContent } = await supabase
       .from('lesson_contents')
       .select('blocks')
@@ -47,9 +47,15 @@ export default async function RenderPage({
       )
     }
 
+    // Support both TipTap JSON dan legacy blocks
+    const blocks = lessonContent.blocks || {}
+    const tiptapContent = blocks?.tiptap_content || null
+    const legacyBlocks = Array.isArray(blocks) ? blocks : (blocks?.blocks || [])
+
     return (
       <CEFRRenderer
-        blocks={lessonContent.blocks || []}
+        content={tiptapContent}
+        legacyBlocks={legacyBlocks}
         lessonName={lesson?.lesson_name || ''}
       />
     )

@@ -2,54 +2,70 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Play, Pause, Volume2, ArrowLeft, ChevronDown } from 'lucide-react'
-import Link from 'next/link'
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-type CollapsibleItem = { id: string; text: string; translation: string; storage_path: string | null; storage_bucket: string }
-type InlineSegment = { id: string; text: string; highlighted: boolean; color: 'blue'|'yellow'|'green'|'red'; storage_path: string | null; storage_bucket: string }
-
-type Block =
-  | { id: string; type: 'heading'; level: 1 | 2 | 3; content: string }
-  | { id: string; type: 'paragraph'; content: string }
-  | { id: string; type: 'highlight'; content: string; color: 'blue' | 'yellow' | 'green' | 'red' }
-  | { id: string; type: 'table'; headers: string[]; rows: string[][] }
-  | { id: string; type: 'audio_sentence'; text: string; translation: string; storage_path: string | null; storage_bucket: string }
-  | { id: string; type: 'collapsible_group'; header: string; color: 'blue'|'yellow'|'green'|'red'; items: CollapsibleItem[] }
-  | { id: string; type: 'inline_highlight'; segments: InlineSegment[] }
+import { Play, Pause, ChevronDown, ArrowLeft, Volume2 } from 'lucide-react'
 
 type CEFRRendererProps = {
-  blocks: Block[]
+  content: any // TipTap JSON or legacy blocks
   lessonName: string
 }
 
-// ── Highlight Colors ───────────────────────────────────────────────────────────
-const HIGHLIGHT_COLORS = {
-  blue: 'bg-blue-50 border-l-4 border-blue-400 text-blue-900',
-  yellow: 'bg-yellow-50 border-l-4 border-yellow-400 text-yellow-900',
-  green: 'bg-green-50 border-l-4 border-green-400 text-green-900',
-  red: 'bg-red-50 border-l-4 border-red-400 text-red-900',
+// ── Highlight color map ───────────────────────────────────────
+const HIGHLIGHT_MAP: Record<string, string> = {
+  '#FEF08A': 'bg-yellow-100',
+  '#BAE6FD': 'bg-blue-100',
+  '#BBF7D0': 'bg-green-100',
+  '#FECACA': 'bg-red-100',
+  '#DDD6FE': 'bg-purple-100',
 }
 
-const COLLAPSIBLE_COLORS = {
+// ── Collapsible Group Colors ──────────────────────────────────
+const GROUP_COLORS: Record<string, string> = {
   blue: 'bg-blue-500 text-white',
   yellow: 'bg-yellow-400 text-yellow-900',
   green: 'bg-green-500 text-white',
   red: 'bg-red-500 text-white',
+  purple: 'bg-[#5C4FE5] text-white',
+  orange: 'bg-orange-400 text-white',
 }
 
-const INLINE_COLORS = {
-  blue: 'bg-blue-100 text-blue-900 border border-blue-300 rounded px-1',
-  yellow: 'bg-yellow-100 text-yellow-900 border border-yellow-300 rounded px-1',
-  green: 'bg-green-100 text-green-900 border border-green-300 rounded px-1',
-  red: 'bg-red-100 text-red-900 border border-red-300 rounded px-1',
-}
-
-// ── Main Component ─────────────────────────────────────────────────────────────
-export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) {
+export default function CEFRRenderer({ content, lessonName }: CEFRRendererProps) {
   const [playingId, setPlayingId] = useState<string | null>(null)
-  const [loadingId, setLoadingId] = useState<string | null>(null)
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    // Initialize open groups based on defaultOpen attribute
+    const open = new Set<string>()
+    if (content?.content) {
+      content.content.forEach((node: any, idx: number) => {
+        if (node.type === 'collapsibleGroup' && node.attrs?.defaultOpen !== false) {
+          open.add(`group_${idx}`)
+        }
+      })
+    }
+    return open
+  })
+  const audioRefs = useRef<Record<string, HTMLAudioElement>>({})
+  const supabase = createClient()
+
+  const toggleAudio = (id: string, storagePath: string) => {
+    Object.entries(audioRefs.current).forEach(([aid, a]) => {
+      if (aid !== id) { a.pause(); a.currentTime = 0 }
+    })
+
+    if (playingId === id) {
+      audioRefs.current[id]?.pause()
+      setPlayingId(null)
+      return
+    }
+
+    if (!audioRefs.current[id]) {
+      const { data } = supabase.storage.from('audio').getPublicUrl(storagePath)
+      const audio = new Audio(data.publicUrl)
+      audio.onended = () => setPlayingId(null)
+      audioRefs.current[id] = audio
+    }
+
+    audioRefs.current[id].play()
+    setPlayingId(id)
+  }
 
   const toggleGroup = (id: string) => {
     setOpenGroups(prev => {
@@ -59,234 +75,202 @@ export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) 
       return next
     })
   }
-  const audioRefs = useRef<Record<string, HTMLAudioElement>>({})
-  const supabase = createClient()
 
-  const toggleAudio = async (blockId: string, storagePath: string, storageBucket: string) => {
-    // Stop semua audio yang sedang play
-    Object.entries(audioRefs.current).forEach(([id, audio]) => {
-      if (id !== blockId) {
-        audio.pause()
-        audio.currentTime = 0
+  // ── Render text marks (bold, italic, underline, highlight) ──
+  const renderMarks = (text: string, marks: any[] = []) => {
+    let el: any = text
+    marks.forEach(mark => {
+      if (mark.type === 'bold') el = <strong>{el}</strong>
+      else if (mark.type === 'italic') el = <em>{el}</em>
+      else if (mark.type === 'underline') el = <u>{el}</u>
+      else if (mark.type === 'highlight') {
+        const bgClass = HIGHLIGHT_MAP[mark.attrs?.color] || 'bg-yellow-100'
+        el = <mark className={`${bgClass} rounded px-0.5`}>{el}</mark>
       }
     })
-
-    // Toggle play/pause
-    if (playingId === blockId) {
-      audioRefs.current[blockId]?.pause()
-      setPlayingId(null)
-      return
-    }
-
-    // Buat audio baru kalau belum ada
-    if (!audioRefs.current[blockId]) {
-      setLoadingId(blockId)
-      try {
-        const { data } = supabase.storage
-          .from(storageBucket)
-          .getPublicUrl(storagePath)
-
-        const audio = new Audio(data.publicUrl)
-        audio.onended = () => setPlayingId(null)
-        audio.onerror = () => {
-          setPlayingId(null)
-          setLoadingId(null)
-        }
-        audioRefs.current[blockId] = audio
-      } catch (err) {
-        setLoadingId(null)
-        return
-      }
-    }
-
-    setLoadingId(null)
-    audioRefs.current[blockId].play()
-    setPlayingId(blockId)
+    return el
   }
 
-  const renderBlock = (block: Block) => {
-    switch (block.type) {
-      case 'heading':
-        const HeadingTag = `h${block.level}` as 'h1' | 'h2' | 'h3'
-        const headingClass = {
-          1: 'text-2xl font-bold text-gray-900 mt-8 mb-4',
-          2: 'text-xl font-bold text-gray-800 mt-6 mb-3',
-          3: 'text-lg font-bold text-gray-700 mt-4 mb-2',
-        }[block.level]
-        return (
-          <HeadingTag key={block.id} className={headingClass}>
-            {block.content}
-          </HeadingTag>
-        )
-
-      case 'paragraph':
-        return (
-          <p key={block.id} className="text-gray-700 leading-relaxed mb-4 text-base">
-            {block.content}
-          </p>
-        )
-
-      case 'highlight':
-        return (
-          <div key={block.id} className={`${HIGHLIGHT_COLORS[block.color]} rounded-lg p-4 mb-4`}>
-            <p className="text-sm font-medium leading-relaxed">{block.content}</p>
-          </div>
-        )
-
-      case 'table':
-        return (
-          <div key={block.id} className="overflow-x-auto mb-6 rounded-xl border border-gray-200 shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#5C4FE5] text-white">
-                  {block.headers.map((h, i) => (
-                    <th key={i} className="px-4 py-3 text-left font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {block.rows.map((row, ri) => (
-                  <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-[#F7F6FF]'}>
-                    {row.map((cell, ci) => (
-                      <td key={ci} className="px-4 py-3 text-gray-700 border-t border-gray-100">{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-
-      case 'audio_sentence':
-        const isPlaying = playingId === block.id
-        const isLoading = loadingId === block.id
-        const hasAudio = !!block.storage_path
-
-        return (
-          <div key={block.id}
-            className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors
-              ${isPlaying ? 'bg-[#5C4FE5]/10 border-2 border-[#5C4FE5]' : 'bg-[#F7F6FF] border-2 border-transparent hover:border-[#E5E3FF]'}`}>
-
-            {/* Play Button */}
-            <button
-              onClick={() => hasAudio && toggleAudio(block.id, block.storage_path!, block.storage_bucket)}
-              disabled={!hasAudio || isLoading}
-              className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all
-                ${hasAudio
-                  ? isPlaying
-                    ? 'bg-[#5C4FE5] text-white shadow-lg'
-                    : 'bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white'
-                  : 'bg-gray-100 text-gray-300 cursor-not-allowed'}`}
-            >
-              {isLoading ? (
-                <div className="w-4 h-4 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
-              ) : isPlaying ? (
-                <Pause className="w-4 h-4" />
-              ) : (
-                <Play className="w-4 h-4 ml-0.5" />
-              )}
-            </button>
-
-            {/* Text Content */}
-            <div className="flex-1 min-w-0">
-              <p className={`font-semibold text-base ${isPlaying ? 'text-[#5C4FE5]' : 'text-gray-900'}`}>
-                {block.text}
-              </p>
-              {block.translation && (
-                <p className="text-sm text-gray-500 mt-0.5">{block.translation}</p>
-              )}
-            </div>
-
-            {/* Audio indicator */}
-            {hasAudio && isPlaying && (
-              <Volume2 className="w-4 h-4 text-[#5C4FE5] flex-shrink-0 animate-pulse" />
-            )}
-          </div>
-        )
-
-      case 'collapsible_group': {
-        const isOpen = openGroups.has(block.id)
-        return (
-          <div key={block.id} className="mb-4 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-            <button onClick={() => toggleGroup(block.id)}
-              className={`w-full flex items-center justify-between px-4 py-3 font-semibold text-sm transition-colors ${COLLAPSIBLE_COLORS[block.color]}`}>
-              <span>{block.header}</span>
-              <ChevronDown className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isOpen && (
-              <div className="bg-white divide-y divide-gray-100">
-                {block.items.map(item => {
-                  const isPlaying = playingId === `${block.id}_${item.id}`
-                  const isLoading = loadingId === `${block.id}_${item.id}`
-                  const hasAudio = !!item.storage_path
-                  return (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
-                      <button
-                        onClick={() => hasAudio && toggleAudio(`${block.id}_${item.id}`, item.storage_path!, item.storage_bucket)}
-                        disabled={!hasAudio || isLoading}
-                        className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all
-                          ${hasAudio ? isPlaying ? 'bg-[#5C4FE5] text-white shadow-lg' : 'bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed'}`}>
-                        {isLoading ? <div className="w-3 h-3 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
-                          : isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
-                      </button>
-                      <div>
-                        <p className={`font-semibold text-sm ${isPlaying ? 'text-[#5C4FE5]' : 'text-gray-900'}`}>{item.text}</p>
-                        {item.translation && <p className="text-xs text-gray-500">{item.translation}</p>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
+  // ── Render inline content (text nodes) ──────────────────────
+  const renderInline = (nodes: any[] = []) => {
+    return nodes.map((node, idx) => {
+      if (node.type === 'text') {
+        return <span key={idx}>{renderMarks(node.text, node.marks)}</span>
       }
+      if (node.type === 'hardBreak') return <br key={idx} />
+      return null
+    })
+  }
 
-      case 'inline_highlight':
-        return (
-          <div key={block.id} className="text-gray-700 leading-relaxed mb-4 text-base">
-            {block.segments.map(seg => {
-              const isPlaying = playingId === `${block.id}_${seg.id}`
-              const isLoading = loadingId === `${block.id}_${seg.id}`
-              const hasAudio = seg.highlighted && !!seg.storage_path
+  // ── Render table ─────────────────────────────────────────────
+  const renderTable = (node: any, idx: number) => (
+    <div key={idx} className="overflow-x-auto mb-6 rounded-xl border border-gray-200 shadow-sm">
+      <table className="w-full text-sm">
+        <tbody>
+          {node.content?.map((row: any, ri: number) => (
+            <tr key={ri} className={ri === 0 ? '' : ri % 2 === 0 ? 'bg-white' : 'bg-[#F7F6FF]'}>
+              {row.content?.map((cell: any, ci: number) => {
+                const Tag = cell.type === 'tableHeader' ? 'th' : 'td'
+                const cellClass = cell.type === 'tableHeader'
+                  ? 'bg-[#5C4FE5] text-white font-semibold px-4 py-2.5 text-left'
+                  : 'px-4 py-2.5 text-gray-700 border-t border-gray-100'
+                return (
+                  <Tag key={ci} className={cellClass}>
+                    {cell.content?.map((p: any, pi: number) => (
+                      <span key={pi}>{renderInline(p.content)}</span>
+                    ))}
+                  </Tag>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 
-              if (!seg.highlighted) {
-                return <span key={seg.id}>{seg.text}</span>
-              }
+  // ── Render audio sentence ─────────────────────────────────────
+  const renderAudioSentence = (node: any, id: string) => {
+    const { text, translation, storagePath } = node.attrs || {}
+    const isPlaying = playingId === id
+    const hasAudio = !!storagePath
 
+    return (
+      <div className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors
+        ${isPlaying ? 'bg-[#5C4FE5]/10 border-2 border-[#5C4FE5]' : 'bg-[#F7F6FF] border-2 border-transparent hover:border-[#E5E3FF]'}`}>
+        <button
+          onClick={() => hasAudio && toggleAudio(id, storagePath)}
+          disabled={!hasAudio}
+          className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all
+            ${hasAudio ? isPlaying ? 'bg-[#5C4FE5] text-white shadow-lg' : 'bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed'}`}>
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <div className="flex-1">
+          <p className={`font-semibold text-base ${isPlaying ? 'text-[#5C4FE5]' : 'text-gray-900'}`}>{text}</p>
+          {translation && <p className="text-sm text-gray-500">{translation}</p>}
+        </div>
+        {hasAudio && isPlaying && <Volume2 className="w-4 h-4 text-[#5C4FE5] animate-pulse flex-shrink-0" />}
+      </div>
+    )
+  }
+
+  // ── Render collapsible group ──────────────────────────────────
+  const renderCollapsibleGroup = (node: any, groupId: string) => {
+    const { header, color, items } = node.attrs || {}
+    const isOpen = openGroups.has(groupId)
+    const colorClass = GROUP_COLORS[color] || GROUP_COLORS.blue
+
+    return (
+      <div className="mb-4 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+        <button onClick={() => toggleGroup(groupId)}
+          className={`w-full flex items-center justify-between px-4 py-3 font-semibold text-sm transition-colors ${colorClass}`}>
+          <span>{header}</span>
+          <ChevronDown className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {isOpen && (
+          <div className="bg-white divide-y divide-gray-100">
+            {(items || []).map((item: any) => {
+              const itemId = `${groupId}_${item.id}`
+              const isPlaying = playingId === itemId
               return (
-                <span key={seg.id} className={`inline-flex items-center gap-0.5 mx-0.5 ${INLINE_COLORS[seg.color]}`}>
-                  <span className="font-semibold">{seg.text}</span>
-                  {hasAudio && (
-                    <button
-                      onClick={() => toggleAudio(`${block.id}_${seg.id}`, seg.storage_path!, seg.storage_bucket)}
-                      disabled={isLoading}
-                      className={`w-4 h-4 rounded-full inline-flex items-center justify-center flex-shrink-0 transition-all
-                        ${isPlaying ? 'bg-[#5C4FE5] text-white' : 'bg-white text-[#5C4FE5] border border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white'}`}>
-                      {isLoading ? <div className="w-2 h-2 border border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
-                        : isPlaying ? <Pause className="w-2 h-2" /> : <Play className="w-2 h-2 ml-px" />}
-                    </button>
-                  )}
-                </span>
+                <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                  <button
+                    onClick={() => item.storagePath && toggleAudio(itemId, item.storagePath)}
+                    disabled={!item.storagePath}
+                    className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center border-2 transition-all
+                      ${item.storagePath ? isPlaying ? 'bg-[#5C4FE5] text-white border-[#5C4FE5]' : 'bg-white text-[#5C4FE5] border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed border-gray-200'}`}>
+                    {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-px" />}
+                  </button>
+                  <div>
+                    <p className={`font-semibold text-sm ${isPlaying ? 'text-[#5C4FE5]' : 'text-gray-900'}`}>{item.text}</p>
+                    {item.translation && <p className="text-xs text-gray-500">{item.translation}</p>}
+                  </div>
+                </div>
               )
             })}
           </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Main render node ──────────────────────────────────────────
+  const renderNode = (node: any, idx: number): React.ReactNode => {
+    const key = `node_${idx}`
+
+    switch (node.type) {
+      case 'heading': {
+        const level = node.attrs?.level || 2
+        const classes: Record<number, string> = {
+          2: 'text-2xl font-bold text-gray-900 mt-8 mb-4',
+          3: 'text-xl font-bold text-gray-800 mt-6 mb-3',
+          4: 'text-lg font-semibold text-gray-700 mt-4 mb-2',
+        }
+        const Tag = `h${level}` as 'h2' | 'h3' | 'h4'
+        const align = node.attrs?.textAlign || 'left'
+        return <Tag key={key} className={classes[level]} style={{ textAlign: align }}>{renderInline(node.content)}</Tag>
+      }
+
+      case 'paragraph': {
+        const align = node.attrs?.textAlign || 'left'
+        return (
+          <p key={key} className="text-gray-700 leading-relaxed mb-4 text-base" style={{ textAlign: align }}>
+            {renderInline(node.content)}
+          </p>
         )
+      }
+
+      case 'bulletList':
+        return (
+          <ul key={key} className="list-disc pl-6 mb-4 space-y-1">
+            {node.content?.map((item: any, i: number) => (
+              <li key={i} className="text-gray-700">{item.content?.map((p: any, j: number) => <span key={j}>{renderInline(p.content)}</span>)}</li>
+            ))}
+          </ul>
+        )
+
+      case 'orderedList':
+        return (
+          <ol key={key} className="list-decimal pl-6 mb-4 space-y-1">
+            {node.content?.map((item: any, i: number) => (
+              <li key={i} className="text-gray-700">{item.content?.map((p: any, j: number) => <span key={j}>{renderInline(p.content)}</span>)}</li>
+            ))}
+          </ol>
+        )
+
+      case 'blockquote':
+        return (
+          <blockquote key={key} className="border-l-4 border-[#5C4FE5] pl-4 py-2 mb-4 bg-purple-50 rounded-r-lg text-gray-700 italic">
+            {node.content?.map((n: any, i: number) => renderNode(n, i))}
+          </blockquote>
+        )
+
+      case 'table':
+        return renderTable(node, idx)
+
+      case 'audioSentence':
+        return <div key={key}>{renderAudioSentence(node, key)}</div>
+
+      case 'collapsibleGroup':
+        return <div key={key}>{renderCollapsibleGroup(node, key)}</div>
+
+      case 'horizontalRule':
+        return <hr key={key} className="my-6 border-gray-200" />
 
       default:
         return null
     }
   }
 
+  // ── Main output ───────────────────────────────────────────────
+  const nodes = content?.content || []
+
   return (
     <div className="min-h-screen bg-[#F7F6FF]">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-[#E5E3FF] shadow-sm">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
-          <button
-            onClick={() => window.history.back()}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <button onClick={() => window.history.back()} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
@@ -298,14 +282,12 @@ export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) 
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-6 py-8">
-        {blocks.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-gray-500">Konten belum tersedia.</p>
+        {nodes.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <p>Konten belum tersedia.</p>
           </div>
         ) : (
-          <div>
-            {blocks.map(block => renderBlock(block))}
-          </div>
+          <div>{nodes.map((node: any, idx: number) => renderNode(node, idx))}</div>
         )}
       </div>
     </div>

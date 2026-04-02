@@ -28,9 +28,15 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch content' }, { status: 500 });
     }
 
+    const blocks = data?.blocks || {}
+    // Support both old array format and new TipTap object format
+    const tiptap_content = blocks?.tiptap_content || null
+    const legacy_blocks = Array.isArray(blocks) ? blocks : (blocks?.blocks || [])
+
     return NextResponse.json({
       lesson_id: lessonId,
-      blocks: data?.blocks || [],
+      tiptap_content,
+      blocks: legacy_blocks,
       updated_at: data?.updated_at || null,
     });
 
@@ -66,18 +72,19 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { blocks } = body;
+    const { blocks, tiptap_content } = body;
 
-    if (!Array.isArray(blocks)) {
-      return NextResponse.json({ error: 'blocks harus berupa array' }, { status: 400 });
-    }
+    // Support both old blocks array and new TipTap content
+    const contentToSave = tiptap_content 
+      ? { tiptap_content } 
+      : (Array.isArray(blocks) ? blocks : []);
 
     // Upsert — insert kalau belum ada, update kalau sudah ada
     const { data, error } = await supabase
       .from('lesson_contents')
       .upsert({
         lesson_id: lessonId,
-        blocks,
+        blocks: contentToSave,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'lesson_id',
