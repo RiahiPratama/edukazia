@@ -211,7 +211,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         const response = await fetch('/api/admin/materials', { method: 'PATCH', body: formData });
         const result = await response.json();
         
-        if (!response.ok) throw new Error(result.error || 'Failed to update');
+        if (!response.ok) throw new Error(`${result.error || 'Failed to update'}: ${result.details || ''}`);
         
         alert('✅ Material berhasil diupdate!');
         onSave();
@@ -342,7 +342,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
         const result = await response.json();
 
-        if (!response.ok) throw new Error(result.error || 'Failed to create');
+        if (!response.ok) throw new Error(`${result.error || 'Failed to create'}: ${result.details || ''}`);
 
         alert('✅ Material berhasil dibuat!');
         onSave();

@@ -309,7 +309,6 @@ export async function POST(request: NextRequest) {
 
     let contentType: 'url' | 'component' | 'audio' = 'url';
     let contentUrl: string | null = null;
-    let audioPath: string | null = null;
     let storagePath: string | null = null;
 
     if (category === 'live_zoom') {
@@ -323,7 +322,17 @@ export async function POST(request: NextRequest) {
       storagePath = uploadedFilePath;
     } else if (category === 'cefr') {
       contentType = 'audio';
-      audioPath = uploadedFilePath;
+      storagePath = uploadedFilePath; // ✅ cefr pakai storage_path
+    }
+
+    // ✅ Defensive check: content_url wajib ada untuk url-based category
+    if (contentType === 'url' && !contentUrl) {
+      console.error('❌ content_url null:', { category, contentData });
+      await supabase.from('materials').delete().eq('id', newMaterial.id);
+      return NextResponse.json({
+        error: 'Failed to create material content',
+        details: `URL tidak boleh kosong untuk kategori ${category}. Pastikan URL sudah diisi.`
+      }, { status: 400 });
     }
 
     const { data: materialContent, error: contentError } = await supabase
@@ -334,9 +343,7 @@ export async function POST(request: NextRequest) {
         content_url: contentUrl,
         storage_bucket: storageBucket,
         storage_path: storagePath,
-        audio_bucket: storageBucket,
-        audio_path: audioPath,
-        content_data: contentData,
+        // ✅ audio_bucket, audio_path, content_data sudah di-drop dari DB
       })
       .select()
       .single();
@@ -598,22 +605,15 @@ export async function PATCH(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Update material_contents
+    // Update material_contents — hanya update content_url
     if (contentDataStr) {
       const existingContent = existingMaterial.material_contents?.[0];
-      
-      const contentUpdate: any = {
-        content_data: contentData,
-      };
+      const newContentUrl = contentData.url || contentData.zoom_link || contentData.canva_link || null;
 
-      if (contentData.url || contentData.zoom_link || contentData.canva_link) {
-        contentUpdate.content_url = contentData.url || contentData.zoom_link || contentData.canva_link;
-      }
-
-      if (existingContent) {
+      if (existingContent && newContentUrl) {
         await supabase
           .from('material_contents')
-          .update(contentUpdate)
+          .update({ content_url: newContentUrl })
           .eq('id', existingContent.id);
       }
     }
