@@ -165,11 +165,19 @@ export default async function MateriPage({
     .select('material_id, content_url, storage_path')
     .in('material_id', materialIds)
 
-  // 10. Get student's material progress
-  const { data: progress } = await supabase
-    .from('student_material_progress')
-    .select('material_id, completed_at')
-    .eq('student_id', student.id)
+  // 10. Get student's material progress (tabel mungkin belum ada)
+  let progress: { material_id: string; completed_at: string }[] = []
+  try {
+    const { data: progressData, error: progressError } = await supabase
+      .from('student_material_progress')
+      .select('material_id, completed_at')
+      .eq('student_id', student.id)
+    if (!progressError && progressData) {
+      progress = progressData
+    }
+  } catch (e) {
+    // tabel belum ada, progress kosong
+  }
 
   // Transform data grouped by LEVEL
   const levelsData = levelIds.map(levelId => {
@@ -186,7 +194,7 @@ export default async function MateriPage({
         const lessonMaterials = materials?.filter(m => m.lesson_id === lesson.id) || []
         return lessonMaterials.map(material => {
           const content = materialContents?.find(c => c.material_id === material.id)
-          const isCompleted = progress?.some(p => p.material_id === material.id)
+          const isCompleted = progress.some(p => p.material_id === material.id)
           
           // ✅ Extract URL dari material_contents (schema v4.1)
           let materialUrl = null
