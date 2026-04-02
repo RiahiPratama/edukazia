@@ -55,7 +55,6 @@ export default async function RenderPage({
     return (
       <CEFRRenderer
         content={tiptapContent}
-        legacyBlocks={legacyBlocks}
         lessonName={lesson?.lesson_name || ''}
       />
     )
