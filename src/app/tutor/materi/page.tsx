@@ -339,7 +339,8 @@ export default function TutorMateriPage() {
             </button>
 
             {/* Units — hanya tampil kalau level terbuka */}
-            {openLevels.has(level.level_id) && <div className="divide-y divide-gray-100">
+            {openLevels.has(level.level_id) && (
+            <div className="divide-y divide-gray-100">
               {level.units.map(unit => {
                 const isOpen = openUnits.has(unit.id)
                 return (
