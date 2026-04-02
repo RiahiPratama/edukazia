@@ -661,17 +661,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
           <p className="text-xs text-green-600 mt-1">⚠️ Pastikan file di-share ke service account EduKazia</p>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">Order Number *</label>
-          <input
-            type="number"
-            value={orderNumber}
-            onChange={(e) => setOrderNumber(parseInt(e.target.value))}
-            min="1"
-            required
-            className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-          />
-        </div>
+        {/* Order Number disembunyikan — default 1 */}
 
         <div className="flex items-center gap-2">
           <input

@@ -414,32 +414,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">JSX Component File {!isEditing && '*'}</label>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            {jsxFile ? (
-              <div className="flex items-center justify-between bg-green-50 p-3 rounded">
-                <div className="flex items-center gap-2">
-                  <FileCode className="text-green-600" size={20} />
-                  <span className="text-sm text-green-800 font-medium">{jsxFile.name}</span>
-                </div>
-                <button type="button" onClick={() => setJsxFile(null)} className="text-red-600 hover:bg-red-50 p-1 rounded"><X size={18} /></button>
-              </div>
-            ) : (
-              <label className="cursor-pointer">
-                <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-                <p className="text-sm text-gray-600">Click to upload JSX file</p>
-                <input type="file" accept=".jsx,.tsx" onChange={(e) => setJsxFile(e.target.files?.[0] || null)} className="hidden" {...(!isEditing && { required: true })} />
-              </label>
-            )}
-          </div>
-        </div>
-
-        {/* Order Number hidden for Bacaan - not needed for file uploads */}
-        {/* <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Order Number *</label>
-          <input type="number" value={orderNumber} onChange={(e) => setOrderNumber(parseInt(e.target.value))} min="1" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
-        </div> */}
+        {/* Order Number hidden — default 1 */} */}
 
         <div className="flex items-center gap-2">
           <input type="checkbox" id="isPublished" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]" />
