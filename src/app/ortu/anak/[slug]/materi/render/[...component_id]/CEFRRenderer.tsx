@@ -244,7 +244,7 @@ export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) 
 
       case 'inline_highlight':
         return (
-          <p key={block.id} className="text-gray-700 leading-relaxed mb-4 text-base flex flex-wrap items-center gap-1">
+          <div key={block.id} className="text-gray-700 leading-relaxed mb-4 text-base">
             {block.segments.map(seg => {
               const isPlaying = playingId === `${block.id}_${seg.id}`
               const isLoading = loadingId === `${block.id}_${seg.id}`
@@ -255,22 +255,22 @@ export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) 
               }
 
               return (
-                <span key={seg.id} className={`inline-flex items-center gap-1 ${INLINE_COLORS[seg.color]}`}>
+                <span key={seg.id} className={`inline-flex items-center gap-0.5 mx-0.5 ${INLINE_COLORS[seg.color]}`}>
                   <span className="font-semibold">{seg.text}</span>
                   {hasAudio && (
                     <button
                       onClick={() => toggleAudio(`${block.id}_${seg.id}`, seg.storage_path!, seg.storage_bucket)}
                       disabled={isLoading}
-                      className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all
+                      className={`w-4 h-4 rounded-full inline-flex items-center justify-center flex-shrink-0 transition-all
                         ${isPlaying ? 'bg-[#5C4FE5] text-white' : 'bg-white text-[#5C4FE5] border border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white'}`}>
                       {isLoading ? <div className="w-2 h-2 border border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
-                        : isPlaying ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5 ml-px" />}
+                        : isPlaying ? <Pause className="w-2 h-2" /> : <Play className="w-2 h-2 ml-px" />}
                     </button>
                   )}
                 </span>
               )
             })}
-          </p>
+          </div>
         )
 
       default:
