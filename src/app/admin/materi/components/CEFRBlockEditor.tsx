@@ -114,7 +114,7 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
     }
   };
 
-  const saveBlocks = async () => {
+  const saveBlocks = async (shouldExit = false) => {
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/cefr/${lessonId}`, {
@@ -124,7 +124,9 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
       });
       if (!res.ok) throw new Error('Failed to save');
       setSavedAt(new Date().toLocaleTimeString('id-ID'));
-      alert('✅ Konten berhasil disimpan!');
+      if (shouldExit) {
+        onBack(); // ✅ Kembali ke daftar materi
+      }
     } catch (err) {
       alert('❌ Gagal menyimpan konten');
     } finally {
@@ -484,11 +486,18 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
               Tersimpan {savedAt}
             </div>
           )}
-          <button onClick={saveBlocks} disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-semibold shadow-md transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? 'Menyimpan...' : 'Simpan'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => saveBlocks(false)} disabled={saving}
+              className="flex items-center gap-2 px-4 py-2.5 border-2 border-[#5C4FE5] text-[#5C4FE5] rounded-lg hover:bg-purple-50 disabled:opacity-50 font-semibold transition-all">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Simpan
+            </button>
+            <button onClick={() => saveBlocks(true)} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-semibold shadow-md transition-all">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Simpan & Keluar
+            </button>
+          </div>
         </div>
       </div>
 
