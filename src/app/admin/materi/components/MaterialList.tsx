@@ -732,7 +732,11 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
               {expandedChapters.has(chapterGroup.chapterId) && (
                 <div className="border-t-2 border-[#5C4FE5]">
                   {Object.values(chapterGroup.units)
-                    .sort((a, b) => (a.unitPosition || 0) - (b.unitPosition || 0))
+                    .sort((a, b) => {
+                      const posDiff = (a.unitPosition || 0) - (b.unitPosition || 0);
+                      if (posDiff !== 0) return posDiff;
+                      return a.unitName.localeCompare(b.unitName);
+                    })
                     .map((unitGroup) => {
                     const UnitIcon = getIconComponent(unitGroup.unitIcon);
                     const isEditingUnit = editingUnitId === unitGroup.unitId;
@@ -790,7 +794,12 @@ export default function MaterialList({ category, onEdit }: MaterialListProps) {
                         {expandedUnits.has(unitGroup.unitId) && (
                           <div className="bg-white">
                             {Object.values(unitGroup.lessons)
-                              .sort((a, b) => (a.lessonPosition || 0) - (b.lessonPosition || 0))
+                              .sort((a, b) => {
+                                const posDiff = (a.lessonPosition || 0) - (b.lessonPosition || 0);
+                                if (posDiff !== 0) return posDiff;
+                                // fallback sort by name kalau position sama
+                                return a.lessonName.localeCompare(b.lessonName);
+                              })
                               .map((lessonGroup) => {
                               if (lessonGroup.materials.length === 0) return null;
                               
