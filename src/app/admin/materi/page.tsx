@@ -6,6 +6,7 @@ import LiveZoomForm from './components/LiveZoomForm';
 import BacaanForm from './components/BacaanForm';
 import KosakataForm from './components/KosakataForm';
 import CEFRForm from './components/CEFRForm';
+import CEFRBlockEditor from './components/CEFRBlockEditor';
 import MaterialList from './components/MaterialList';
 
 type TabType = 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
@@ -41,6 +42,9 @@ export default function MateriTutorPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
 
+  // ✅ CEFR Block Editor state
+  const [cefrEditorLesson, setCefrEditorLesson] = useState<{ id: string; name: string } | null>(null);
+
   const handleEdit = (material: Material) => {
     setEditingMaterial(material);
     setShowForm(true);
@@ -57,6 +61,19 @@ export default function MateriTutorPage() {
     setEditingMaterial(null);
   };
 
+  // ✅ CEFR: setelah simpan form → buka block editor
+  const handleCEFRSaveWithLesson = (lessonId: string, lessonName: string) => {
+    setShowForm(false);
+    setEditingMaterial(null);
+    setCefrEditorLesson({ id: lessonId, name: lessonName });
+  };
+
+  // ✅ CEFR: kembali dari block editor ke daftar materi
+  const handleCEFREditorBack = () => {
+    setCefrEditorLesson(null);
+    setRefreshKey(prev => prev + 1);
+  };
+
   const renderForm = () => {
     switch (activeTab) {
       case 'live_zoom':
@@ -66,7 +83,14 @@ export default function MateriTutorPage() {
       case 'kosakata':
         return <KosakataForm onSave={handleSave} onCancel={handleCancel} editData={editingMaterial} />;
       case 'cefr':
-        return <CEFRForm onSave={handleSave} onCancel={handleCancel} editData={editingMaterial} />;
+        return (
+          <CEFRForm
+            onSave={handleSave}
+            onSaveWithLesson={handleCEFRSaveWithLesson}
+            onCancel={handleCancel}
+            editData={editingMaterial}
+          />
+        );
     }
   };
 
@@ -90,6 +114,7 @@ export default function MateriTutorPage() {
                 onClick={() => {
                   setActiveTab(tab.id);
                   setShowForm(false);
+                  setCefrEditorLesson(null);
                 }}
                 className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
                   isActive
@@ -106,47 +131,59 @@ export default function MateriTutorPage() {
 
         {/* Content */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {showForm 
-                ? `Tambah Materi ${tabs.find(t => t.id === activeTab)?.label}`
-                : `Daftar Materi ${tabs.find(t => t.id === activeTab)?.label}`
-              }
-            </h2>
-            <div className="flex gap-2">
-              {!showForm ? (
-                <>
-                  <button
-                    onClick={() => setShowForm(false)}
-                    className="px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors flex items-center gap-2 font-medium"
-                  >
-                    <List size={18} />
-                    Daftar Materi
-                  </button>
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
-                  >
-                    <Plus size={18} />
-                    Tambah Materi
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleCancel}
-                  className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
-                >
-                  <List size={18} />
-                  Kembali ke Daftar
-                </button>
-              )}
-            </div>
-          </div>
 
-          {showForm ? (
-            renderForm()
+          {/* ✅ CEFR Block Editor — tampil saat lessonId tersedia */}
+          {activeTab === 'cefr' && cefrEditorLesson ? (
+            <CEFRBlockEditor
+              lessonId={cefrEditorLesson.id}
+              lessonName={cefrEditorLesson.name}
+              onBack={handleCEFREditorBack}
+            />
           ) : (
-            <MaterialList key={refreshKey} category={activeTab} onEdit={handleEdit} />
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {showForm
+                    ? `${editingMaterial ? 'Edit' : 'Tambah'} Materi ${tabs.find(t => t.id === activeTab)?.label}`
+                    : `Daftar Materi ${tabs.find(t => t.id === activeTab)?.label}`
+                  }
+                </h2>
+                <div className="flex gap-2">
+                  {!showForm ? (
+                    <>
+                      <button
+                        onClick={() => setShowForm(false)}
+                        className="px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] transition-colors flex items-center gap-2 font-medium"
+                      >
+                        <List size={18} />
+                        Daftar Materi
+                      </button>
+                      <button
+                        onClick={() => setShowForm(true)}
+                        className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
+                      >
+                        <Plus size={18} />
+                        Tambah Materi
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleCancel}
+                      className="px-4 py-2 bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors flex items-center gap-2 font-medium"
+                    >
+                      <List size={18} />
+                      Kembali ke Daftar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {showForm ? (
+                renderForm()
+              ) : (
+                <MaterialList key={refreshKey} category={activeTab} onEdit={handleEdit} />
+              )}
+            </>
           )}
         </div>
       </div>
