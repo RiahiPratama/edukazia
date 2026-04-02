@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { Plus, Trash2 } from 'lucide-react'
+import { Trash2, Crown, Users, Building2, ChevronDown } from 'lucide-react'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
 export default function TutorPage() {
@@ -13,14 +13,30 @@ export default function TutorPage() {
   const [deleteId,  setDeleteId]  = useState<string | null>(null)
   const [deleting,  setDeleting]  = useState(false)
   const [deleteName,setDeleteName]= useState('')
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null)
+  const [savingType, setSavingType] = useState(false)
 
   useEffect(() => { fetchTutors() }, [])
+
+  async function saveTutorType(tutorId: string, tutorType: string) {
+    setSavingType(true)
+    const isOwner = tutorType === 'owner'
+    await supabase.from('tutors').update({ 
+      tutor_type: tutorType, 
+      is_owner: isOwner,
+      employment_status: tutorType === 'owner' ? 'owner' : tutorType === 'b2b' ? 'partner' : 'freelance'
+    }).eq('id', tutorId)
+    setSavingType(false)
+    setEditingTypeId(null)
+    fetchTutors()
+  }
 
   async function fetchTutors() {
     setLoading(true)
     const { data } = await supabase
       .from('tutors')
       .select(`id, rate_per_session, bank_name, bank_account, is_active,
+        is_owner, tutor_type, employment_status, bimbel_name,
         profiles:profile_id(full_name, phone),
         tutor_courses(courses(name, color)),
         class_groups(id, label, status)`)
@@ -42,6 +58,12 @@ export default function TutorPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
 
+  const getTutorTypeBadge = (t: any) => {
+    if (t.is_owner) return { label: 'Owner', color: 'bg-purple-100 text-purple-700 border border-purple-300', icon: <Crown size={10} className="inline mr-1"/> }
+    if (t.tutor_type === 'b2b') return { label: 'B2B', color: 'bg-blue-100 text-blue-700 border border-blue-300', icon: <Building2 size={10} className="inline mr-1"/> }
+    return { label: 'Freelancer', color: 'bg-green-100 text-green-700 border border-green-300', icon: <Users size={10} className="inline mr-1"/> }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -50,7 +72,7 @@ export default function TutorPage() {
           <p className="text-sm text-[#7B78A8] mt-1">{tutors.filter(t => t.is_active).length} tutor aktif</p>
         </div>
         <Link href="/admin/tutor/baru"
-          className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+          className="flex items-center gap-2 bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
           + Tambah Tutor
         </Link>
       </div>
@@ -95,6 +117,30 @@ export default function TutorPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    {/* Tutor Type Badge + Quick Edit */}
+                    <div className="relative">
+                      <button onClick={() => setEditingTypeId(editingTypeId === t.id ? null : t.id)}
+                        className={`text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-0.5 ${getTutorTypeBadge(t).color}`}>
+                        {getTutorTypeBadge(t).icon}{getTutorTypeBadge(t).label}
+                        <ChevronDown size={9} className="ml-0.5"/>
+                      </button>
+                      {editingTypeId === t.id && (
+                        <div className="absolute right-0 top-7 bg-white border border-gray-200 rounded-xl shadow-xl z-20 p-2 min-w-[140px]">
+                          <p className="text-xs text-gray-400 font-medium px-2 mb-1">Ubah tipe:</p>
+                          {[
+                            { value: 'owner', label: '👑 Owner' },
+                            { value: 'internal', label: '👤 Freelancer' },
+                            { value: 'b2b', label: '🏢 B2B' },
+                          ].map(opt => (
+                            <button key={opt.value} disabled={savingType}
+                              onClick={() => saveTutorType(t.id, opt.value)}
+                              className="w-full text-left px-2 py-1.5 text-xs rounded-lg hover:bg-purple-50 hover:text-[#5C4FE5] font-medium transition-colors">
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${t.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {t.is_active ? 'Aktif' : 'Nonaktif'}
                     </span>
