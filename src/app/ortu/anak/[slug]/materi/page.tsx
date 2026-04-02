@@ -153,18 +153,12 @@ export default async function MateriPage({
 
   // 8. Get all materials for these lessons
   const lessonIds = lessons?.map(l => l.id) || []
-  const { data: materials, error: materialsError } = await supabase
+  const { data: materials } = await supabase
     .from('materials')
     .select('id, title, position, lesson_id, category, is_published')
     .in('lesson_id', lessonIds)
     .eq('is_published', true)
     .order('position')
-  
-  // 🔍 DEBUG materials error
-  console.error('🔍 lessonIds sample:', lessonIds.slice(0, 3))
-  console.error('🔍 lessonIds count:', lessonIds.length)
-  console.error('🔍 materials error:', materialsError)
-  console.error('🔍 materials data:', materials?.length)
 
   // 9. Get material contents for all materials
   const materialIds = materials?.map(m => m.id) || []
@@ -256,31 +250,8 @@ export default async function MateriPage({
     }
   }).filter((l): l is NonNullable<typeof l> => l !== null)
 
-  // 🔍 DEBUG INFO
-  const debugInfo = {
-    levelIds_count: levelIds.length,
-    levelIds,
-    units_count: units?.length || 0,
-    lessons_count: lessons?.length || 0,
-    lessonIds_count: lessonIds.length,
-    lessonIds_sample: lessonIds.slice(0, 3),
-    materials_count: materials?.length || 0,
-    materials_error: materialsError?.message || null,
-    materials_error_code: materialsError?.code || null,
-    levelsData: levelsData.map(l => ({
-      level_name: l.level_name,
-      units_count: l.units.length,
-      materials_count: l.units.flatMap(u => u.materials).length
-    }))
-  }
-
   return (
     <div className="min-h-screen bg-[#F7F6FF]">
-      {/* 🔍 DEBUG PANEL — hapus setelah fix */}
-      <div className="bg-red-50 border-2 border-red-400 rounded-xl m-4 p-4 font-mono text-xs text-red-900 overflow-auto">
-        <p className="font-bold mb-2">🔍 DEBUG INFO</p>
-        <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-      </div>
       <MateriContent
         levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
