@@ -65,15 +65,23 @@ export default function TutorMateriPage() {
     // Get kelas yang diajar tutor
     const { data: classGroups } = await supabase
       .from('class_groups')
-      .select('id, level_id:class_group_levels(level_id)')
+      .select('id, label')
       .eq('tutor_id', tutor.id)
       .eq('status', 'active')
 
-    // Extract level IDs
+    const classGroupIds = classGroups?.map((cg: any) => cg.id) || []
+
+    // Get level IDs dari class_group_levels
+    const { data: cgl } = classGroupIds.length > 0
+      ? await supabase
+          .from('class_group_levels')
+          .select('class_group_id, level_id')
+          .in('class_group_id', classGroupIds)
+      : { data: [] }
+
+    // Extract unique level IDs
     const levelIds = Array.from(new Set(
-      classGroups?.flatMap((cg: any) =>
-        cg.level_id?.map((l: any) => l.level_id) || []
-      ).filter(Boolean) || []
+      cgl?.map((c: any) => c.level_id).filter(Boolean) || []
     ))
 
     if (levelIds.length === 0) { setLoading(false); return }
@@ -130,7 +138,7 @@ export default function TutorMateriPage() {
       const { data: sessions } = await supabase
         .from('sessions')
         .select('id, scheduled_at, class_group_id')
-        .in('class_group_id', classGroups?.map((cg: any) => cg.id) || [])
+        .in('class_group_id', classGroupIds)
         .gte('scheduled_at', new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString())
         .lte('scheduled_at', new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString())
 
@@ -156,12 +164,9 @@ export default function TutorMateriPage() {
           accessMap[m.id] = 'no_content'
         } else if (tutor.tutor_type === 'internal') {
           // Time-based check
-          const classGroupId = classGroups?.find((cg: any) =>
-            cg.level_id?.some((l: any) =>
-              levelIds.includes(l.level_id)
-            )
-          )?.id
-          accessMap[m.id] = timeAccess[classGroupId] ? 'allowed' : 'time_locked'
+              // Cek apakah ada sesi aktif untuk materi ini
+          const hasActiveSession = Object.values(timeAccess).some(v => v)
+          accessMap[m.id] = hasActiveSession ? 'allowed' : 'time_locked'
         } else {
           // B2B — akses penuh kalau ada slides_url
           accessMap[m.id] = 'allowed'
@@ -170,8 +175,14 @@ export default function TutorMateriPage() {
     })
     setAccessStatus(accessMap)
 
-    // Build levelsData
-    const result: LevelData[] = levelIds.map(levelId => {
+    // Build levelsData — sort level by name
+    const sortedLevelIds = [...levelIds].sort((a, b) => {
+      const la = levels?.find(l => l.id === a)?.name || ''
+      const lb = levels?.find(l => l.id === b)?.name || ''
+      return la.localeCompare(lb)
+    })
+
+    const result: LevelData[] = sortedLevelIds.map(levelId => {
       const level = levels?.find(l => l.id === levelId)
       if (!level) return null
       const course = Array.isArray(level.courses) ? level.courses[0] : level.courses
