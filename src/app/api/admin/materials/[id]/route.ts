@@ -15,7 +15,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -26,18 +25,70 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Delete material
-    const { error } = await supabase
+    // ✅ Ambil lesson_id sebelum hapus material
+    const { data: material } = await supabase
+      .from('materials')
+      .select('lesson_id')
+      .eq('id', id)
+      .single();
+
+    if (!material) {
+      return NextResponse.json({ error: 'Material not found' }, { status: 404 });
+    }
+
+    const lessonId = material.lesson_id;
+
+    // STEP 1: Hapus material
+    const { error: deleteError } = await supabase
       .from('materials')
       .delete()
       .eq('id', id);
 
-    if (error) {
-      console.error('Error deleting material:', error);
+    if (deleteError) {
+      console.error('Error deleting material:', deleteError);
       return NextResponse.json(
         { error: 'Failed to delete material' },
         { status: 500 }
       );
+    }
+
+    console.log('✅ Material deleted:', id);
+
+    // STEP 2: Cek apakah lesson masih punya material lain
+    if (lessonId) {
+      const { count: remainingMaterials } = await supabase
+        .from('materials')
+        .select('id', { count: 'exact', head: true })
+        .eq('lesson_id', lessonId);
+
+      if (remainingMaterials === 0) {
+        // Ambil unit_id sebelum hapus lesson
+        const { data: lesson } = await supabase
+          .from('lessons')
+          .select('unit_id')
+          .eq('id', lessonId)
+          .single();
+
+        const unitId = lesson?.unit_id;
+
+        // Hapus lesson yang kosong
+        await supabase.from('lessons').delete().eq('id', lessonId);
+        console.log('🗑️ Empty lesson deleted:', lessonId);
+
+        // STEP 3: Cek apakah unit masih punya lesson lain
+        if (unitId) {
+          const { count: remainingLessons } = await supabase
+            .from('lessons')
+            .select('id', { count: 'exact', head: true })
+            .eq('unit_id', unitId);
+
+          if (remainingLessons === 0) {
+            // Hapus unit yang kosong
+            await supabase.from('units').delete().eq('id', unitId);
+            console.log('🗑️ Empty unit deleted:', unitId);
+          }
+        }
+      }
     }
 
     return NextResponse.json({
@@ -68,18 +119,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Parse form data
     const formData = await request.formData();
     const title = formData.get('title') as string;
     const url = formData.get('url') as string;
-
-    // Validate inputs
-    if (!title || !title.trim()) {
-      return NextResponse.json(
-        { error: 'Title is required' },
-        { status: 400 }
-      );
-    }
 
     if (!url || !url.trim()) {
       return NextResponse.json(
@@ -88,53 +141,48 @@ export async function PATCH(
       );
     }
 
-    // Get current material to know the category
+    // Get current material
     const { data: currentMaterial } = await supabase
       .from('materials')
-      .select('category, content_data')
+      .select('category, lesson_id')
       .eq('id', id)
       .single();
 
     if (!currentMaterial) {
-      return NextResponse.json(
-        { error: 'Material not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Material not found' }, { status: 404 });
     }
 
-    const content_data = currentMaterial.content_data || {};
-    
-    // Update URL based on category
-    if (currentMaterial.category === 'live_zoom') {
-      content_data.url = url.trim();
-      content_data.zoom_link = url.trim();
-    } else if (currentMaterial.category === 'kosakata') {
-      content_data.url = url.trim();
-      content_data.canva_link = url.trim();
-    }
-
-    // Update material
-    const { data, error } = await supabase
+    // ✅ Update material title
+    const { data: updatedMaterial, error: materialError } = await supabase
       .from('materials')
-      .update({ 
-        title: title.trim(),
-        content_data 
-      })
+      .update({ title: title?.trim() || url.trim() })
       .eq('id', id)
       .select()
       .single();
 
-    if (error) {
-      console.error('Error updating material:', error);
-      return NextResponse.json(
-        { error: 'Failed to update material' },
-        { status: 500 }
-      );
+    if (materialError) {
+      return NextResponse.json({ error: 'Failed to update material' }, { status: 500 });
     }
+
+    // ✅ Update content_url di material_contents
+    const { data: mc } = await supabase
+      .from('material_contents')
+      .select('id')
+      .eq('material_id', id)
+      .single();
+
+    if (mc) {
+      await supabase
+        .from('material_contents')
+        .update({ content_url: url.trim() })
+        .eq('id', mc.id);
+    }
+
+    console.log('✅ Material updated:', id);
 
     return NextResponse.json({
       success: true,
-      data,
+      data: updatedMaterial,
       message: 'Material updated successfully'
     });
 
