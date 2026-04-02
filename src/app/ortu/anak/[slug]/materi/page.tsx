@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import MateriContent from './MateriContent'
 
+export const dynamic = 'force-dynamic'
+
 export default async function MateriPage({ 
   params 
 }: { 
@@ -248,19 +250,27 @@ export default async function MateriPage({
     }
   }).filter((l): l is NonNullable<typeof l> => l !== null)
 
-  // 🔍 DEBUG — hapus setelah fix
-  console.log('🔍 levelIds:', levelIds)
-  console.log('🔍 units count:', units?.length)
-  console.log('🔍 lessons count:', lessons?.length)
-  console.log('🔍 materials count:', materials?.length)
-  console.log('🔍 levelsData:', JSON.stringify(levelsData.map(l => ({
-    level_name: l.level_name,
-    units_count: l.units.length,
-    materials_count: l.units.flatMap(u => u.materials).length
-  }))))
+  // 🔍 DEBUG INFO
+  const debugInfo = {
+    levelIds_count: levelIds.length,
+    levelIds,
+    units_count: units?.length || 0,
+    lessons_count: lessons?.length || 0,
+    materials_count: materials?.length || 0,
+    levelsData: levelsData.map(l => ({
+      level_name: l.level_name,
+      units_count: l.units.length,
+      materials_count: l.units.flatMap(u => u.materials).length
+    }))
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F6FF]">
+      {/* 🔍 DEBUG PANEL — hapus setelah fix */}
+      <div className="bg-red-50 border-2 border-red-400 rounded-xl m-4 p-4 font-mono text-xs text-red-900 overflow-auto">
+        <p className="font-bold mb-2">🔍 DEBUG INFO</p>
+        <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+      </div>
       <MateriContent
         levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
