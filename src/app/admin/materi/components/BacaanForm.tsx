@@ -28,17 +28,17 @@ type BacaanFormProps = {
 export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormProps) {
   const [courses, setCourses] = useState<any[]>([]);
   const [levels, setLevels] = useState<any[]>([]);
-  const [juduls, setJuduls] = useState<any[]>([]);
+  const [chapters, setChapters] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
 
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
-  const [selectedJudul, setSelectedJudul] = useState('');
+  const [selectedChapter, setSelectedChapter] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('');
   const [selectedLesson, setSelectedLesson] = useState('');
 
-  const [newJudulName, setNewJudulName] = useState('');
+  const [newChapterTitle, setNewChapterTitle] = useState('');
   const [newUnitName, setNewUnitName] = useState('');
   const [newLessonName, setNewLessonName] = useState('');
   const [newLessonPosition, setNewLessonPosition] = useState(1);
@@ -112,10 +112,10 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
   useEffect(() => {
     if (selectedLevels.length > 0 && !isEditing) {
-      fetchJudulsForSelectedLevels();
+      fetchChaptersForSelectedLevels();
     } else if (!isEditing) {
-      setJuduls([]);
-      setSelectedJudul('');
+      setChapters([]);
+      setSelectedChapter('');
     }
   }, [selectedLevels]);
 
@@ -129,18 +129,23 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
     setLevels(data || []);
   };
 
-  const fetchJudulsForSelectedLevels = async () => {
+  const fetchChaptersForSelectedLevels = async () => {
     if (selectedLevels.length === 0) return;
-    const { data } = await supabase.from('juduls').select('*').in('level_id', selectedLevels);
-    const uniqueJuduls = data?.reduce((acc: any[], curr) => {
-      if (!acc.find(j => j.name === curr.name)) acc.push(curr);
-      return acc;
-    }, []) || [];
-    setJuduls(uniqueJuduls);
+    // Fetch chapters untuk semua level yang dipilih
+    const { data } = await supabase
+      .from('chapters')
+      .select('*')
+      .in('level_id', selectedLevels)
+      .order('order_number');
+    setChapters(data || []);
   };
 
-  const fetchUnits = async (judulId: string) => {
-    const { data } = await supabase.from('units').select('*').eq('judul_id', judulId);
+  const fetchUnits = async (chapterId: string) => {
+    const { data } = await supabase
+      .from('units')
+      .select('*')
+      .eq('chapter_id', chapterId) // ✅ pakai chapter_id bukan judul_id
+      .order('position');
     setUnits(data || []);
   };
 
@@ -203,8 +208,8 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
             formData.append('course_id', selectedCourse);
             formData.append('level_id', levelId);
             // Send chapter info (judul = chapter)
-            formData.append('chapter_id', selectedJudul === 'NEW' ? 'NEW' : selectedJudul);
-            formData.append('chapter_name', newJudulName);
+            formData.append('chapter_id', selectedChapter === 'NEW' ? 'NEW' : selectedChapter);
+            formData.append('chapter_name', newChapterTitle);
             formData.append('unit_id', selectedUnit === 'NEW' ? 'NEW' : selectedUnit);
             formData.append('unit_name', newUnitName);
             formData.append('lesson_id', selectedLesson === 'NEW' ? 'NEW' : selectedLesson);
@@ -291,17 +296,17 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
 
           {selectedLevels.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">Judul *</label>
-              <select value={selectedJudul} onChange={(e) => { setSelectedJudul(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
-                <option value="">Pilih Judul</option>
-                <option value="NEW">+ Buat Judul Baru</option>
-                {juduls.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+              <label className="block text-sm font-medium text-gray-900 mb-2">Chapter *</label>
+              <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
+                <option value="">Pilih Chapter</option>
+                <option value="NEW">+ Buat Chapter Baru</option>
+                {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
               </select>
-              {selectedJudul === 'NEW' && <input type="text" value={newJudulName} onChange={(e) => setNewJudulName(e.target.value)} placeholder="Nama Judul Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
+              {selectedChapter === 'NEW' && <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
             </div>
           )}
 
-          {selectedJudul && (
+          {selectedChapter && (
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">Unit *</label>
               <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
