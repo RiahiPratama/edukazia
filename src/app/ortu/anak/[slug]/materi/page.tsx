@@ -158,7 +158,7 @@ export default async function MateriPage({
   const materialIds = materials?.map(m => m.id) || []
   const { data: materialContents } = await supabase
     .from('material_contents')
-    .select('material_id, content_url, storage_path')
+    .select('material_id, content_url, storage_path, pdf_storage_path, canva_url, slides_url')
     .in('material_id', materialIds)
 
   // 10. Get student's material progress (tabel mungkin belum ada)
@@ -197,11 +197,10 @@ export default async function MateriPage({
           let componentId = null
 
           if (material.category === 'live_zoom' || material.category === 'kosakata') {
-            materialUrl = content?.content_url || null
+            materialUrl = content?.canva_url || content?.content_url || null
           } else if (material.category === 'bacaan') {
             componentId = content?.storage_path || null
           } else if (material.category === 'cefr') {
-            // CEFR pakai lesson_contents (block editor) — lesson_id jadi identifier
             componentId = material.lesson_id || null
           }
           
@@ -211,6 +210,8 @@ export default async function MateriPage({
             category: material.category || 'live_zoom',
             gdrive_url: materialUrl,
             component_id: componentId,
+            pdf_storage_path: content?.pdf_storage_path || null,
+            slides_url: content?.slides_url || null,
             completed: isCompleted || false,
             lesson_title: lesson.lesson_name,
             unit_name: unit.unit_name
