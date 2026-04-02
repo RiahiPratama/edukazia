@@ -32,11 +32,12 @@ export default function CEFRRenderer({ content, lessonName }: CEFRRendererProps)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     // Initialize open groups based on defaultOpen attribute
+    // Use same key format as renderNode: node_${idx}
     const open = new Set<string>()
     if (content?.content) {
       content.content.forEach((node: any, idx: number) => {
         if (node.type === 'collapsibleGroup' && node.attrs?.defaultOpen !== false) {
-          open.add(`group_${idx}`)
+          open.add(`node_${idx}`)
         }
       })
     }
