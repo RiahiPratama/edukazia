@@ -236,7 +236,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
         <>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Mata Pelajaran *</label>
-            <select value={selectedCourse} onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]">
+            <select value={selectedCourse} onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
               <option value="">Pilih Mata Pelajaran</option>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -244,7 +244,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Level *</label>
-            <select value={selectedLevel} onChange={(e) => { setSelectedLevel(e.target.value); fetchChapters(e.target.value); }} required disabled={!selectedCourse} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+            <select value={selectedLevel} onChange={(e) => { setSelectedLevel(e.target.value); fetchChapters(e.target.value); }} required disabled={!selectedCourse} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500">
               <option value="">Pilih Level</option>
               {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -252,38 +252,38 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Chapter *</label>
-            <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required disabled={!selectedLevel} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+            <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required disabled={!selectedLevel} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500">
               <option value="">Pilih Chapter</option>
               <option value="NEW">+ Buat Chapter Baru</option>
               {chapters.map((c) => <option key={c.id} value={c.id}>{c.chapter_title}</option>)}
             </select>
             {selectedChapter === 'NEW' && (
-              <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru (contoh: Pronunciation)" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />
+              <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru (contoh: Pronunciation)" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Unit *</label>
-            <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required disabled={!selectedChapter} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+            <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required disabled={!selectedChapter} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500">
               <option value="">Pilih Unit</option>
               <option value="NEW">+ Buat Unit Baru</option>
               {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
             </select>
             {selectedUnit === 'NEW' && (
-              <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2" />
+              <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Lesson *</label>
-            <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required disabled={!selectedUnit} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] disabled:bg-gray-100">
+            <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required disabled={!selectedUnit} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500">
               <option value="">Pilih Lesson</option>
               <option value="NEW">+ Buat Lesson Baru</option>
               {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
             </select>
             {selectedLesson === 'NEW' && (
               <div className="mt-2 space-y-2">
-                <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]" />
+                <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Lesson *</label>
                   <input
@@ -377,7 +377,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
             value={fileType}
             onChange={(e) => setFileType(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
           >
             <option value="google_drive">Google Drive</option>
             <option value="canva">Canva</option>
@@ -396,13 +396,13 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
             }}
             placeholder="https://..."
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Order Number *</label>
-          <input type="number" value={orderNumber} onChange={(e) => setOrderNumber(parseInt(e.target.value))} min="1" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5]" />
+          <input type="number" value={orderNumber} onChange={(e) => setOrderNumber(parseInt(e.target.value))} min="1" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
         </div>
 
         <div className="flex items-center gap-2">
