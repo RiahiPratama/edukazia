@@ -11,11 +11,11 @@ import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
 import { useEffect, useState } from 'react'
 import {
-  Bold, Italic, Underline as UnderlineIcon, Highlighter, AlignLeft, AlignCenter,
+  Bold, Italic, Underline as UnderlineIcon, Highlighter, AlignLeft, AlignCenter, Mic,
   Table as TableIcon, Headphones, ChevronDown as CollapseIcon, Save, ArrowLeft,
   Check, Loader2, Minus, List, ListOrdered,
 } from 'lucide-react'
-import { AudioSentenceExtension, CollapsibleGroupExtension } from './CEFRExtensions'
+import { AudioSentenceExtension, CollapsibleGroupExtension, AudioHighlightExtension } from './CEFRExtensions'
 
 type CEFRBlockEditorProps = {
   lessonId: string
@@ -63,6 +63,7 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
       TableCell,
       AudioSentenceExtension,
       CollapsibleGroupExtension,
+      AudioHighlightExtension,
     ],
     content: '',
     editorProps: {
@@ -111,6 +112,14 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
     editor.commands.insertContent({
       type: 'audioSentence',
       attrs: { text: '', translation: '', storagePath: null, storageBucket: 'audio' },
+    })
+  }
+
+  const insertAudioHighlight = () => {
+    if (!editor) return
+    editor.commands.insertContent({
+      type: 'audioHighlight',
+      attrs: { text: 'teks highlight', color: '#FEF08A', storagePath: null, storageBucket: 'audio' },
     })
   }
 
@@ -258,6 +267,11 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
             className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-[#5C4FE5] border border-[#5C4FE5]/30 rounded-lg text-xs font-semibold hover:bg-purple-100 transition-colors">
             <Headphones className="w-3.5 h-3.5" />
             + Audio Sentence
+          </button>
+          <button onClick={insertAudioHighlight}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-300 rounded-lg text-xs font-semibold hover:bg-yellow-100 transition-colors">
+            <Mic className="w-3.5 h-3.5" />
+            + Highlight+Audio
           </button>
           <button onClick={insertCollapsibleGroup}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-300 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors">

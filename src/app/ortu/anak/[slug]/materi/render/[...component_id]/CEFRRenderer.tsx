@@ -92,6 +92,36 @@ export default function CEFRRenderer({ content, lessonName }: CEFRRendererProps)
     return el
   }
 
+  // ── Render audio highlight inline ────────────────────────────
+  const renderAudioHighlight = (node: any, id: string) => {
+    const { text, color, storagePath } = node.attrs || {}
+    const isPlaying = playingId === id
+    const hasAudio = !!storagePath
+
+    const COLORS_INLINE: Record<string, string> = {
+      '#FEF08A': 'bg-yellow-100 border-yellow-400 text-yellow-900',
+      '#BAE6FD': 'bg-blue-100 border-blue-400 text-blue-900',
+      '#BBF7D0': 'bg-green-100 border-green-400 text-green-900',
+      '#FECACA': 'bg-red-100 border-red-400 text-red-900',
+      '#DDD6FE': 'bg-purple-100 border-purple-400 text-purple-900',
+    }
+    const colorClass = COLORS_INLINE[color] || COLORS_INLINE['#FEF08A']
+
+    return (
+      <span key={id} className={`inline-flex items-center gap-0.5 mx-0.5 px-1.5 py-0.5 rounded border font-semibold ${colorClass}`}>
+        <span>{text}</span>
+        {hasAudio && (
+          <button
+            onClick={() => toggleAudio(id, storagePath)}
+            className={`w-4 h-4 rounded-full inline-flex items-center justify-center ml-0.5 flex-shrink-0 transition-all
+              ${isPlaying ? 'bg-[#5C4FE5] text-white' : 'bg-white/80 text-[#5C4FE5] border border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white'}`}>
+            {isPlaying ? <Pause className="w-2 h-2" /> : <Play className="w-2 h-2 ml-px" />}
+          </button>
+        )}
+      </span>
+    )
+  }
+
   // ── Render inline content (text nodes) ──────────────────────
   const renderInline = (nodes: any[] = []) => {
     return nodes.map((node, idx) => {
@@ -99,6 +129,9 @@ export default function CEFRRenderer({ content, lessonName }: CEFRRendererProps)
         return <span key={idx}>{renderMarks(node.text, node.marks)}</span>
       }
       if (node.type === 'hardBreak') return <br key={idx} />
+      if (node.type === 'audioHighlight') {
+        return renderAudioHighlight(node, `ah_${idx}_${node.attrs?.text}`)
+      }
       return null
     })
   }
