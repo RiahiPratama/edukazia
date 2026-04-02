@@ -158,20 +158,24 @@ export default function TutorMateriPage() {
     // Build access status per material
     const accessMap: Record<string, 'allowed' | 'time_locked' | 'no_content'> = {}
     materials?.forEach(m => {
-      const content = contents?.find(c => c.material_id === m.id)
+      const content = contents?.find((c: any) => c.material_id === m.id)
+
+      // Non-live_zoom: cek content_url
+      if (m.category !== 'live_zoom') {
+        accessMap[m.id] = (content as any)?.content_url ? 'allowed' : 'no_content'
+        return
+      }
+
+      // Live zoom — berdasarkan tutor type
       if (tutor.is_owner) {
-        accessMap[m.id] = content?.canva_url ? 'allowed' : 'no_content'
+        accessMap[m.id] = (content as any)?.canva_url ? 'allowed' : 'no_content'
       } else {
-        // Freelancer & B2B
-        if (!content?.slides_url) {
+        if (!(content as any)?.slides_url) {
           accessMap[m.id] = 'no_content'
         } else if (tutor.tutor_type === 'internal') {
-          // Time-based check
-              // Cek apakah ada sesi aktif untuk materi ini
           const hasActiveSession = Object.values(timeAccess).some(v => v)
           accessMap[m.id] = hasActiveSession ? 'allowed' : 'time_locked'
         } else {
-          // B2B — akses penuh kalau ada slides_url
           accessMap[m.id] = 'allowed'
         }
       }
