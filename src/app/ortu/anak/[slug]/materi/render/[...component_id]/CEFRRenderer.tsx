@@ -2,16 +2,21 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Play, Pause, Volume2, ArrowLeft } from 'lucide-react'
+import { Play, Pause, Volume2, ArrowLeft, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+type CollapsibleItem = { id: string; text: string; translation: string; storage_path: string | null; storage_bucket: string }
+type InlineSegment = { id: string; text: string; highlighted: boolean; color: 'blue'|'yellow'|'green'|'red'; storage_path: string | null; storage_bucket: string }
+
 type Block =
   | { id: string; type: 'heading'; level: 1 | 2 | 3; content: string }
   | { id: string; type: 'paragraph'; content: string }
   | { id: string; type: 'highlight'; content: string; color: 'blue' | 'yellow' | 'green' | 'red' }
   | { id: string; type: 'table'; headers: string[]; rows: string[][] }
   | { id: string; type: 'audio_sentence'; text: string; translation: string; storage_path: string | null; storage_bucket: string }
+  | { id: string; type: 'collapsible_group'; header: string; color: 'blue'|'yellow'|'green'|'red'; items: CollapsibleItem[] }
+  | { id: string; type: 'inline_highlight'; segments: InlineSegment[] }
 
 type CEFRRendererProps = {
   blocks: Block[]
@@ -26,10 +31,34 @@ const HIGHLIGHT_COLORS = {
   red: 'bg-red-50 border-l-4 border-red-400 text-red-900',
 }
 
+const COLLAPSIBLE_COLORS = {
+  blue: 'bg-blue-500 text-white',
+  yellow: 'bg-yellow-400 text-yellow-900',
+  green: 'bg-green-500 text-white',
+  red: 'bg-red-500 text-white',
+}
+
+const INLINE_COLORS = {
+  blue: 'bg-blue-100 text-blue-900 border border-blue-300 rounded px-1',
+  yellow: 'bg-yellow-100 text-yellow-900 border border-yellow-300 rounded px-1',
+  green: 'bg-green-100 text-green-900 border border-green-300 rounded px-1',
+  red: 'bg-red-100 text-red-900 border border-red-300 rounded px-1',
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) {
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+
+  const toggleGroup = (id: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const audioRefs = useRef<Record<string, HTMLAudioElement>>({})
   const supabase = createClient()
 
@@ -173,6 +202,75 @@ export default function CEFRRenderer({ blocks, lessonName }: CEFRRendererProps) 
               <Volume2 className="w-4 h-4 text-[#5C4FE5] flex-shrink-0 animate-pulse" />
             )}
           </div>
+        )
+
+      case 'collapsible_group': {
+        const isOpen = openGroups.has(block.id)
+        return (
+          <div key={block.id} className="mb-4 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+            <button onClick={() => toggleGroup(block.id)}
+              className={`w-full flex items-center justify-between px-4 py-3 font-semibold text-sm transition-colors ${COLLAPSIBLE_COLORS[block.color]}`}>
+              <span>{block.header}</span>
+              <ChevronDown className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+              <div className="bg-white divide-y divide-gray-100">
+                {block.items.map(item => {
+                  const isPlaying = playingId === `${block.id}_${item.id}`
+                  const isLoading = loadingId === `${block.id}_${item.id}`
+                  const hasAudio = !!item.storage_path
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                      <button
+                        onClick={() => hasAudio && toggleAudio(`${block.id}_${item.id}`, item.storage_path!, item.storage_bucket)}
+                        disabled={!hasAudio || isLoading}
+                        className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all
+                          ${hasAudio ? isPlaying ? 'bg-[#5C4FE5] text-white shadow-lg' : 'bg-white text-[#5C4FE5] border-2 border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed'}`}>
+                        {isLoading ? <div className="w-3 h-3 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
+                          : isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
+                      </button>
+                      <div>
+                        <p className={`font-semibold text-sm ${isPlaying ? 'text-[#5C4FE5]' : 'text-gray-900'}`}>{item.text}</p>
+                        {item.translation && <p className="text-xs text-gray-500">{item.translation}</p>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      }
+
+      case 'inline_highlight':
+        return (
+          <p key={block.id} className="text-gray-700 leading-relaxed mb-4 text-base flex flex-wrap items-center gap-1">
+            {block.segments.map(seg => {
+              const isPlaying = playingId === `${block.id}_${seg.id}`
+              const isLoading = loadingId === `${block.id}_${seg.id}`
+              const hasAudio = seg.highlighted && !!seg.storage_path
+
+              if (!seg.highlighted) {
+                return <span key={seg.id}>{seg.text}</span>
+              }
+
+              return (
+                <span key={seg.id} className={`inline-flex items-center gap-1 ${INLINE_COLORS[seg.color]}`}>
+                  <span className="font-semibold">{seg.text}</span>
+                  {hasAudio && (
+                    <button
+                      onClick={() => toggleAudio(`${block.id}_${seg.id}`, seg.storage_path!, seg.storage_bucket)}
+                      disabled={isLoading}
+                      className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all
+                        ${isPlaying ? 'bg-[#5C4FE5] text-white' : 'bg-white text-[#5C4FE5] border border-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white'}`}>
+                      {isLoading ? <div className="w-2 h-2 border border-[#5C4FE5] border-t-transparent rounded-full animate-spin" />
+                        : isPlaying ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5 ml-px" />}
+                    </button>
+                  )}
+                </span>
+              )
+            })}
+          </p>
         )
 
       default:

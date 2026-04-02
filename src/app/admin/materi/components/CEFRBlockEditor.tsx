@@ -11,7 +11,7 @@ import {
 // ============================================================
 // TYPES
 // ============================================================
-type BlockType = 'heading' | 'paragraph' | 'highlight' | 'table' | 'audio_sentence';
+type BlockType = 'heading' | 'paragraph' | 'highlight' | 'table' | 'audio_sentence' | 'collapsible_group' | 'inline_highlight';
 
 type HeadingBlock = {
   id: string; type: 'heading';
@@ -44,7 +44,36 @@ type AudioSentenceBlock = {
   storage_bucket: string;
 };
 
-type Block = HeadingBlock | ParagraphBlock | HighlightBlock | TableBlock | AudioSentenceBlock;
+type CollapsibleGroupItem = {
+  id: string;
+  text: string;
+  translation: string;
+  storage_path: string | null;
+  storage_bucket: string;
+};
+
+type CollapsibleGroupBlock = {
+  id: string; type: 'collapsible_group';
+  header: string;
+  color: 'blue' | 'yellow' | 'green' | 'red';
+  items: CollapsibleGroupItem[];
+};
+
+type InlineSegment = {
+  id: string;
+  text: string;
+  highlighted: boolean;
+  color: 'blue' | 'yellow' | 'green' | 'red';
+  storage_path: string | null;
+  storage_bucket: string;
+};
+
+type InlineHighlightBlock = {
+  id: string; type: 'inline_highlight';
+  segments: InlineSegment[];
+};
+
+type Block = HeadingBlock | ParagraphBlock | HighlightBlock | TableBlock | AudioSentenceBlock | CollapsibleGroupBlock | InlineHighlightBlock;
 
 type CEFRBlockEditorProps = {
   lessonId: string;
@@ -70,6 +99,8 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   highlight: 'Highlight Box',
   table: 'Tabel',
   audio_sentence: 'Kalimat + Audio',
+  collapsible_group: 'Grup Dropdown',
+  inline_highlight: 'Teks Inline + Audio',
 };
 
 const BLOCK_ICONS: Record<BlockType, any> = {
@@ -78,6 +109,8 @@ const BLOCK_ICONS: Record<BlockType, any> = {
   highlight: Highlighter,
   table: Table,
   audio_sentence: Headphones,
+  collapsible_group: ChevronDown,
+  inline_highlight: Highlighter,
 };
 
 // ============================================================
@@ -154,6 +187,12 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
         break;
       case 'audio_sentence':
         newBlock = { id, type, text: '', translation: '', storage_path: null, storage_bucket: 'audio' };
+        break;
+      case 'collapsible_group':
+        newBlock = { id, type, header: '', color: 'blue', items: [] };
+        break;
+      case 'inline_highlight':
+        newBlock = { id, type, segments: [{ id: generateId(), text: '', highlighted: false, color: 'yellow', storage_path: null, storage_bucket: 'audio' }] };
         break;
     }
 
@@ -244,6 +283,84 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
 
     audioRefs.current[blockId].play();
     setPlayingId(blockId);
+  };
+
+  // ── Collapsible Group Operations ─────────────────────────
+  const addGroupItem = (blockId: string) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'collapsible_group') return b;
+      const newItem: CollapsibleGroupItem = { id: generateId(), text: '', translation: '', storage_path: null, storage_bucket: 'audio' };
+      return { ...b, items: [...b.items, newItem] };
+    }));
+  };
+
+  const updateGroupItem = (blockId: string, itemId: string, updates: Partial<CollapsibleGroupItem>) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'collapsible_group') return b;
+      return { ...b, items: b.items.map(item => item.id === itemId ? { ...item, ...updates } : item) };
+    }));
+  };
+
+  const deleteGroupItem = (blockId: string, itemId: string) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'collapsible_group') return b;
+      return { ...b, items: b.items.filter(item => item.id !== itemId) };
+    }));
+  };
+
+  const uploadGroupItemAudio = async (blockId: string, itemId: string, file: File) => {
+    setUploadingAudioId(`${blockId}_${itemId}`);
+    try {
+      const formData = new FormData();
+      formData.append('audio', file);
+      const res = await fetch('/api/admin/cefr/audio', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      updateGroupItem(blockId, itemId, { storage_path: data.storage_path, storage_bucket: 'audio' });
+    } catch (err) {
+      alert('❌ Gagal upload audio');
+    } finally {
+      setUploadingAudioId(null);
+    }
+  };
+
+  // ── Inline Highlight Operations ───────────────────────────
+  const addSegment = (blockId: string) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'inline_highlight') return b;
+      const newSeg: InlineSegment = { id: generateId(), text: '', highlighted: false, color: 'yellow', storage_path: null, storage_bucket: 'audio' };
+      return { ...b, segments: [...b.segments, newSeg] };
+    }));
+  };
+
+  const updateSegment = (blockId: string, segId: string, updates: Partial<InlineSegment>) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'inline_highlight') return b;
+      return { ...b, segments: b.segments.map(s => s.id === segId ? { ...s, ...updates } : s) };
+    }));
+  };
+
+  const deleteSegment = (blockId: string, segId: string) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'inline_highlight') return b;
+      return { ...b, segments: b.segments.filter(s => s.id !== segId) };
+    }));
+  };
+
+  const uploadSegmentAudio = async (blockId: string, segId: string, file: File) => {
+    setUploadingAudioId(`${blockId}_${segId}`);
+    try {
+      const formData = new FormData();
+      formData.append('audio', file);
+      const res = await fetch('/api/admin/cefr/audio', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      updateSegment(blockId, segId, { storage_path: data.storage_path, storage_bucket: 'audio' });
+    } catch (err) {
+      alert('❌ Gagal upload audio');
+    } finally {
+      setUploadingAudioId(null);
+    }
   };
 
   // ── Table Operations ──────────────────────────────────────
