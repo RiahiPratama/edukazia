@@ -414,7 +414,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
         </div>
 
-        {/* Order Number hidden — default 1 */} */}
+        {/* Order Number hidden — default 1 */}
 
         <div className="flex items-center gap-2">
           <input type="checkbox" id="isPublished" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5]" />
