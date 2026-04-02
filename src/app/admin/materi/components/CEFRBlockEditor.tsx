@@ -282,6 +282,17 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
       return { ...b, items: b.items.filter(item => item.id !== itemId) };
     }));
   };
+  const deleteGroupItemAudio = async (blockId: string, itemId: string, storagePath: string) => {
+    try {
+      await fetch('/api/admin/cefr/audio', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storage_path: storagePath }),
+      });
+      updateGroupItem(blockId, itemId, { storage_path: null });
+    } catch { alert('❌ Gagal hapus audio'); }
+  };
+
   const uploadGroupItemAudio = async (blockId: string, itemId: string, file: File) => {
     setUploadingAudioId(`${blockId}_${itemId}`);
     try {
@@ -314,6 +325,17 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
       return { ...b, segments: b.segments.filter(s => s.id !== segId) };
     }));
   };
+  const deleteSegmentAudio = async (blockId: string, segId: string, storagePath: string) => {
+    try {
+      await fetch('/api/admin/cefr/audio', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storage_path: storagePath }),
+      });
+      updateSegment(blockId, segId, { storage_path: null });
+    } catch { alert('❌ Gagal hapus audio'); }
+  };
+
   const uploadSegmentAudio = async (blockId: string, segId: string, file: File) => {
     setUploadingAudioId(`${blockId}_${segId}`);
     try {
@@ -620,7 +642,7 @@ export default function CEFRBlockEditor({ lessonId, lessonName, onBack }: CEFRBl
                         {seg.storage_path ? (
                           <div className="flex items-center gap-1 text-xs text-gray-500">
                             <span className="font-mono truncate max-w-[80px]">{seg.storage_path.split('/').pop()}</span>
-                            <button onClick={() => updateSegment(block.id, seg.id, { storage_path: null })} className="text-red-400"><X className="w-3 h-3" /></button>
+                            <button onClick={() => deleteSegmentAudio(block.id, seg.id, seg.storage_path!)} className="text-red-400"><X className="w-3 h-3" /></button>
                           </div>
                         ) : (
                           <label className={`flex items-center gap-1 px-2 py-0.5 border border-dashed rounded cursor-pointer text-xs ${uploadingAudioId === segKey ? 'border-purple-400' : 'border-gray-300 hover:border-[#5C4FE5]'}`}>
