@@ -55,21 +55,37 @@ export default async function MateriPage({
     )
   }
 
-  // 4. Get level IDs from enrollment_levels table (supports multi-level per enrollment)
+  // 4. Get level IDs dari 3 sumber berbeda
   const enrollmentIds = enrollments.map(e => e.id)
+  const classGroupIds = enrollments.map(e => e.class_group_id).filter(Boolean)
+
+  // Sumber 1: langsung dari enrollments.level_id (sistem lama)
+  const levelIdsFromEnrollments = enrollments
+    .map(e => e.level_id)
+    .filter((id): id is string => !!id)
+
+  // Sumber 2: dari enrollment_levels junction table
   const { data: enrollmentLevels } = await supabase
     .from('enrollment_levels')
     .select('level_id')
     .in('enrollment_id', enrollmentIds)
-
-  // Combine level_id from both enrollments (old system) and enrollment_levels (new system)
-  const levelIdsFromEnrollments = enrollments
-    .map(e => e.level_id)
-    .filter((id): id is string => !!id)
-  
   const levelIdsFromJunction = enrollmentLevels?.map(el => el.level_id) || []
-  
-  const levelIds = Array.from(new Set([...levelIdsFromEnrollments, ...levelIdsFromJunction]))
+
+  // ✅ Sumber 3: dari class_group_levels (untuk enrollment yang level_id-nya null)
+  const { data: classGroupLevels } = classGroupIds.length > 0
+    ? await supabase
+        .from('class_group_levels')
+        .select('level_id')
+        .in('class_group_id', classGroupIds)
+    : { data: [] }
+  const levelIdsFromClassGroups = classGroupLevels?.map(cgl => cgl.level_id) || []
+
+  // Gabungkan semua sumber level_id
+  const levelIds = Array.from(new Set([
+    ...levelIdsFromEnrollments,
+    ...levelIdsFromJunction,
+    ...levelIdsFromClassGroups,
+  ].filter(Boolean)))
 
   if (levelIds.length === 0) {
     return (
