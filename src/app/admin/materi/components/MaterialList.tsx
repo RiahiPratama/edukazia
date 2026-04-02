@@ -185,7 +185,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
             storage_path,
             canva_url,
             slides_url,
-            pdf_storage_path
+            student_content_url
           )
         `)
         .eq('category', category)
