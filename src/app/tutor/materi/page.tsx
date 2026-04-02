@@ -17,6 +17,7 @@ type Material = {
   category: string
   canva_url: string | null
   slides_url: string | null
+  student_content_url: string | null
   lesson_id: string
 }
 
@@ -40,6 +41,7 @@ export default function TutorMateriPage() {
   const [tutorInfo, setTutorInfo] = useState<TutorInfo | null>(null)
   const [levelsData, setLevelsData] = useState<LevelData[]>([])
   const [loading, setLoading] = useState(true)
+  const [openLevels, setOpenLevels] = useState<Set<string>>(new Set())
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
   const [accessStatus, setAccessStatus] = useState<Record<string, 'allowed' | 'time_locked' | 'no_content'>>({})
   const [embedModal, setEmbedModal] = useState<{ open: boolean; url: string; title: string; loading: boolean }>
@@ -122,13 +124,13 @@ export default function TutorMateriPage() {
       .select('id, title, category, lesson_id, is_published')
       .in('lesson_id', lessonIds)
       .eq('is_published', true)
-      .eq('category', 'live_zoom')
+      .order('position')
 
     const materialIds = materials?.map(m => m.id) || []
 
     const { data: contents } = await supabase
       .from('material_contents')
-      .select('material_id, canva_url, slides_url')
+      .select('material_id, canva_url, slides_url, student_content_url')
       .in('material_id', materialIds)
 
     // Check time-based access for freelancer
@@ -200,6 +202,7 @@ export default function TutorMateriPage() {
               category: m.category,
               canva_url: content?.canva_url || null,
               slides_url: content?.slides_url || null,
+              student_content_url: (content as any)?.student_content_url || null,
               lesson_id: m.lesson_id,
             }
           })
@@ -261,6 +264,16 @@ export default function TutorMateriPage() {
     }
   }
 
+  const getCategoryInfo = (category: string) => {
+    switch (category) {
+      case 'live_zoom': return { label: 'Live Zoom', color: 'bg-purple-100 text-purple-700', icon: '📹' }
+      case 'kosakata': return { label: 'Kosakata', color: 'bg-yellow-100 text-yellow-700', icon: '📝' }
+      case 'bacaan': return { label: 'Bacaan', color: 'bg-blue-100 text-blue-700', icon: '📖' }
+      case 'cefr': return { label: 'CEFR', color: 'bg-green-100 text-green-700', icon: '🎧' }
+      default: return { label: category, color: 'bg-gray-100 text-gray-600', icon: '📄' }
+    }
+  }
+
   const getTutorBadge = () => {
     if (!tutorInfo) return null
     if (tutorInfo.is_owner) return { label: 'Owner', color: 'bg-purple-100 text-purple-700', icon: <Crown size={12} className="inline mr-1"/> }
@@ -311,16 +324,22 @@ export default function TutorMateriPage() {
       ) : (
         levelsData.map(level => (
           <div key={level.level_id} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-            {/* Level header */}
-            <div className="px-6 py-4 bg-[#5C4FE5] flex items-center justify-between">
+            {/* Level header — collapsible */}
+            <button onClick={() => setOpenLevels(prev => {
+              const next = new Set(prev)
+              openLevels.has(level.level_id) ? next.delete(level.level_id) : next.add(level.level_id)
+              return next
+            })}
+              className="w-full px-6 py-4 bg-[#5C4FE5] flex items-center justify-between hover:bg-[#4a3ec7] transition-colors text-left">
               <div>
                 <p className="text-xs text-purple-200 font-medium">{level.course_name}</p>
                 <h2 className="text-lg font-bold text-white">{level.level_name}</h2>
               </div>
-            </div>
+              <ChevronDown className={`w-5 h-5 text-white transition-transform ${openLevels.has(level.level_id) ? 'rotate-180' : ''}`}/>
+            </button>
 
-            {/* Units */}
-            <div className="divide-y divide-gray-100">
+            {/* Units — hanya tampil kalau level terbuka */}
+            {openLevels.has(level.level_id) && <div className="divide-y divide-gray-100">
               {level.units.map(unit => {
                 const isOpen = openUnits.has(unit.id)
                 return (
@@ -354,21 +373,28 @@ export default function TutorMateriPage() {
                                   ${status === 'allowed' ? 'border-[#E5E3FF] bg-[#F7F6FF] hover:border-[#5C4FE5]' :
                                     status === 'time_locked' ? 'border-yellow-200 bg-yellow-50' :
                                     'border-gray-200 bg-gray-50'}`}>
-                                <div className="flex items-center gap-3">
-                                  <Video className={`w-4 h-4 flex-shrink-0 ${status === 'allowed' ? 'text-[#5C4FE5]' : 'text-gray-400'}`}/>
-                                  <span className={`text-sm font-medium ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-500'}`}>
-                                    {material.title}
-                                  </span>
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <span className="text-base flex-shrink-0">{getCategoryInfo(material.category).icon}</span>
+                                  <div className="min-w-0">
+                                    <p className={`text-sm font-medium truncate ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-500'}`}>
+                                      {material.title}
+                                    </p>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryInfo(material.category).color}`}>
+                                      {getCategoryInfo(material.category).label}
+                                    </span>
+                                  </div>
                                 </div>
-                                <button onClick={() => openMaterial(material)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0
-                                    ${status === 'allowed' ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]' :
-                                      status === 'time_locked' ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed' :
-                                      'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                                  {status === 'allowed' ? <><ExternalLink className="w-3 h-3"/>Buka</> :
-                                    status === 'time_locked' ? <><Clock className="w-3 h-3"/>Terkunci</> :
-                                    <><Lock className="w-3 h-3"/>Belum Tersedia</>}
-                                </button>
+                                {material.category === 'live_zoom' && (
+                                  <button onClick={() => openMaterial(material)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ml-2
+                                      ${status === 'allowed' ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]' :
+                                        status === 'time_locked' ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed' :
+                                        'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                                    {status === 'allowed' ? <><ExternalLink className="w-3 h-3"/>Buka</> :
+                                      status === 'time_locked' ? <><Clock className="w-3 h-3"/>Terkunci</> :
+                                      <><Lock className="w-3 h-3"/>Belum Tersedia</>}
+                                  </button>
+                                )}
                               </div>
                             )
                           })
