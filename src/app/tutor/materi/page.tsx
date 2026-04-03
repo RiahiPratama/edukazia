@@ -170,24 +170,47 @@ export default function TutorMateriPage() {
     // Check time-based access for freelancer
     if (!tutor.is_owner && tutor.tutor_type === 'internal') {
       const now = new Date()
-      // Get classGroupIds for time check
+
+      // Get class groups + course untuk tentukan durasi
       const { data: cgForTime } = await supabase
         .from('class_groups')
-        .select('id')
+        .select('id, course_id, class_type_id')
         .eq('tutor_id', tutor.id)
         .eq('status', 'active')
-      const classGroupIdsForTime = cgForTime?.map(cg => cg.id) || []
+
+      const classGroupIdsForTime = cgForTime?.map((cg: any) => cg.id) || []
+
+      // Fetch durasi dari DB
+      const { data: durations } = await supabase
+        .from('course_type_durations')
+        .select('course_id, class_type_id, duration_minutes')
+
+      const getDuration = (cgId: string): number => {
+        const cg = cgForTime?.find((c: any) => c.id === cgId)
+        if (!cg) return 60
+        const dur = durations?.find((d: any) =>
+          d.course_id === cg.course_id && d.class_type_id === cg.class_type_id
+        )
+        return dur?.duration_minutes || 60
+      }
 
       const { data: sessions } = await supabase
         .from('sessions')
-        .select('id, scheduled_at')
+        .select('id, scheduled_at, class_group_id')
         .in('class_group_id', classGroupIdsForTime)
-        .gte('scheduled_at', new Date(now.getTime() - 60 * 60 * 1000).toISOString())
+        .gte('scheduled_at', new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString())
         .lte('scheduled_at', new Date(now.getTime() + 60 * 60 * 1000).toISOString())
 
       const active = sessions?.some(s => {
-        const diffMin = (now.getTime() - new Date(s.scheduled_at).getTime()) / 60000
-        return diffMin >= -20 && diffMin <= 5
+        const sessionStart = new Date(s.scheduled_at)
+        const duration = getDuration(s.class_group_id)
+        const sessionEnd = new Date(sessionStart.getTime() + duration * 60 * 1000)
+        const minutesBeforeStart = (sessionStart.getTime() - now.getTime()) / 60000
+        const minutesAfterEnd = (now.getTime() - sessionEnd.getTime()) / 60000
+
+        // Buka: 20 menit sebelum mulai
+        // Tutup: 5 menit setelah selesai
+        return minutesBeforeStart <= 20 && minutesAfterEnd <= 5
       })
       setHasActiveSession(!!active)
     }
@@ -381,8 +404,8 @@ export default function TutorMateriPage() {
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-center gap-3">
           <Clock className="w-4 h-4 text-yellow-600 flex-shrink-0" />
           <p className="text-xs text-yellow-800">
-            <strong>Live Zoom</strong> hanya bisa dibuka 20 menit sebelum – 5 menit setelah kelas.
-            {hasActiveSession ? ' ✅ Sesi aktif sekarang.' : ' 🔒 Belum ada sesi aktif.'}
+            Materi di kelas ini akan tersedia sebelum 20 menit kelas di mulai.
+            {hasActiveSession ? ' ✅ Sesi aktif sekarang.' : ''}
           </p>
         </div>
       )}
