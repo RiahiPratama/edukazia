@@ -169,7 +169,7 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
 
         if (insertError) throw insertError
 
-        // 3. ✅ NEW: Update enrollments.level_id with first selected level
+        // 3. ✅ Update enrollments.level_id with first selected level
         const primaryLevelId = enrollment.selectedLevels[0]
         const { error: updateError } = await supabase
           .from('enrollments')
@@ -177,6 +177,23 @@ export default function EnrollmentLevelManager({ studentId }: { studentId: strin
           .eq('id', enrollmentId)
 
         if (updateError) throw updateError
+
+        // 4. ✅ Sync ke class_group_levels
+        for (const levelId of enrollment.selectedLevels) {
+          const { data: existing } = await supabase
+            .from('class_group_levels')
+            .select('id')
+            .eq('class_group_id', enrollment.class_group_id)
+            .eq('level_id', levelId)
+            .maybeSingle()
+
+          if (!existing) {
+            await supabase.from('class_group_levels').insert({
+              class_group_id: enrollment.class_group_id,
+              level_id: levelId,
+            })
+          }
+        }
       } else {
         // 4. ✅ NEW: If no levels selected, set to NULL
         const { error: updateError } = await supabase
