@@ -22,7 +22,9 @@ type Material = {
   category: string
   lesson_id: string
   lesson_name: string
+  lesson_position: number
   unit_name: string
+  unit_position: number
   chapter_title: string | null
   level_name: string
   content_url: string | null
@@ -116,7 +118,7 @@ export default function TutorMateriPage() {
     // Get units
     const { data: units } = await supabase
       .from('units')
-      .select('id, unit_name, level_id, chapter_id, position')
+      .select('id, unit_name, level_id, chapter_id, position').order('position')
       .in('level_id', levelIds)
       .order('position')
 
@@ -132,7 +134,7 @@ export default function TutorMateriPage() {
     const { data: lessons } = unitIds.length > 0
       ? await supabase
           .from('lessons')
-          .select('id, lesson_name, unit_id, position')
+          .select('id, lesson_name, unit_id, position').order('position')
           .in('unit_id', unitIds)
           .order('position')
       : { data: [] }
@@ -190,7 +192,9 @@ export default function TutorMateriPage() {
         category: m.category,
         lesson_id: m.lesson_id,
         lesson_name: lesson?.lesson_name || '',
+        lesson_position: lesson?.position || 0,
         unit_name: unit?.unit_name || '',
+        unit_position: unit?.position || 0,
         chapter_title: chapter?.chapter_title || null,
         level_name: level?.name || '',
         content_url: (content as any)?.content_url || null,
@@ -289,13 +293,13 @@ export default function TutorMateriPage() {
   type ChapterGroup = { level: string; chapter: string | null; units: UnitGroup[] }
   const groups: ChapterGroup[] = []
 
-  // Sort: level → chapter → unit → lesson
+  // Sort: level → chapter → unit position → lesson position
   const sorted = [...tabMaterials].sort((a, b) => {
     if (a.level_name !== b.level_name) return a.level_name.localeCompare(b.level_name)
     if ((a.chapter_title || '') !== (b.chapter_title || ''))
       return (a.chapter_title || '').localeCompare(b.chapter_title || '')
-    if (a.unit_name !== b.unit_name) return a.unit_name.localeCompare(b.unit_name)
-    return a.lesson_name.localeCompare(b.lesson_name)
+    if (a.unit_position !== b.unit_position) return a.unit_position - b.unit_position
+    return a.lesson_position - b.lesson_position
   })
 
   sorted.forEach(m => {
