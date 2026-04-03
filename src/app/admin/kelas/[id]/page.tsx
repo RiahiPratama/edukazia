@@ -205,7 +205,6 @@ export default function KelasDetailPage() {
       .from('enrollments')
       .select('id, student_id, sessions_total, session_start_offset, sessions_used, status')
       .eq('class_group_id', kelasId)
-      .order('created_at', { ascending: true })
 
     if (enr && enr.length > 0) {
       // Fetch nama siswa
