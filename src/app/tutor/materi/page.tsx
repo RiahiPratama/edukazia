@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BookOpen, Video, ChevronDown, ChevronRight, Crown, Users, Building2, Clock, Lock, ExternalLink, Loader2, X } from 'lucide-react'
 
@@ -19,6 +20,7 @@ type Material = {
   canva_url: string | null
   slides_url: string | null
   student_content_url: string | null
+  storage_path: string | null
   lesson_id: string
 }
 
@@ -39,6 +41,7 @@ type LevelData = {
 
 export default function TutorMateriPage() {
   const supabase = createClient()
+  const router = useRouter()
   const [tutorInfo, setTutorInfo] = useState<TutorInfo | null>(null)
   const [levelsData, setLevelsData] = useState<LevelData[]>([])
   const [loading, setLoading] = useState(true)
@@ -131,7 +134,7 @@ export default function TutorMateriPage() {
 
     const { data: contents } = await supabase
       .from('material_contents')
-      .select('material_id, content_url, canva_url, slides_url, student_content_url')
+      .select('material_id, content_url, canva_url, slides_url, student_content_url, storage_path')
       .in('material_id', materialIds)
 
     // Check time-based access for freelancer
@@ -160,9 +163,15 @@ export default function TutorMateriPage() {
     materials?.forEach(m => {
       const content = contents?.find((c: any) => c.material_id === m.id)
 
-      // Non-live_zoom: cek content_url
+      // Non-live_zoom
       if (m.category !== 'live_zoom') {
-        accessMap[m.id] = (content as any)?.content_url ? 'allowed' : 'no_content'
+        if (m.category === 'bacaan') {
+          accessMap[m.id] = (content as any)?.storage_path ? 'allowed' : 'no_content'
+        } else if (m.category === 'cefr') {
+          accessMap[m.id] = m.lesson_id ? 'allowed' : 'no_content'
+        } else {
+          accessMap[m.id] = (content as any)?.content_url ? 'allowed' : 'no_content'
+        }
         return
       }
 
@@ -206,9 +215,10 @@ export default function TutorMateriPage() {
               title: m.title,
               category: m.category,
               content_url: (content as any)?.content_url || null,
-              canva_url: content?.canva_url || null,
-              slides_url: content?.slides_url || null,
+              canva_url: (content as any)?.canva_url || null,
+              slides_url: (content as any)?.slides_url || null,
               student_content_url: (content as any)?.student_content_url || null,
+              storage_path: (content as any)?.storage_path || null,
               lesson_id: m.lesson_id,
             }
           })
@@ -245,12 +255,23 @@ export default function TutorMateriPage() {
       return
     }
 
+    // Bacaan → render via tutor render page
+    if (material.category === 'bacaan' && material.storage_path) {
+      router.push(`/tutor/render/${material.storage_path}`)
+      return
+    }
+
+    // CEFR → render via tutor render page pakai lesson_id
+    if (material.category === 'cefr' && material.lesson_id) {
+      router.push(`/tutor/render/${material.lesson_id}`)
+      return
+    }
+
     // Tentukan URL berdasarkan kategori & tutor type
     let url: string | null = null
     if (material.category === 'live_zoom') {
       url = tutorInfo?.is_owner ? material.canva_url : material.slides_url
     } else {
-      // kosakata, bacaan, cefr → pakai content_url
       url = material.content_url
     }
 
@@ -281,7 +302,6 @@ export default function TutorMateriPage() {
       return
     }
 
-    // URL lain → buka tab baru
     window.open(url, '_blank')
   }
 
