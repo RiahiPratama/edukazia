@@ -8,30 +8,33 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2,
-  ClipboardList, Archive, Building2
+  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown
 } from 'lucide-react'
 
-const navItems = [
+// Nav structure dengan sub-menu
+const navGroups = [
   { group: 'Utama', items: [
-    { href: '/admin/dashboard', label: 'Dashboard',      icon: LayoutDashboard },
-    { href: '/admin/jadwal',    label: 'Jadwal',          icon: CalendarDays },
+    { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/admin/jadwal',    label: 'Jadwal',     icon: CalendarDays },
   ]},
   { group: 'Akademik', items: [
-    { href: '/admin/siswa',     label: 'Siswa',           icon: GraduationCap },
-    { href: '/admin/tutor',     label: 'Tutor',           icon: Users },
-    { href: '/admin/kelas',     label: 'Kelas',           icon: BookOpen },
-    { href: '/admin/bimbel',        label: 'Bimbel (B2B)',      icon: Building2 },
-    { href: '/admin/subscription',  label: 'Subscription B2B',  icon: CreditCard },
-    { href: '/admin/kursus',    label: 'Kursus & Paket',  icon: Layers },
-    { href: '/admin/absensi',   label: 'Absensi',         icon: ClipboardList },
+    { href: '/admin/siswa',   label: 'Siswa',         icon: GraduationCap },
+    { href: '/admin/tutor',   label: 'Tutor',          icon: Users, children: [
+      { href: '/admin/absensi', label: 'Absensi', icon: ClipboardList },
+    ]},
+    { href: '/admin/kelas',   label: 'Kelas',          icon: BookOpen },
+    { href: '/admin/kursus',  label: 'Kursus & Paket', icon: Layers },
+    { href: '/admin/bimbel',  label: 'Bimbel (B2B)',   icon: Building2, children: [
+      { href: '/admin/subscription', label: 'Subscription B2B', icon: CreditCard },
+    ]},
   ]},
   { group: 'Keuangan', items: [
-    { href: '/admin/pembayaran', label: 'Pembayaran',     icon: CreditCard },
-    { href: '/admin/honor',      label: 'Honor Tutor',    icon: Coins },
+    { href: '/admin/pembayaran', label: 'Pendapatan',   icon: TrendingUp },
+    { href: '/admin/honor',      label: 'Pengeluaran',  icon: TrendingDown },
   ]},
   { group: 'Sistem', items: [
-    { href: '/admin/materi',    label: 'Materi Tutor',    icon: FolderOpen },
-    { href: '/admin/konten',    label: 'Konten Landing',  icon: Globe },
+    { href: '/admin/materi',  label: 'Bank Materi',    icon: FolderOpen },
+    { href: '/admin/konten',  label: 'Konten Landing', icon: Globe },
   ]},
 ]
 
@@ -52,32 +55,75 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   function NavContent({ onClose }: { onClose?: () => void }) {
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({
+      '/admin/tutor': pathname.startsWith('/admin/tutor') || pathname.startsWith('/admin/absensi'),
+      '/admin/bimbel': pathname.startsWith('/admin/bimbel') || pathname.startsWith('/admin/subscription'),
+    })
+
+    function toggleExpand(href: string) {
+      setExpanded(prev => ({ ...prev, [href]: !prev[href] }))
+    }
+
     return (
       <>
         <nav className="flex-1 overflow-y-auto py-4 px-3">
-          {navItems.map(group => (
+          {navGroups.map(group => (
             <div key={group.group} className="mb-4">
               <div className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-[#7B78A8]">
                 {group.group}
               </div>
-              {group.items.map(item => {
-                const Icon    = item.icon
-                const active  = isActive(item.href)
+              {group.items.map((item: any) => {
+                const Icon   = item.icon
+                const active = isActive(item.href)
+                const hasChildren = item.children && item.children.length > 0
+                const isExpanded = expanded[item.href]
+
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClose}
-                    className={[
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold mb-0.5 transition-all',
-                      active
-                        ? 'bg-[#5C4FE5] text-white'
-                        : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
-                    ].join(' ')}
-                  >
-                    <Icon size={16} strokeWidth={active ? 2.5 : 2} className="flex-shrink-0"/>
-                    <span>{item.label}</span>
-                  </Link>
+                  <div key={item.href}>
+                    <div className="flex items-center">
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        className={[
+                          'flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold mb-0.5 transition-all',
+                          active
+                            ? 'bg-[#5C4FE5] text-white'
+                            : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
+                        ].join(' ')}
+                      >
+                        <Icon size={16} strokeWidth={active ? 2.5 : 2} className="flex-shrink-0"/>
+                        <span className="flex-1">{item.label}</span>
+                      </Link>
+                      {hasChildren && (
+                        <button onClick={() => toggleExpand(item.href)}
+                          className="p-1.5 text-[#7B78A8] hover:text-[#5C4FE5] transition-colors rounded-lg">
+                          {isExpanded
+                            ? <ChevronDown size={14} />
+                            : <ChevronRight size={14} />}
+                        </button>
+                      )}
+                    </div>
+                    {hasChildren && isExpanded && (
+                      <div className="ml-4 pl-3 border-l-2 border-[#E5E3FF] mb-1">
+                        {item.children.map((child: any) => {
+                          const ChildIcon = child.icon
+                          const childActive = isActive(child.href)
+                          return (
+                            <Link key={child.href} href={child.href} onClick={onClose}
+                              className={[
+                                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold mb-0.5 transition-all',
+                                childActive
+                                  ? 'bg-[#5C4FE5] text-white'
+                                  : 'text-[#4A4580] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'
+                              ].join(' ')}>
+                              <ChildIcon size={14} className="flex-shrink-0"/>
+                              <span>{child.label}</span>
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
