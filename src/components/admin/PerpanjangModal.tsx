@@ -73,7 +73,7 @@ export default function PerpanjangModal({
   const [startOffset,   setStartOffset]   = useState('1')
   const [payment,       setPayment]       = useState('')
   const [paymentMethod, setPaymentMethod] = useState('transfer')
-  const [zoomLink,      setZoomLink]      = useState(kelasZoomLink ?? '')
+  const [zoomLink,      setZoomLink]      = useState('') // selalu kosong — admin wajib input link baru
   const [jadwalMode,    setJadwalMode]    = useState<'auto' | 'manual'>('auto')
   const [jadwalRows,    setJadwalRows]    = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
 
@@ -468,9 +468,9 @@ export default function PerpanjangModal({
             <div>
               <label className={labelCls}>5. Link Zoom</label>
               <input type="url" value={zoomLink} onChange={e => setZoomLink(e.target.value)}
-                placeholder="https://zoom.us/j/..."
+                placeholder="Masukkan link Zoom baru..."
                 className={inputCls}/>
-              <p className="text-xs text-[#7B78A8] mt-1">Pre-fill dari kelas sebelumnya, bisa diganti</p>
+              <p className="text-xs text-[#7B78A8] mt-1">Wajib diisi dengan link Zoom terbaru untuk periode ini</p>
             </div>
 
             {error && (
