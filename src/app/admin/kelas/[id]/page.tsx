@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, X, BookOpen, Plus, Trash } from 'lucide-react'
+import PerpanjangModal from '@/components/admin/PerpanjangModal'
 
 type KelasDetail = {
   id: string
@@ -52,7 +53,6 @@ type Level = {
   sort_order: number
 }
 
-type Package = { id: string; name: string; total_sessions: number; price: number }
 
 type ClassGroupLevel = {
   id: string
@@ -111,12 +111,6 @@ export default function KelasDetailPage() {
   // Perpanjang state
   const [showPerpanjang,    setShowPerpanjang]    = useState(false)
   const [perpanjangEnr,     setPerpanjangEnr]     = useState<Enrollment | null>(null)
-  const [packages,          setPackages]          = useState<Package[]>([])
-  const [perpanjangForm,    setPerpanjangForm]    = useState({
-    package_id: '', sessions_total: '8', start_date: '', zoom_link: ''
-  })
-  const [savingPerpanjang,  setSavingPerpanjang]  = useState(false)
-  const [perpanjangError,   setPerpanjangError]   = useState('')
 
   // Level state
   const [classLevels,     setClassLevels]     = useState<ClassGroupLevel[]>([])
@@ -225,10 +219,6 @@ export default function KelasDetailPage() {
       }
       setEnrollments(enr.map((e: any) => ({ ...e, student_name: nameMap[e.student_id] ?? 'Siswa' })))
     }
-
-    // Fetch packages
-    const { data: pkgs } = await supabase.from('packages').select('id, name, total_sessions, price').eq('is_active', true)
-    setPackages(pkgs ?? [])
 
     // Fetch sessions
     const { data: sess } = await supabase
@@ -387,46 +377,6 @@ export default function KelasDetailPage() {
     })
     setPerpanjangError('')
     setShowPerpanjang(true)
-  }
-
-  async function handlePerpanjang() {
-    if (!perpanjangEnr) return
-    if (!perpanjangForm.package_id) { setPerpanjangError('Pilih paket'); return }
-    if (!perpanjangForm.start_date) { setPerpanjangError('Pilih tanggal mulai'); return }
-
-    setSavingPerpanjang(true); setPerpanjangError('')
-    try {
-      // Insert enrollment baru
-      const { error: enrErr } = await supabase.from('enrollments').insert({
-        student_id:     perpanjangEnr.student_id,
-        class_group_id: kelasId,
-        package_id:     perpanjangForm.package_id,
-        sessions_total: parseInt(perpanjangForm.sessions_total),
-        sessions_used:  0,
-        session_start_offset: 1,
-        start_date:     perpanjangForm.start_date,
-        status:         'active',
-      })
-      if (enrErr) throw enrErr
-
-      // Update zoom link kalau berubah
-      if (perpanjangForm.zoom_link !== kelas?.zoom_link) {
-        await supabase.from('class_groups')
-          .update({ zoom_link: perpanjangForm.zoom_link, status: 'active' })
-          .eq('id', kelasId)
-      } else {
-        // Pastikan kelas kembali aktif
-        await supabase.from('class_groups')
-          .update({ status: 'active' })
-          .eq('id', kelasId)
-      }
-
-      setShowPerpanjang(false)
-      fetchAll()
-    } catch (err: any) {
-      setPerpanjangError(err.message ?? 'Gagal memperpanjang')
-    }
-    setSavingPerpanjang(false)
   }
 
   async function deleteSession(id: string) {
@@ -869,74 +819,16 @@ export default function KelasDetailPage() {
         </div>
       )}
       {/* Modal Perpanjang */}
-      {showPerpanjang && perpanjangEnr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF]">
-              <div>
-                <h2 className="text-lg font-black text-[#1A1640]">Perpanjang Kelas</h2>
-                <p className="text-xs text-[#7B78A8]">{perpanjangEnr.student_name}</p>
-              </div>
-              <button onClick={() => setShowPerpanjang(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
-                <X size={18}/>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              {/* Paket */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Paket *</label>
-                <select value={perpanjangForm.package_id}
-                  onChange={e => {
-                    const pkg = packages.find(p => p.id === e.target.value)
-                    setPerpanjangForm(prev => ({ ...prev, package_id: e.target.value, sessions_total: pkg?.total_sessions.toString() ?? '8' }))
-                  }}
-                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5]">
-                  <option value="">Pilih paket...</option>
-                  {packages.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} — {p.total_sessions} sesi</option>
-                  ))}
-                </select>
-              </div>
-              {/* Custom sesi */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Total Sesi</label>
-                <input type="number" min={1} max={100} value={perpanjangForm.sessions_total}
-                  onChange={e => setPerpanjangForm(prev => ({ ...prev, sessions_total: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5]"/>
-                <p className="text-xs text-[#7B78A8] mt-1">Otomatis dari paket, bisa diedit</p>
-              </div>
-              {/* Tanggal mulai */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tanggal Mulai Sesi Baru *</label>
-                <input type="date" value={perpanjangForm.start_date}
-                  onChange={e => setPerpanjangForm(prev => ({ ...prev, start_date: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5]"/>
-              </div>
-              {/* Zoom link */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Link Zoom (opsional)</label>
-                <input type="url" value={perpanjangForm.zoom_link}
-                  onChange={e => setPerpanjangForm(prev => ({ ...prev, zoom_link: e.target.value }))}
-                  placeholder="https://zoom.us/j/..."
-                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] focus:outline-none focus:border-[#5C4FE5]"/>
-                <p className="text-xs text-[#7B78A8] mt-1">Kosongkan jika link Zoom tidak berubah</p>
-              </div>
-              {perpanjangError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-semibold">{perpanjangError}</div>
-              )}
-            </div>
-            <div className="px-6 py-4 border-t border-[#E5E3FF] flex gap-3">
-              <button onClick={() => setShowPerpanjang(false)}
-                className="flex-1 py-2.5 border-2 border-[#E5E3FF] text-[#7B78A8] rounded-xl font-semibold text-sm hover:bg-gray-50">
-                Batal
-              </button>
-              <button onClick={handlePerpanjang} disabled={savingPerpanjang}
-                className="flex-1 py-2.5 bg-[#5C4FE5] text-white rounded-xl font-semibold text-sm hover:bg-[#4a3ec7] disabled:opacity-50">
-                {savingPerpanjang ? 'Menyimpan...' : '🔄 Perpanjang'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {showPerpanjang && perpanjangEnr && kelas && (
+        <PerpanjangModal
+          kelasId={kelasId}
+          kelasLabel={kelas.label}
+          kelasZoomLink={kelas.zoom_link}
+          kelasClassTypeId={(kelas as any).class_type_id ?? ''}
+          enrollment={perpanjangEnr}
+          onClose={() => setShowPerpanjang(false)}
+          onSuccess={() => { setShowPerpanjang(false); fetchAll() }}
+        />
       )}
     </div>
   )
