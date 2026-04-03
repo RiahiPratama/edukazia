@@ -4,10 +4,9 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { X, Plus, Minus, ChevronRight, Check, Loader2 } from 'lucide-react'
 
-type Package = { id: string; name: string; total_sessions: number; price: number }
-type Session = { scheduled_at: string; status: string }
+type Package  = { id: string; name: string; total_sessions: number; price: number }
+type Session  = { scheduled_at: string; status: string }
 type Enrollment = { id: string; student_id: string; student_name: string; sessions_total: number; sessions_used: number }
-
 type JadwalRow = { date: string; time: string; repeat: number }
 type PreviewSession = { date: string; time: string }
 
@@ -41,13 +40,21 @@ type Props = {
   kelasId: string
   kelasLabel: string
   kelasZoomLink: string | null
-  kelasClassTypeId: string
+  kelasClassTypeId: string   // ← sudah ada di Props
   enrollment: Enrollment
   onClose: () => void
   onSuccess: () => void
 }
 
-export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, enrollment, onClose, onSuccess }: Props) {
+export default function PerpanjangModal({
+  kelasId,
+  kelasLabel,
+  kelasZoomLink,
+  kelasClassTypeId,           // ← FIX: sekarang di-destructure
+  enrollment,
+  onClose,
+  onSuccess,
+}: Props) {
   const supabase = createClient()
 
   const [step, setStep]         = useState<'form' | 'preview'>('form')
@@ -56,6 +63,9 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
+
+  // course_id di-fetch dari class_groups (tidak ada di props)
+  const [kelasCourseId, setKelasCourseId] = useState<string | null>(null)
 
   // Form state
   const [packageId,     setPackageId]     = useState('')
@@ -74,17 +84,38 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
 
   async function fetchData() {
     setLoading(true)
+
+    // FIX: fetch course_id dari class_groups dulu, baru filter packages
+    const { data: kelasData } = await supabase
+      .from('class_groups')
+      .select('course_id')
+      .eq('id', kelasId)
+      .single()
+
+    const courseId = kelasData?.course_id ?? null
+    setKelasCourseId(courseId)
+
+    // FIX: filter packages by course_id + class_type_id
+    const pkgQuery = supabase
+      .from('packages')
+      .select('id, name, total_sessions, price')
+      .eq('is_active', true)
+
+    if (courseId)        pkgQuery.eq('course_id', courseId)
+    if (kelasClassTypeId) pkgQuery.eq('class_type_id', kelasClassTypeId)
+
     const [pkgRes, sessRes] = await Promise.all([
-      supabase.from('packages').select('id, name, total_sessions, price').eq('is_active', true),
-      supabase.from('sessions')
+      pkgQuery,
+      supabase
+        .from('sessions')
         .select('scheduled_at, status')
         .eq('class_group_id', kelasId)
         .order('scheduled_at', { ascending: true }),
     ])
+
     setPackages(pkgRes.data ?? [])
     setSessions(sessRes.data ?? [])
 
-    // Auto-detect pola jadwal dari sesi sebelumnya
     if (sessRes.data && sessRes.data.length > 0) {
       detectAndSetAutoJadwal(sessRes.data)
     }
@@ -93,13 +124,12 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
   }
 
   function detectAndSetAutoJadwal(allSessions: Session[]) {
-    // Group by day of week + time
     const patternMap: Record<string, { time: string; count: number; lastDate: string }> = {}
 
     allSessions.forEach(s => {
       const d = new Date(s.scheduled_at)
-      const dayOfWeek = d.getDay() // 0=Sun, 6=Sat
-      const time = d.toTimeString().substring(0, 5) // HH:MM
+      const dayOfWeek = d.getDay()
+      const time = d.toTimeString().substring(0, 5)
       const key = `${dayOfWeek}-${time}`
       if (!patternMap[key]) {
         patternMap[key] = { time, count: 0, lastDate: s.scheduled_at }
@@ -110,28 +140,19 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
       }
     })
 
-    // Sort patterns by day of week, find next occurrence after last session
     const lastSession = allSessions[allSessions.length - 1]
-    const lastDate = new Date(lastSession.scheduled_at)
+    const lastDate    = new Date(lastSession.scheduled_at)
 
     const patterns = Object.values(patternMap).sort((a, b) => {
-      const dayA = new Date(a.lastDate).getDay()
-      const dayB = new Date(b.lastDate).getDay()
-      return dayA - dayB
+      return new Date(a.lastDate).getDay() - new Date(b.lastDate).getDay()
     })
 
     if (patterns.length === 0) return
 
-    // Generate next dates for each pattern after lastDate
     const rows: JadwalRow[] = patterns.map(p => {
-      const lastPatternDate = new Date(p.lastDate)
-      // Next occurrence = lastPatternDate + 7 days (next week same day)
-      const nextDate = new Date(lastPatternDate)
+      const nextDate = new Date(p.lastDate)
       nextDate.setDate(nextDate.getDate() + 7)
-      // If nextDate <= lastDate, add another week
-      while (nextDate <= lastDate) {
-        nextDate.setDate(nextDate.getDate() + 7)
-      }
+      while (nextDate <= lastDate) nextDate.setDate(nextDate.getDate() + 7)
       return {
         date: nextDate.toISOString().split('T')[0],
         time: p.time,
@@ -171,11 +192,9 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
   function handlePreview() {
     if (!packageId) { setError('Pilih paket terlebih dahulu'); return }
     setError('')
-
     const generated = jadwalMode === 'auto'
       ? generateSessions(jadwalRows.map(r => ({ ...r, repeat: Math.ceil(parseInt(sessionsTotal) / jadwalRows.length) })))
       : generateSessions(jadwalRows)
-
     setPreviewSessions(generated)
     setStep('preview')
   }
@@ -183,17 +202,22 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
   async function handleSave() {
     setSaving(true); setError('')
     try {
-      // 1. Insert enrollment baru
-      const { error: enrErr } = await supabase.from('enrollments').insert({
-        student_id:           enrollment.student_id,
-        class_group_id:       kelasId,
-        package_id:           packageId,
-        sessions_total:       parseInt(sessionsTotal),
-        sessions_used:        0,
-        session_start_offset: parseInt(startOffset),
-        start_date:           jadwalRows[0]?.date || today(),
-        status:               'active',
-      })
+      // 1. Insert enrollment baru — dapatkan id-nya untuk payment
+      const { data: newEnrollment, error: enrErr } = await supabase
+        .from('enrollments')
+        .insert({
+          student_id:           enrollment.student_id,
+          class_group_id:       kelasId,
+          package_id:           packageId,
+          sessions_total:       parseInt(sessionsTotal),
+          sessions_used:        0,
+          session_start_offset: parseInt(startOffset),
+          start_date:           jadwalRows[0]?.date || today(),
+          status:               'active',
+        })
+        .select('id')
+        .single()
+
       if (enrErr) throw enrErr
 
       // 2. Generate & insert sessions
@@ -221,19 +245,24 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
       }
 
       // 3. Update zoom link & pastikan kelas aktif
-      await supabase.from('class_groups')
+      await supabase
+        .from('class_groups')
         .update({ zoom_link: zoomLink || null, status: 'active' })
         .eq('id', kelasId)
 
-      // 4. Insert payment jika ada nominal
-      if (payment && parseInt(payment) > 0) {
+      // FIX: insert payment pakai enrollment_id (bukan class_group_id)
+      if (payment && parseInt(payment) > 0 && newEnrollment?.id) {
+        const now = new Date()
         await supabase.from('payments').insert({
-          student_id:     enrollment.student_id,
-          class_group_id: kelasId,
-          amount:         parseInt(payment),
-          method:         paymentMethod,
-          status:         'pending',
-          period_label:   `Perpanjang - ${new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
+          student_id:    enrollment.student_id,
+          enrollment_id: newEnrollment.id,            // ← FIX: enrollment_id
+          amount:        parseInt(payment),
+          base_amount:   parseInt(payment),
+          method:        paymentMethod,
+          payment_method: 'manual',
+          status:        'pending',
+          period_label:  `Perpanjang - ${now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
+          paid_at:       now.toISOString(),
         })
       }
 
@@ -275,14 +304,24 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
             {/* 1. PAKET */}
             <div>
               <label className={labelCls}>1. Paket *</label>
-              <select value={packageId} onChange={e => handlePackageChange(e.target.value)} className={inputCls}>
-                <option value="">Pilih paket...</option>
-                {packages.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — {p.total_sessions} sesi — {formatRp(p.price)}
-                  </option>
-                ))}
-              </select>
+              {packages.length === 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Tidak ada paket aktif untuk kelas ini. Tambahkan paket di menu Kursus & Paket.
+                </div>
+              ) : (
+                <select
+                  value={packageId}
+                  onChange={e => handlePackageChange(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">Pilih paket...</option>
+                  {packages.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {p.total_sessions} sesi — {formatRp(p.price)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* 2. PEMBAYARAN */}
@@ -347,7 +386,6 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
                 ))}
               </div>
 
-              {/* Auto mode info */}
               {jadwalMode === 'auto' && (
                 <div className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3">
                   <p className="text-xs font-semibold text-[#5C4FE5] mb-2">Pola jadwal terdeteksi:</p>
@@ -377,7 +415,6 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
                 </div>
               )}
 
-              {/* Manual mode */}
               {jadwalMode === 'manual' && (
                 <div className="space-y-3">
                   {jadwalRows.map((row, idx) => (
@@ -393,13 +430,11 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
                       <div className="grid grid-cols-2 gap-2 mb-2">
                         <div>
                           <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Tanggal</label>
-                          <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)}
-                            className={inputCls}/>
+                          <input type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)} className={inputCls}/>
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Jam Mulai</label>
-                          <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)}
-                            className={inputCls}/>
+                          <input type="time" value={row.time} onChange={e => updateRow(idx, 'time', e.target.value)} className={inputCls}/>
                         </div>
                       </div>
                       <div>
@@ -496,8 +531,8 @@ export default function PerpanjangModal({ kelasId, kelasLabel, kelasZoomLink, en
                 className="flex-1 py-2.5 border-2 border-[#E5E3FF] text-[#7B78A8] rounded-xl font-semibold text-sm hover:bg-gray-50">
                 Batal
               </button>
-              <button onClick={handlePreview}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#5C4FE5] text-white rounded-xl font-semibold text-sm hover:bg-[#4a3ec7]">
+              <button onClick={handlePreview} disabled={packages.length === 0}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#5C4FE5] text-white rounded-xl font-semibold text-sm hover:bg-[#4a3ec7] disabled:opacity-40 disabled:cursor-not-allowed">
                 Preview Jadwal <ChevronRight size={15}/>
               </button>
             </>
