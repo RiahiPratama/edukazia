@@ -369,13 +369,6 @@ export default function KelasDetailPage() {
 
   function openPerpanjang(enr: Enrollment) {
     setPerpanjangEnr(enr)
-    setPerpanjangForm({
-      package_id: '',
-      sessions_total: '8',
-      start_date: '',
-      zoom_link: kelas?.zoom_link ?? '',
-    })
-    setPerpanjangError('')
     setShowPerpanjang(true)
   }
 
