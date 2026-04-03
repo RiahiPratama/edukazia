@@ -106,7 +106,9 @@ export default function KelasDetailPage() {
   const [classType,        setClassType]        = useState<string>('')
   const [classCurrentUnit, setClassCurrentUnit] = useState<number>(1)
   const [studentProgress,  setStudentProgress]  = useState<Record<string, number>>({})
-  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number}[]>([])
+  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number; chapter_id: string | null}[]>([])
+  const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number}[]>([])
+  const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
 
   // Perpanjang state
@@ -148,12 +150,26 @@ export default function KelasDetailPage() {
 
     const levelIds = (cg.class_group_levels as any[])?.map((l: any) => l.level_id) || []
     if (levelIds.length > 0) {
+      // Fetch units dengan chapter_id
       const { data: u } = await supabase
         .from('units')
-        .select('id, unit_name, position')
+        .select('id, unit_name, position, chapter_id')
         .in('level_id', levelIds)
         .order('position')
       setUnits(u ?? [])
+
+      // Fetch chapters untuk grouping
+      const chapterIds = [...new Set((u ?? []).map(u => u.chapter_id).filter(Boolean))] as string[]
+      if (chapterIds.length > 0) {
+        const { data: ch } = await supabase
+          .from('chapters')
+          .select('id, chapter_title, order_number')
+          .in('id', chapterIds)
+          .order('order_number')
+        setChapters(ch ?? [])
+        // Auto-open semua chapter by default
+        setOpenChapters(new Set((ch ?? []).map(c => c.id)))
+      }
     }
 
     if (typeName === 'Privat') {
@@ -656,11 +672,85 @@ export default function KelasDetailPage() {
             <div className="space-y-3">
               {enrollments.filter(e => e.status === 'active').map(enr => {
                 const currentPos = studentProgress[enr.student_id] ?? 1
+
+                // Group units by chapter
+                const chapterMap = new Map<string, typeof units>()
+                const noChapterUnits: typeof units = []
+                units.forEach(unit => {
+                  if (unit.chapter_id) {
+                    if (!chapterMap.has(unit.chapter_id)) chapterMap.set(unit.chapter_id, [])
+                    chapterMap.get(unit.chapter_id)!.push(unit)
+                  } else {
+                    noChapterUnits.push(unit)
+                  }
+                })
+
                 return (
                   <div key={enr.student_id} className="bg-white rounded-xl border border-[#E5E3FF] p-4">
                     <p className="font-bold text-[#1A1640] mb-3">{enr.student_name}</p>
+
                     <div className="space-y-2">
-                      {units.map(unit => {
+                      {/* Units dengan chapter */}
+                      {chapters.map(chapter => {
+                        const chapterUnits = chapterMap.get(chapter.id) ?? []
+                        if (chapterUnits.length === 0) return null
+                        const isChOpen = openChapters.has(chapter.id)
+                        const doneCh = chapterUnits.filter(u => u.position < currentPos).length
+                        const totalCh = chapterUnits.length
+
+                        return (
+                          <div key={chapter.id} className="rounded-xl border border-[#E5E3FF] overflow-hidden">
+                            {/* Chapter header */}
+                            <button
+                              onClick={() => {
+                                setOpenChapters(prev => {
+                                  const next = new Set(prev)
+                                  next.has(chapter.id) ? next.delete(chapter.id) : next.add(chapter.id)
+                                  return next
+                                })
+                              }}
+                              className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-2">
+                                {isChOpen
+                                  ? <ChevronDown size={14} className="text-[#5C4FE5]" />
+                                  : <ChevronRight size={14} className="text-gray-400" />}
+                                <span className="text-sm font-bold text-[#1A1640]">{chapter.chapter_title}</span>
+                              </div>
+                              <span className="text-xs text-[#7B78A8]">{doneCh}/{totalCh} unit selesai</span>
+                            </button>
+
+                            {/* Units in chapter */}
+                            {isChOpen && (
+                              <div className="p-2 space-y-1.5">
+                                {chapterUnits.map(unit => {
+                                  const isDone   = unit.position < currentPos
+                                  const isActive = unit.position === currentPos
+                                  return (
+                                    <div key={unit.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'}`}>
+                                      <div className="flex items-center gap-2">
+                                        <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
+                                        <span className={`text-sm font-medium ${unit.position > currentPos ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                                      </div>
+                                      {isActive && (
+                                        <button
+                                          onClick={() => saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length))}
+                                          disabled={savingProgress || currentPos >= units.length}
+                                          className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
+                                          Naik Unit →
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+
+                      {/* Units tanpa chapter (fallback) */}
+                      {noChapterUnits.map(unit => {
                         const isDone   = unit.position < currentPos
                         const isActive = unit.position === currentPos
                         return (
@@ -686,10 +776,61 @@ export default function KelasDetailPage() {
               })}
             </div>
           ) : (
+            /* Kelas Grup */
             <div className="bg-white rounded-xl border border-[#E5E3FF] p-4">
               <p className="font-bold text-[#1A1640] mb-3">Unit Progress Kelas</p>
               <div className="space-y-2 mb-4">
-                {units.map(unit => {
+                {chapters.map(chapter => {
+                  const chapterUnits = units.filter(u => u.chapter_id === chapter.id)
+                  if (chapterUnits.length === 0) return null
+                  const isChOpen = openChapters.has(chapter.id)
+                  const doneCh = chapterUnits.filter(u => u.position < classCurrentUnit).length
+
+                  return (
+                    <div key={chapter.id} className="rounded-xl border border-[#E5E3FF] overflow-hidden">
+                      <button
+                        onClick={() => {
+                          setOpenChapters(prev => {
+                            const next = new Set(prev)
+                            next.has(chapter.id) ? next.delete(chapter.id) : next.add(chapter.id)
+                            return next
+                          })
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          {isChOpen
+                            ? <ChevronDown size={14} className="text-[#5C4FE5]" />
+                            : <ChevronRight size={14} className="text-gray-400" />}
+                          <span className="text-sm font-bold text-[#1A1640]">{chapter.chapter_title}</span>
+                        </div>
+                        <span className="text-xs text-[#7B78A8]">{doneCh}/{chapterUnits.length} unit selesai</span>
+                      </button>
+
+                      {isChOpen && (
+                        <div className="p-2 space-y-1.5">
+                          {chapterUnits.map(unit => {
+                            const isDone   = unit.position < classCurrentUnit
+                            const isActive = unit.position === classCurrentUnit
+                            return (
+                              <div key={unit.id} onClick={() => setClassCurrentUnit(unit.position)}
+                                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
+                                <div className="flex items-center gap-2">
+                                  <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
+                                  <span className={`text-sm font-medium ${unit.position > classCurrentUnit ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                                </div>
+                                {isActive && <span className="text-xs font-bold text-[#5C4FE5] bg-purple-100 px-2 py-0.5 rounded-full">Aktif</span>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Fallback: units tanpa chapter */}
+                {units.filter(u => !u.chapter_id).map(unit => {
                   const isDone   = unit.position < classCurrentUnit
                   const isActive = unit.position === classCurrentUnit
                   return (
