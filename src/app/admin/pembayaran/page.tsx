@@ -109,7 +109,9 @@ export default function PendapatanPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'kursus' | 'b2b'>('kursus')
   const [filterStatus, setFilterStatus] = useState('all')
-  const [filterBulan, setFilterBulan] = useState('all')
+  const [filterBulan, setFilterBulan] = useState(
+    () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }).slice(0, 7)
+  )
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -402,7 +404,7 @@ export default function PendapatanPage() {
             onChange={(e) => setFilterBulan(e.target.value)}
             className="appearance-none rounded-xl border border-[#E5E3FF] bg-white py-2 pl-3 pr-8 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5C4FE5]/30"
           >
-            <option value="all">Semua Bulan</option>
+            <option value="all">Semua Periode</option>
             {allMonths.map((m) => (
               <option key={m} value={m}>
                 {new Date(m + '-15').toLocaleDateString('id-ID', {
