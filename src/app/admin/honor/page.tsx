@@ -1,498 +1,421 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { Plus, X, Check, Search } from 'lucide-react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
+import {
+  TrendingDown,
+  Users,
+  BookOpen,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle,
+} from 'lucide-react'
 
-type Tutor = {
-  id: string
-  profile_id: string
-  is_owner: boolean
-  bank_name: string | null
-  bank_account: string | null
-  bank_holder: string | null
-  name: string
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type ClassGroup = {
-  id: string
-  label: string
-  class_type_id: string
-  class_type_name: string
+type TutorHonorRow = {
   tutor_id: string
-  active_students: number
-}
-
-type HonorPayment = {
-  id: string
-  tutor_id: string
-  class_group_id: string | null
-  period_label: string | null
-  sessions_done: number
-  students_count: number
-  class_type: string
-  rate_per_session: number
-  subtotal: number
-  bonus: number
-  total: number
-  status: string
-  notes: string | null
-  paid_at: string | null
-  created_at: string
   tutor_name: string
-  class_label: string
+  tutor_type: string
+  employment_status: string | null
+  rate_per_session: number
+  monthly_salary: number | null
+  total_sessions: number
+  total_honor: number
+  sessions: SessionRow[]
 }
 
-const RATES: Record<string, number> = {
-  'Privat':      50000,
-  'Semi Privat': 30000,
-  'Reguler':     15000,
+type SessionRow = {
+  id: string
+  scheduled_at: string
+  status: string
+  class_name: string
+  course_name: string
+  honor: number
 }
 
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  unpaid: { label: 'Belum Dibayar', cls: 'bg-[#FEE9E9] text-[#991B1B]' },
-  paid:   { label: 'Sudah Dibayar', cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
+
+const fmtDate = (s: string) =>
+  new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+
+const tutorTypeBadge = (type: string) => {
+  const map: Record<string, string> = {
+    owner: 'bg-purple-100 text-purple-700',
+    internal: 'bg-blue-100 text-blue-700',
+    b2b: 'bg-orange-100 text-orange-700',
+    hybrid: 'bg-emerald-100 text-emerald-700',
+  }
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${map[type] ?? 'bg-gray-100 text-gray-600'}`}>
+      {type}
+    </span>
+  )
 }
 
-function formatRp(n: number) {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
-}
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-}
+// ─── Component ───────────────────────────────────────────────────────────────
 
-export default function HonorPage() {
-  const supabase = createClient()
+export default function PengeluaranPage() {
+  const supabase = useMemo(() => createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
 
-  const [payments,    setPayments]    = useState<HonorPayment[]>([])
-  const [tutors,      setTutors]      = useState<Tutor[]>([])
-  const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [showModal,   setShowModal]   = useState(false)
-  const [saving,      setSaving]      = useState(false)
-  const [formError,   setFormError]   = useState('')
-  const [search,      setSearch]      = useState('')
-  const [filterStatus,setFilterStatus]= useState('all')
+  const [honorData, setHonorData] = useState<TutorHonorRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedTutor, setExpandedTutor] = useState<string | null>(null)
+  const [filterBulan, setFilterBulan] = useState<string>('all')
+  const [filterType, setFilterType] = useState<string>('all')
 
-  // Form
-  const [fTutorId,      setFTutorId]      = useState('')
-  const [fClassGroupId, setFClassGroupId] = useState('')
-  const [fPeriod,       setFPeriod]       = useState('')
-  const [fSessionsDone, setFSessionsDone] = useState(0)
-  const [fStudents,     setFStudents]     = useState(1)
-  const [fRate,         setFRate]         = useState(0)
-  const [fBonus,        setFBonus]        = useState(0)
-  const [fBonusNote,    setFBonusNote]    = useState('')
-  const [fNotes,        setFNotes]        = useState('')
-
-  const selectedTutor      = tutors.find(t => t.id === fTutorId)
-  const selectedClass      = classGroups.find(c => c.id === fClassGroupId)
-  const tutorClasses       = classGroups.filter(c => c.tutor_id === fTutorId)
-  const classType          = selectedClass?.class_type_name ?? ''
-  const isPerStudent       = classType === 'Semi Privat' || classType === 'Reguler'
-  const subtotal           = fRate * fSessionsDone * (isPerStudent ? fStudents : 1)
-  const total              = subtotal + fBonus
-
-  useEffect(() => { fetchAll() }, [])
-
-  // Auto-fill rate & students saat pilih kelas
-  useEffect(() => {
-    if (selectedClass) {
-      const rate = RATES[selectedClass.class_type_name] ?? 0
-      setFRate(rate)
-      setFStudents(selectedClass.active_students)
-    }
-  }, [fClassGroupId])
-
-  async function fetchAll() {
+  // ── Fetch data ──────────────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
     setLoading(true)
 
-    // Fetch honor payments
-    const { data: pays } = await supabase
-      .from('tutor_payments')
-      .select('id, tutor_id, class_group_id, period_label, sessions_done, students_count, class_type, rate_per_session, subtotal, bonus, total, status, notes, paid_at, created_at')
-      .order('created_at', { ascending: false })
+    // 1. Fetch completed sessions
+    const { data: sessions } = await supabase
+      .from('sessions')
+      .select('id, class_group_id, scheduled_at, status')
+      .eq('status', 'completed')
+      .order('scheduled_at', { ascending: false })
 
-    // Fetch tutors
-    const { data: tutorData } = await supabase
-      .from('tutors')
-      .select('id, profile_id, is_owner, bank_name, bank_account, bank_holder')
-      .eq('is_active', true)
-
-    let tutorNameMap: Record<string, string> = {}
-    if (tutorData && tutorData.length > 0) {
-      const profIds = tutorData.map((t: any) => t.profile_id).filter(Boolean)
-      if (profIds.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', profIds)
-        const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]))
-        tutorNameMap = Object.fromEntries(tutorData.map((t: any) => [t.id, profMap[t.profile_id] ?? 'Tutor']))
-      }
-      setTutors(tutorData.map((t: any) => ({ ...t, name: tutorNameMap[t.id] ?? 'Tutor' })))
+    if (!sessions || sessions.length === 0) {
+      setHonorData([])
+      setLoading(false)
+      return
     }
 
-    // Fetch class groups + tipe + jumlah siswa aktif
-    const { data: cg } = await supabase
+    // 2. Fetch class_groups (to get tutor_id, course_id, class_type_id)
+    const cgIds = [...new Set(sessions.map((s) => s.class_group_id).filter(Boolean))]
+    const { data: classGroups } = await supabase
       .from('class_groups')
-      .select('id, label, class_type_id, tutor_id, class_types(name), enrollments(id, status)')
-      .eq('status', 'active')
+      .select('id, tutor_id, course_id, class_type_id')
+      .in('id', cgIds)
 
-    const cgList: ClassGroup[] = (cg ?? []).map((c: any) => ({
-      id:               c.id,
-      label:            c.label,
-      class_type_id:    c.class_type_id,
-      class_type_name:  c.class_types?.name ?? '—',
-      tutor_id:         c.tutor_id,
-      active_students:  (c.enrollments ?? []).filter((e: any) => e.status === 'active').length,
-    }))
-    setClassGroups(cgList)
+    // 3. Fetch tutors
+    const tutorIds = [...new Set((classGroups ?? []).map((c) => c.tutor_id).filter(Boolean))]
+    const { data: tutors } = await supabase
+      .from('tutors')
+      .select('id, profile_id, tutor_type, employment_status, rate_per_session, monthly_salary')
+      .in('id', tutorIds)
 
-    // Merge class label & tutor name ke payments
-    const cgMap = Object.fromEntries(cgList.map(c => [c.id, c.label]))
-    setPayments((pays ?? []).map((p: any) => ({
-      ...p,
-      tutor_name:  tutorNameMap[p.tutor_id] ?? '—',
-      class_label: cgMap[p.class_group_id] ?? '—',
-    })))
+    // 4. Fetch profiles for tutors
+    const profileIds = (tutors ?? []).map((t) => t.profile_id).filter(Boolean)
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', profileIds)
 
+    // 5. Fetch courses
+    const courseIds = [...new Set((classGroups ?? []).map((c) => c.course_id).filter(Boolean))]
+    const { data: courses } = await supabase
+      .from('courses')
+      .select('id, name')
+      .in('id', courseIds)
+
+    // 5b. Fetch class_types (untuk construct nama kelas: "Bahasa Inggris - Privat")
+    const ctIds = [...new Set((classGroups ?? []).map((c) => c.class_type_id).filter(Boolean))]
+    const { data: classTypes } = await supabase
+      .from('class_types')
+      .select('id, name')
+      .in('id', ctIds)
+
+    // 6. Build lookup maps
+    const cgMap = new Map((classGroups ?? []).map((c) => [c.id, c]))
+    const tutorMap = new Map((tutors ?? []).map((t) => [t.id, t]))
+    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
+    const courseMap = new Map((courses ?? []).map((c) => [c.id, c]))
+    const classTypeMap = new Map((classTypes ?? []).map((c) => [c.id, c]))
+
+    // 7. Group sessions by tutor
+    const tutorGroups = new Map<string, TutorHonorRow>()
+
+    for (const session of sessions) {
+      const cg = cgMap.get(session.class_group_id)
+      if (!cg) continue
+
+      const tutor = tutorMap.get(cg.tutor_id)
+      if (!tutor) continue
+
+      const profile = profileMap.get(tutor.profile_id)
+      const course = courseMap.get(cg.course_id)
+      const classType = classTypeMap.get(cg.class_type_id)
+      const rate = tutor.rate_per_session ?? 0
+      // Construct nama kelas dari kursus + tipe karena class_groups tidak punya kolom name
+      const className = [course?.name, classType?.name].filter(Boolean).join(' – ') || '—'
+      const courseName = course?.name ?? '—'
+
+      if (!tutorGroups.has(tutor.id)) {
+        tutorGroups.set(tutor.id, {
+          tutor_id: tutor.id,
+          tutor_name: profile?.full_name ?? '—',
+          tutor_type: tutor.tutor_type ?? 'internal',
+          employment_status: tutor.employment_status,
+          rate_per_session: rate,
+          monthly_salary: tutor.monthly_salary,
+          total_sessions: 0,
+          total_honor: 0,
+          sessions: [],
+        })
+      }
+
+      const row = tutorGroups.get(tutor.id)!
+      row.total_sessions += 1
+      row.total_honor += rate
+      row.sessions.push({
+        id: session.id,
+        scheduled_at: session.scheduled_at,
+        status: session.status,
+        class_name: className,
+        course_name: courseName,
+        honor: rate,
+      })
+    }
+
+    setHonorData([...tutorGroups.values()].sort((a, b) => b.total_honor - a.total_honor))
     setLoading(false)
-  }
+  }, [supabase])
 
-  function openAdd() {
-    setFTutorId(''); setFClassGroupId(''); setFPeriod('')
-    setFSessionsDone(0); setFStudents(1); setFRate(0)
-    setFBonus(0); setFBonusNote(''); setFNotes(''); setFormError('')
-    setShowModal(true)
-  }
+  useEffect(() => { fetchData() }, [fetchData])
 
-  async function handleSave() {
-    if (!fTutorId)    { setFormError('Pilih tutor.'); return }
-    if (!fPeriod)     { setFormError('Isi periode.'); return }
-    if (fSessionsDone <= 0) { setFormError('Jumlah sesi harus lebih dari 0.'); return }
-
-    setSaving(true); setFormError('')
-
-    const { error } = await supabase.from('tutor_payments').insert({
-      tutor_id:        fTutorId,
-      class_group_id:  fClassGroupId || null,
-      period_label:    fPeriod,
-      sessions_done:   fSessionsDone,
-      students_count:  isPerStudent ? fStudents : 1,
-      class_type:      classType || 'Privat',
-      rate_per_session: fRate,
-      subtotal,
-      bonus:           fBonus,
-      total,
-      notes:           fBonusNote || fNotes || null,
-      status:          'unpaid',
+  // ── Filtered data ───────────────────────────────────────────────────────────
+  const filtered = honorData
+    .map((t) => {
+      const filteredSessions = t.sessions.filter((s) => {
+        const matchBulan =
+          filterBulan === 'all' || s.scheduled_at.slice(0, 7) === filterBulan
+        return matchBulan
+      })
+      return {
+        ...t,
+        sessions: filteredSessions,
+        total_sessions: filteredSessions.length,
+        total_honor: filteredSessions.reduce((a, b) => a + b.honor, 0),
+      }
+    })
+    .filter((t) => {
+      const matchType = filterType === 'all' || t.tutor_type === filterType
+      const hasSession = t.total_sessions > 0
+      return matchType && hasSession
     })
 
-    if (error) { setFormError(error.message); setSaving(false); return }
-    setSaving(false); setShowModal(false); fetchAll()
-  }
+  // ── Summary ─────────────────────────────────────────────────────────────────
+  const totalHonor = filtered.reduce((a, b) => a + b.total_honor, 0)
+  const totalSesi = filtered.reduce((a, b) => a + b.total_sessions, 0)
+  const totalTutor = filtered.length
 
-  async function markPaid(id: string) {
-    await supabase.from('tutor_payments')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
-      .eq('id', id)
-    fetchAll()
-  }
+  // ── Available months ────────────────────────────────────────────────────────
+  const allMonths = [
+    ...new Set(honorData.flatMap((t) => t.sessions.map((s) => s.scheduled_at.slice(0, 7)))),
+  ].sort().reverse()
 
-  // Hitung sesi selesai otomatis dari DB
-  async function autoFillSessions() {
-    if (!fClassGroupId || !fPeriod) return
-    const { data } = await supabase
-      .from('sessions')
-      .select('id')
-      .eq('class_group_id', fClassGroupId)
-      .eq('status', 'completed')
-    setFSessionsDone(data?.length ?? 0)
-  }
-
-  const filtered = payments.filter(p => {
-    const matchSearch = p.tutor_name.toLowerCase().includes(search.toLowerCase()) ||
-      p.class_label.toLowerCase().includes(search.toLowerCase()) ||
-      (p.period_label ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'all' || p.status === filterStatus
-    return matchSearch && matchStatus
-  })
-
-  const totalBelumBayar = payments.filter(p => p.status === 'unpaid').reduce((a, p) => a + p.total, 0)
-  const totalSudahBayar = payments.filter(p => p.status === 'paid').reduce((a, p) => a + p.total, 0)
-
-  const inputCls = "w-full px-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
-
+  // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl">
+    <div className="min-h-screen bg-[#F7F6FF] p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640]" style={{fontFamily:'Sora,sans-serif'}}>Honor Tutor</h1>
-          <p className="text-sm text-[#7B78A8] mt-0.5">Kelola dan catat pembayaran honor tutor</p>
+          <h1 className="font-sora text-2xl font-bold text-gray-900">Pengeluaran</h1>
+          <p className="mt-1 text-sm text-gray-500">Honor tutor berdasarkan sesi yang selesai</p>
         </div>
-        <button onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#5C4FE5] text-white text-sm font-semibold rounded-xl hover:bg-[#3D34C4] transition active:scale-95">
-          <Plus size={15}/> Buat Tagihan Honor
+        <button
+          onClick={fetchData}
+          className="flex items-center gap-2 rounded-xl border border-[#E5E3FF] bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-[#F7F6FF] hover:text-[#5C4FE5]"
+        >
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          Refresh
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
-          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Belum Dibayar</p>
-          <p className="text-xl font-black text-[#DC2626]">{formatRp(totalBelumBayar)}</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-4">
-          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Sudah Dibayar</p>
-          <p className="text-xl font-black text-[#27A05A]">{formatRp(totalSudahBayar)}</p>
-        </div>
-      </div>
-
-      {/* Filter */}
-      <div className="flex gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8]"/>
-          <input type="text" placeholder="Cari nama tutor, kelas, atau periode..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-[#E5E3FF] rounded-xl bg-white text-[#1A1640] placeholder:text-[#7B78A8] focus:outline-none focus:border-[#5C4FE5] transition"/>
-        </div>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="px-3.5 py-2.5 text-sm border border-[#E5E3FF] rounded-xl bg-white text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
-          <option value="all">Semua Status</option>
-          <option value="unpaid">Belum Dibayar</option>
-          <option value="paid">Sudah Dibayar</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{backgroundColor:'#F7F6FF'}}>
-              <th className="text-left px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider">Tutor</th>
-              <th className="text-left px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider hidden md:table-cell">Kelas</th>
-              <th className="text-left px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider hidden lg:table-cell">Periode</th>
-              <th className="text-left px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider hidden lg:table-cell">Rincian</th>
-              <th className="text-left px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider">Total</th>
-              <th className="text-left px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider">Status</th>
-              <th className="text-right px-5 py-3.5 text-xs font-bold text-[#7B78A8] uppercase tracking-wider">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#E5E3FF]">
-            {loading ? (
-              Array.from({length:3}).map((_,i) => (
-                <tr key={i} className="animate-pulse">
-                  <td className="px-5 py-4"><div className="h-4 w-28 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4 hidden md:table-cell"><div className="h-4 w-32 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 w-20 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4 hidden lg:table-cell"><div className="h-4 w-24 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4"><div className="h-4 w-20 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4"><div className="h-4 w-20 bg-gray-200 rounded"/></td>
-                  <td className="px-5 py-4"><div className="h-4 w-16 bg-gray-200 rounded ml-auto"/></td>
-                </tr>
-              ))
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-5 py-16 text-center">
-                  <div className="text-3xl mb-3">💰</div>
-                  <p className="text-sm font-semibold text-[#7B78A8]">
-                    {search || filterStatus !== 'all' ? 'Tidak ada data yang sesuai' : 'Belum ada tagihan honor'}
-                  </p>
-                  {!search && filterStatus === 'all' && (
-                    <button onClick={openAdd} className="mt-3 text-sm text-[#5C4FE5] font-semibold hover:underline">
-                      + Buat tagihan pertama
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ) : (
-              filtered.map(p => {
-                const st = STATUS_MAP[p.status] ?? { label: p.status, cls: 'bg-gray-100 text-gray-600' }
-                const isPerSiswa = p.class_type === 'Semi Privat' || p.class_type === 'Reguler'
-                return (
-                  <tr key={p.id} className="hover:bg-[#F7F6FF] transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="font-semibold text-[#1A1640]">{p.tutor_name}</div>
-                      <div className="text-xs text-[#7B78A8] mt-0.5">{p.class_type}</div>
-                    </td>
-                    <td className="px-5 py-4 hidden md:table-cell">
-                      <div className="text-[#1A1640] truncate max-w-[160px]">{p.class_label}</div>
-                    </td>
-                    <td className="px-5 py-4 hidden lg:table-cell text-[#7B78A8]">{p.period_label ?? '—'}</td>
-                    <td className="px-5 py-4 hidden lg:table-cell">
-                      <div className="text-xs text-[#7B78A8]">
-                        {p.sessions_done} sesi × {formatRp(p.rate_per_session)}
-                        {isPerSiswa && ` × ${p.students_count} siswa`}
-                      </div>
-                      {p.bonus > 0 && (
-                        <div className="text-xs text-[#5C4FE5] font-semibold">+ Bonus {formatRp(p.bonus)}</div>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="font-bold text-[#1A1640]">{formatRp(p.total)}</div>
-                      {p.paid_at && <div className="text-xs text-[#7B78A8]">{fmtDate(p.paid_at)}</div>}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.cls}`}>{st.label}</span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      {p.status === 'unpaid' && (
-                        <button onClick={() => markPaid(p.id)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#E6F4EC] text-[#1A5C36] hover:bg-[#C6E8D4] transition ml-auto">
-                          <Check size={12}/> Tandai Dibayar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal Buat Tagihan */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E3FF] sticky top-0 bg-white z-10">
-              <h2 className="text-base font-bold text-[#1A1640]">Buat Tagihan Honor</h2>
-              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
+      {/* Summary Cards */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl overflow-hidden border border-[#E5E3FF] bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-rose-500 to-rose-400 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-white/80 text-sm font-medium">Total Honor</span>
+              <TrendingDown size={20} className="text-white/80" />
             </div>
+            <p className="mt-2 text-2xl font-bold text-white font-sora">{fmt(totalHonor)}</p>
+          </div>
+          <div className="px-4 py-2">
+            <p className="text-xs text-gray-500">Dari {totalSesi} sesi selesai</p>
+          </div>
+        </div>
 
-            <div className="px-6 py-5 space-y-4">
-              {/* Tutor */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Tutor <span className="text-red-500">*</span></label>
-                <select value={fTutorId} onChange={e => { setFTutorId(e.target.value); setFClassGroupId('') }} className={inputCls}>
-                  <option value="">-- Pilih Tutor --</option>
-                  {tutors.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}{t.is_owner ? ' (Pemilik)' : ''}</option>
-                  ))}
-                </select>
-              </div>
+        <div className="rounded-2xl overflow-hidden border border-[#E5E3FF] bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-[#5C4FE5] to-[#7C6FF5] p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-white/80 text-sm font-medium">Total Tutor Aktif</span>
+              <Users size={20} className="text-white/80" />
+            </div>
+            <p className="mt-2 text-2xl font-bold text-white font-sora">{totalTutor}</p>
+          </div>
+          <div className="px-4 py-2">
+            <p className="text-xs text-gray-500">Yang ada sesi selesai</p>
+          </div>
+        </div>
 
-              {/* Kelas */}
-              {fTutorId && (
-                <div>
-                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Kelas <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span></label>
-                  <select value={fClassGroupId} onChange={e => setFClassGroupId(e.target.value)} className={inputCls}>
-                    <option value="">-- Pilih Kelas --</option>
-                    {tutorClasses.map(c => (
-                      <option key={c.id} value={c.id}>{c.label} ({c.class_type_name})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+        <div className="rounded-2xl overflow-hidden border border-[#E5E3FF] bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-amber-500 to-amber-400 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-white/80 text-sm font-medium">Total Sesi</span>
+              <BookOpen size={20} className="text-white/80" />
+            </div>
+            <p className="mt-2 text-2xl font-bold text-white font-sora">{totalSesi}</p>
+          </div>
+          <div className="px-4 py-2">
+            <p className="text-xs text-gray-500">
+              Rata-rata {totalTutor > 0 ? Math.round(totalSesi / totalTutor) : 0} sesi/tutor
+            </p>
+          </div>
+        </div>
+      </div>
 
-              {/* Periode */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Periode <span className="text-red-500">*</span></label>
-                <input type="text" placeholder="Contoh: April 2026" value={fPeriod}
-                  onChange={e => setFPeriod(e.target.value)} className={inputCls}/>
-              </div>
+      {/* Filters */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <select
+            value={filterBulan}
+            onChange={(e) => setFilterBulan(e.target.value)}
+            className="appearance-none rounded-xl border border-[#E5E3FF] bg-white pl-3 pr-8 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5C4FE5]/30"
+          >
+            <option value="all">Semua Bulan</option>
+            {allMonths.map((m) => (
+              <option key={m} value={m}>
+                {new Date(m + '-01').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
 
-              {/* Rincian Honor */}
-              <div className="bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl p-4 space-y-3">
-                <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Rincian Honor</p>
+        <div className="relative">
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="appearance-none rounded-xl border border-[#E5E3FF] bg-white pl-3 pr-8 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5C4FE5]/30"
+          >
+            <option value="all">Semua Tipe</option>
+            <option value="owner">Owner</option>
+            <option value="internal">Internal (Freelancer)</option>
+            <option value="b2b">B2B</option>
+            <option value="hybrid">Hybrid</option>
+          </select>
+          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
 
-                {/* Jumlah Sesi */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Sesi Selesai</label>
-                    {fClassGroupId && (
-                      <button type="button" onClick={autoFillSessions}
-                        className="text-xs text-[#5C4FE5] font-semibold hover:underline">
-                        Hitung otomatis
-                      </button>
-                    )}
+        <span className="ml-auto text-sm text-gray-400">{filtered.length} tutor</span>
+      </div>
+
+      {/* Accordion table by tutor */}
+      {loading ? (
+        <div className="flex items-center justify-center rounded-2xl border border-[#E5E3FF] bg-white py-20 shadow-sm">
+          <RefreshCw size={20} className="animate-spin text-[#5C4FE5]" />
+          <span className="ml-2 text-sm text-gray-500">Menghitung honor...</span>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-[#E5E3FF] bg-white py-16 text-center shadow-sm">
+          <p className="text-gray-400">Tidak ada data honor untuk filter ini</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((tutor) => {
+            const isOpen = expandedTutor === tutor.tutor_id
+            return (
+              <div
+                key={tutor.tutor_id}
+                className="rounded-2xl border border-[#E5E3FF] bg-white shadow-sm overflow-hidden"
+              >
+                {/* Tutor header row */}
+                <button
+                  onClick={() => setExpandedTutor(isOpen ? null : tutor.tutor_id)}
+                  className="w-full px-5 py-4 flex items-center gap-4 hover:bg-[#F7F6FF] transition text-left"
+                >
+                  <ChevronRight
+                    size={16}
+                    className={`text-[#5C4FE5] transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                  />
+
+                  {/* Avatar */}
+                  <div className="h-9 w-9 rounded-full bg-[#5C4FE5]/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-[#5C4FE5]">
+                      {tutor.tutor_name.charAt(0).toUpperCase()}
+                    </span>
                   </div>
-                  <input type="number" min={0} value={fSessionsDone}
-                    onChange={e => setFSessionsDone(Number(e.target.value))} className={inputCls}/>
-                </div>
 
-                {/* Rate per sesi */}
-                <div>
-                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
-                    Rate per Sesi
-                    {classType && <span className="ml-1 normal-case font-normal text-[#7B78A8]">(otomatis dari tipe kelas)</span>}
-                  </label>
-                  <input type="number" min={0} value={fRate}
-                    onChange={e => setFRate(Number(e.target.value))} className={inputCls}/>
-                  <p className="text-xs text-[#7B78A8] mt-1">
-                    Privat: 50.000 · Semi Privat: 30.000×siswa · Reguler: 15.000×siswa
-                  </p>
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-800">{tutor.tutor_name}</span>
+                      {tutorTypeBadge(tutor.tutor_type)}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {tutor.total_sessions} sesi · {fmt(tutor.rate_per_session)}/sesi
+                    </p>
+                  </div>
 
-                {/* Jumlah siswa (untuk semi privat & reguler) */}
-                {isPerStudent && (
-                  <div>
-                    <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">Jumlah Siswa Aktif</label>
-                    <input type="number" min={1} value={fStudents}
-                      onChange={e => setFStudents(Number(e.target.value))} className={inputCls}/>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-bold text-rose-600">{fmt(tutor.total_honor)}</p>
+                    <p className="text-xs text-gray-400">total honor</p>
+                  </div>
+                </button>
+
+                {/* Session detail rows */}
+                {isOpen && (
+                  <div className="border-t border-[#F0EFFE]">
+                    <table className="w-full text-sm">
+                      <thead className="bg-[#F7F6FF]">
+                        <tr>
+                          <th className="px-5 py-2 text-left text-xs font-semibold text-gray-500">Tanggal</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500">Kelas</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500">Kursus</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500">Status</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500">Honor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#F0EFFE]">
+                        {tutor.sessions.map((s) => (
+                          <tr key={s.id} className="hover:bg-[#F7F6FF]/50">
+                            <td className="px-5 py-2.5 text-gray-600 text-xs whitespace-nowrap">
+                              {fmtDate(s.scheduled_at)}
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-700">{s.class_name}</td>
+                            <td className="px-4 py-2.5 text-gray-500">{s.course_name}</td>
+                            <td className="px-4 py-2.5">
+                              <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                                <CheckCircle size={11} />
+                                Selesai
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-medium text-rose-600">
+                              {fmt(s.honor)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t border-[#E5E3FF] bg-[#F7F6FF]">
+                        <tr>
+                          <td colSpan={4} className="px-5 py-2.5 text-xs font-semibold text-gray-600">
+                            Total Honor {tutor.tutor_name}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-sm font-bold text-rose-600">
+                            {fmt(tutor.total_honor)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 )}
-
-                {/* Preview subtotal */}
-                <div className="flex items-center justify-between py-2 border-t border-[#E5E3FF]">
-                  <span className="text-xs text-[#7B78A8]">
-                    {fSessionsDone} sesi × {formatRp(fRate)}{isPerStudent ? ` × ${fStudents} siswa` : ''}
-                  </span>
-                  <span className="text-sm font-bold text-[#1A1640]">{formatRp(subtotal)}</span>
-                </div>
               </div>
+            )
+          })}
 
-              {/* Bonus */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
-                  Bonus <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
-                </label>
-                <input type="number" min={0} value={fBonus} placeholder="0"
-                  onChange={e => setFBonus(Number(e.target.value))} className={inputCls}/>
-                {fBonus > 0 && (
-                  <input type="text" value={fBonusNote} onChange={e => setFBonusNote(e.target.value)}
-                    placeholder="Alasan bonus (prestasi, lebaran, dll)" className={`${inputCls} mt-2`}/>
-                )}
-              </div>
-
-              {/* Total */}
-              <div className="flex items-center justify-between px-4 py-3 bg-[#EEEDFE] rounded-xl">
-                <span className="text-sm font-bold text-[#3C3489]">Total Honor</span>
-                <span className="text-lg font-black text-[#5C4FE5]">{formatRp(total)}</span>
-              </div>
-
-              {/* Catatan */}
-              <div>
-                <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
-                  Catatan <span className="normal-case font-normal text-[#7B78A8]">(opsional)</span>
-                </label>
-                <input type="text" value={fNotes} onChange={e => setFNotes(e.target.value)}
-                  placeholder="Catatan tambahan..." className={inputCls}/>
-              </div>
-
-              {/* Info pemilik */}
-              {selectedTutor?.is_owner && (
-                <div className="px-4 py-3 bg-[#FEF3E2] border border-[#FCD34D] rounded-xl">
-                  <p className="text-xs font-semibold text-[#92400E]">
-                    💡 Tutor ini adalah pemilik — honor akan dicatat sebagai keuntungan pemilik, bukan pengeluaran operasional.
-                  </p>
-                </div>
-              )}
-
-              {formError && (
-                <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-semibold">{formError}</div>
-              )}
-            </div>
-
-            <div className="px-6 pb-5 flex gap-3 sticky bottom-0 bg-white border-t border-[#E5E3FF] pt-4">
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 py-3 bg-[#5C4FE5] hover:bg-[#3D34C4] text-white font-bold rounded-xl text-sm transition disabled:opacity-60">
-                {saving ? 'Menyimpan...' : 'Buat Tagihan Honor'}
-              </button>
-              <button onClick={() => setShowModal(false)}
-                className="px-5 py-3 border border-[#E5E3FF] text-[#4A4580] font-bold rounded-xl text-sm hover:bg-[#F0EFFF] transition">
-                Batal
-              </button>
-            </div>
+          {/* Grand total */}
+          <div className="rounded-2xl border-2 border-[#5C4FE5]/20 bg-white p-4 flex items-center justify-between">
+            <span className="font-semibold text-gray-700">Total Pengeluaran Honor</span>
+            <span className="text-xl font-bold text-rose-600 font-sora">{fmt(totalHonor)}</span>
           </div>
         </div>
       )}
