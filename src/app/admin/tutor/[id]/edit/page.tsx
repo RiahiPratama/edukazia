@@ -51,6 +51,9 @@ export default function TutorEditPage() {
     bank_account:              '',
     bank_holder:               '',
     is_active:                 true,
+    tutor_type:                'internal',
+    is_owner:                  false,
+    bimbel_name:               '',
     education_level:           '',
     education_major:           '',
     education_university:      '',
@@ -191,6 +194,9 @@ export default function TutorEditPage() {
         bank_account:              form.bank_account.trim() || null,
         bank_holder:               form.bank_holder.trim() || null,
         is_active:                 form.is_active,
+        tutor_type:                form.tutor_type,
+        is_owner:                  form.is_owner,
+        bimbel_name:               form.bimbel_name.trim() || null,
         education_level:           form.education_level || null,
         education_major:           form.education_major.trim() || null,
         education_university:      form.education_university.trim() || null,
@@ -235,6 +241,37 @@ export default function TutorEditPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+
+        {/* JENIS TUTOR */}
+        <div className={sectionCls}>
+          <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jenis Tutor</p>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { value: 'owner',    label: '👑 Owner',      desc: 'Akses penuh semua materi',   color: 'border-purple-400 bg-purple-50' },
+              { value: 'internal', label: '👤 Freelancer', desc: 'Akses terbatas waktu kelas', color: 'border-green-400 bg-green-50' },
+              { value: 'b2b',      label: '🏢 B2B',        desc: 'Tutor dari bimbel mitra',    color: 'border-blue-400 bg-blue-50' },
+            ].map(opt => (
+              <button type="button" key={opt.value}
+                onClick={() => setForm(prev => ({
+                  ...prev,
+                  tutor_type: opt.value,
+                  is_owner: opt.value === 'owner',
+                }))}
+                className={`p-3 rounded-xl border-2 text-left transition-all
+                  ${form.tutor_type === opt.value ? opt.color + ' ring-2 ring-offset-1 ring-[#5C4FE5]' : 'border-[#E5E3FF] hover:border-[#5C4FE5]'}`}>
+                <p className="font-bold text-sm text-[#1A1640]">{opt.label}</p>
+                <p className="text-xs text-[#7B78A8] mt-0.5">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+          {form.tutor_type === 'b2b' && (
+            <div>
+              <label className={labelCls}>Nama Bimbel *</label>
+              <input name="bimbel_name" value={form.bimbel_name} onChange={handleChange}
+                placeholder="Nama bimbel mitra..." className={inputCls} />
+            </div>
+          )}
+        </div>
 
         {/* DATA PRIBADI */}
         <div className={sectionCls}>
