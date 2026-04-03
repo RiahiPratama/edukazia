@@ -285,28 +285,31 @@ export default function TutorMateriPage() {
   // ── Group materials by level → chapter/unit ───────────────
   const tabMaterials = materials.filter(m => m.category === activeTab)
 
-  type Group = { level: string; chapter: string | null; unit: string; items: Material[] }
-  const groups: Group[] = []
+  type UnitGroup = { unit: string; items: Material[] }
+  type ChapterGroup = { level: string; chapter: string | null; units: UnitGroup[] }
+  const groups: ChapterGroup[] = []
 
-  // Sort materials: level → chapter → unit → lesson
+  // Sort: level → chapter → unit → lesson
   const sorted = [...tabMaterials].sort((a, b) => {
     if (a.level_name !== b.level_name) return a.level_name.localeCompare(b.level_name)
-    if ((a.chapter_title || '') !== (b.chapter_title || '')) 
+    if ((a.chapter_title || '') !== (b.chapter_title || ''))
       return (a.chapter_title || '').localeCompare(b.chapter_title || '')
-    return a.unit_name.localeCompare(b.unit_name)
+    if (a.unit_name !== b.unit_name) return a.unit_name.localeCompare(b.unit_name)
+    return a.lesson_name.localeCompare(b.lesson_name)
   })
 
   sorted.forEach(m => {
-    const existing = groups.find(g =>
-      g.level === m.level_name &&
-      g.chapter === m.chapter_title &&
-      g.unit === m.unit_name
-    )
-    if (existing) {
-      existing.items.push(m)
-    } else {
-      groups.push({ level: m.level_name, chapter: m.chapter_title, unit: m.unit_name, items: [m] })
+    let chGroup = groups.find(g => g.level === m.level_name && g.chapter === m.chapter_title)
+    if (!chGroup) {
+      chGroup = { level: m.level_name, chapter: m.chapter_title, units: [] }
+      groups.push(chGroup)
     }
+    let uGroup = chGroup.units.find(u => u.unit === m.unit_name)
+    if (!uGroup) {
+      uGroup = { unit: m.unit_name, items: [] }
+      chGroup.units.push(uGroup)
+    }
+    uGroup.items.push(m)
   })
 
   const toggleGroup = (key: string) => {
@@ -398,61 +401,83 @@ export default function TutorMateriPage() {
       ) : (
         <div className="space-y-3">
           {groups.map((group, gi) => {
-            const groupKey = `${group.level}__${group.chapter}__${group.unit}`
-            const isOpen = openGroups.has(groupKey)
+            const chKey = `${group.level}__${group.chapter}`
+            const isChOpen = openGroups.has(chKey)
+            const totalItems = group.units.reduce((sum, u) => sum + u.items.length, 0)
+
             return (
               <div key={gi} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-                <button onClick={() => toggleGroup(groupKey)}
+                {/* Chapter header */}
+                <button onClick={() => toggleGroup(chKey)}
                   className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#F7F6FF] transition-colors text-left">
                   <div className="flex items-center gap-3 min-w-0">
-                    {isOpen
+                    {isChOpen
                       ? <ChevronDown className="w-4 h-4 text-[#5C4FE5] flex-shrink-0" />
                       : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap text-xs text-[#7B78A8]">
-                        <span className="font-semibold text-[#5C4FE5]">{group.level}</span>
-                        {group.chapter && (
-                          <>
-                            <ChevronRight className="w-3 h-3 inline" />
-                            <span>{group.chapter}</span>
-                          </>
-                        )}
-                        <ChevronRight className="w-3 h-3 inline" />
-                        <span className="font-bold text-[#1A1640]">{group.unit}</span>
-                      </div>
+                    <div>
+                      <p className="text-xs text-[#7B78A8] font-medium">{group.level}</p>
+                      <p className="font-bold text-[#1A1640] text-sm">{group.chapter || 'Materi'}</p>
                     </div>
                   </div>
                   <span className="text-xs text-[#7B78A8] flex-shrink-0 ml-3">
-                    {group.items.length} materi
+                    {group.units.length} unit · {totalItems} materi
                   </span>
                 </button>
 
-                {isOpen && (
-                  <div className="border-t border-[#F0EFFF] divide-y divide-[#F7F6FF]">
-                    {group.items.map(material => {
-                      const status = canAccess(material)
+                {/* Units */}
+                {isChOpen && (
+                  <div className="border-t border-[#F0EFFF]">
+                    {group.units.map((uGroup, ui) => {
+                      const uKey = `${chKey}__${uGroup.unit}`
+                      const isUOpen = openGroups.has(uKey)
                       return (
-                        <div key={material.id}
-                          className="flex items-center justify-between px-5 py-3 hover:bg-[#F7F6FF] transition-colors">
-                          <div className="flex-1 min-w-0 mr-3">
-                            <p className={`text-sm font-semibold truncate ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-400'}`}>
-                              {material.title}
-                            </p>
-                            <p className="text-xs text-[#7B78A8] truncate">{material.lesson_name}</p>
-                          </div>
-                          <button onClick={() => openMaterial(material)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex-shrink-0
-                              ${status === 'allowed'
-                                ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]'
-                                : status === 'time_locked'
-                                ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                            {status === 'allowed'
-                              ? <><ExternalLink className="w-3 h-3" />Buka</>
-                              : status === 'time_locked'
-                              ? <><Clock className="w-3 h-3" />Terkunci</>
-                              : <><Lock className="w-3 h-3" />Belum Tersedia</>}
+                        <div key={ui} className="border-b border-[#F7F6FF] last:border-0">
+                          {/* Unit header */}
+                          <button onClick={() => toggleGroup(uKey)}
+                            className="w-full flex items-center justify-between pl-10 pr-5 py-3 hover:bg-[#F7F6FF] transition-colors text-left">
+                            <div className="flex items-center gap-2">
+                              {isUOpen
+                                ? <ChevronDown className="w-3.5 h-3.5 text-[#5C4FE5]" />
+                                : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+                              <span className="text-sm font-semibold text-[#1A1640]">{uGroup.unit}</span>
+                            </div>
+                            <span className="text-xs text-[#7B78A8]">{uGroup.items.length} materi</span>
                           </button>
+
+                          {/* Materials */}
+                          {isUOpen && (
+                            <div className="divide-y divide-[#F7F6FF] bg-[#FAFAFE]">
+                              {uGroup.items.map(material => {
+                                const status = canAccess(material)
+                                return (
+                                  <div key={material.id}
+                                    className="flex items-center justify-between pl-14 pr-5 py-3 hover:bg-[#F0EFFF] transition-colors">
+                                    <div className="flex-1 min-w-0 mr-3">
+                                      <p className={`text-sm font-medium truncate ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-400'}`}>
+                                        {material.title}
+                                      </p>
+                                      {material.lesson_name && (
+                                        <p className="text-xs text-[#7B78A8] truncate">{material.lesson_name}</p>
+                                      )}
+                                    </div>
+                                    <button onClick={() => openMaterial(material)}
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex-shrink-0
+                                        ${status === 'allowed'
+                                          ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]'
+                                          : status === 'time_locked'
+                                          ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed'
+                                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                                      {status === 'allowed'
+                                        ? <><ExternalLink className="w-3 h-3" />Buka</>
+                                        : status === 'time_locked'
+                                        ? <><Clock className="w-3 h-3" />Terkunci</>
+                                        : <><Lock className="w-3 h-3" />Belum Tersedia</>}
+                                    </button>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
