@@ -185,13 +185,6 @@ export default function KelasDetailPage() {
     setSavingProgress(false)
   }
 
-  async function saveStudentProgress(studentId: string, unitPos: number) {
-    setSavingProgress(true)
-    await supabase.from('student_unit_progress').upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: unitPos, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
-    setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
-    setSavingProgress(false)
-  }
-
   async function fetchAll() {
     setLoading(true)
 
