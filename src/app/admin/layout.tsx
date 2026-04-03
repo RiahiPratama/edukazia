@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2,
-  ClipboardList, Archive
+  ClipboardList, Archive, Building2
 } from 'lucide-react'
 
 const navItems = [
@@ -20,9 +20,9 @@ const navItems = [
     { href: '/admin/siswa',     label: 'Siswa',           icon: GraduationCap },
     { href: '/admin/tutor',     label: 'Tutor',           icon: Users },
     { href: '/admin/kelas',     label: 'Kelas',           icon: BookOpen },
+    { href: '/admin/bimbel',    label: 'Bimbel (B2B)',    icon: Building2 },
     { href: '/admin/kursus',    label: 'Kursus & Paket',  icon: Layers },
     { href: '/admin/absensi',   label: 'Absensi',         icon: ClipboardList },
-    { href: '/admin/arsip',     label: 'Arsip Kelas',     icon: Archive },
   ]},
   { group: 'Keuangan', items: [
     { href: '/admin/pembayaran', label: 'Pembayaran',     icon: CreditCard },
