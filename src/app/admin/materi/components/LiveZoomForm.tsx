@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AlertCircle } from 'lucide-react';
 
-// ✅ FIX 1: Type diperbarui — hapus content_data & order_number, tambah material_contents
 type Material = {
   id: string;
   title: string;
@@ -43,22 +42,20 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   const [platform, setPlatform] = useState('canva');
   const [url, setUrl] = useState('');
-  // ✅ 3 URL fields untuk akses berbeda
   const [canvaUrl, setCanvaUrl] = useState('');
-  const [slidesUrl, setSlidesUrl] = useState(''); // siswa - Google Drive PDF
-  const [tutorSlidesUrl, setTutorSlidesUrl] = useState(''); // tutor - Google Slides
+  const [slidesUrl, setSlidesUrl] = useState('');
+  const [tutorSlidesUrl, setTutorSlidesUrl] = useState('');
 
   const [orderNumber, setOrderNumber] = useState(1);
   const [isPublished, setIsPublished] = useState(false);
 
-  // Edit mode states
   const [editLevelName, setEditLevelName] = useState('');
   const [editChapterTitle, setEditChapterTitle] = useState('');
   const [editChapterId, setEditChapterId] = useState('');
   const [editUnitName, setEditUnitName] = useState('');
-  const [editUnitPosition, setEditUnitPosition] = useState(0);
+  const [editUnitPosition, setEditUnitPosition] = useState(1); // FIX: default 1, bukan 0
   const [editLessonName, setEditLessonName] = useState('');
-  const [editLessonPosition, setEditLessonPosition] = useState(0);
+  const [editLessonPosition, setEditLessonPosition] = useState(1); // FIX: default 1, bukan 0
 
   const [loading, setLoading] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
@@ -70,7 +67,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
     fetchCourses();
   }, []);
 
-  // ✅ FIX 2: Helper detect platform dari URL
   const detectPlatformFromUrl = (inputUrl: string): string => {
     if (!inputUrl) return 'canva';
     const lower = inputUrl.toLowerCase();
@@ -81,7 +77,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   useEffect(() => {
     if (editData) {
-      // ✅ FIX 3: Baca URL dari material_contents, bukan content_data
       const contentUrl = editData.material_contents?.[0]?.content_url || '';
       setUrl(contentUrl);
       setPlatform(detectPlatformFromUrl(contentUrl));
@@ -107,11 +102,12 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         .select('unit_name, position, chapter_id')
         .eq('id', editData.unit_id)
         .single();
-      
+
       if (unitData) {
         setEditUnitName(unitData.unit_name);
-        setEditUnitPosition(unitData.position || 0);
-        
+        // FIX: pastikan minimum 1, bukan 0
+        setEditUnitPosition(Math.max(unitData.position || 1, 1));
+
         if (unitData.chapter_id) {
           setEditChapterId(unitData.chapter_id);
           const { data: chapterData } = await supabase
@@ -130,7 +126,8 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         .single();
       if (lessonData) {
         setEditLessonName(lessonData.lesson_name);
-        setEditLessonPosition(lessonData.position || 0);
+        // FIX: pastikan minimum 1, bukan 0
+        setEditLessonPosition(Math.max(lessonData.position || 1, 1));
       }
     } catch (error) {
       console.error('Error fetching edit data:', error);
@@ -150,7 +147,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
   useEffect(() => {
     if (selectedChapter && selectedChapter !== 'NEW') {
-      // STRICT: Only fetch units FROM THIS CHAPTER
       fetchUnits(selectedChapter);
     } else {
       setUnits([]);
@@ -183,7 +179,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
   };
 
   const fetchUnits = async (chapterId: string) => {
-    // STRICT: Only units from this chapter
     const { data } = await supabase.from('units').select('*').eq('chapter_id', chapterId).order('position');
     setUnits(data || []);
   };
@@ -199,7 +194,6 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
 
     try {
       if (isEditing) {
-        // EDIT MODE
         const formData = new FormData();
         formData.append('material_id', editData.id);
         formData.append('chapter_id', editChapterId || '');
@@ -214,30 +208,21 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         formData.append('is_published', isPublished.toString());
         formData.append('content_data', JSON.stringify({ platform, url: canvaUrl || url }));
         formData.append('canva_url', canvaUrl);
-        formData.append('student_content_url', slidesUrl); // Google Drive PDF untuk siswa
-        formData.append('slides_url', tutorSlidesUrl); // Google Slides untuk tutor
+        formData.append('student_content_url', slidesUrl);
+        formData.append('slides_url', tutorSlidesUrl);
 
         const response = await fetch('/api/admin/materials', { method: 'PATCH', body: formData });
         const result = await response.json();
-        
+
         if (!response.ok) throw new Error(`${result.error || 'Failed to update'}: ${result.details || ''}`);
-        
+
         alert('✅ Material berhasil diupdate!');
         onSave();
       } else {
-        // CREATE MODE - STRICT VALIDATION
-        if (!selectedLevel) {
-          alert('❌ Level harus dipilih!');
-          setLoading(false);
-          return;
-        }
-
+        // CREATE MODE
+        if (!selectedLevel) { alert('❌ Level harus dipilih!'); setLoading(false); return; }
         if (!selectedChapter || selectedChapter === 'NEW') {
-          if (selectedChapter !== 'NEW') {
-            alert('❌ Chapter harus dipilih!');
-            setLoading(false);
-            return;
-          }
+          if (selectedChapter !== 'NEW') { alert('❌ Chapter harus dipilih!'); setLoading(false); return; }
         }
 
         // Create Chapter if NEW
@@ -251,8 +236,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             .limit(1);
 
           const nextOrderNumber = existingChapters && existingChapters.length > 0
-            ? (existingChapters[0].order_number + 1)
-            : 1;
+            ? (existingChapters[0].order_number + 1) : 1;
 
           const { data: newChapter, error: chapterError } = await supabase
             .from('chapters')
@@ -265,19 +249,12 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             .select()
             .single();
 
-          if (chapterError) {
-            alert(`❌ Gagal membuat chapter: ${chapterError.message}`);
-            setLoading(false);
-            return;
-          }
+          if (chapterError) { alert(`❌ Gagal membuat chapter: ${chapterError.message}`); setLoading(false); return; }
           actualChapterId = newChapter.id;
         }
 
-        // STRICT VALIDATION: Chapter must be selected
         if (!actualChapterId || actualChapterId === 'NEW') {
-          alert('❌ Chapter harus dipilih atau dibuat!');
-          setLoading(false);
-          return;
+          alert('❌ Chapter harus dipilih atau dibuat!'); setLoading(false); return;
         }
 
         // Create Unit if NEW
@@ -287,23 +264,18 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             .from('units')
             .insert({
               level_id: selectedLevel,
-              chapter_id: actualChapterId, // STRICT: Must have chapter_id
+              chapter_id: actualChapterId,
               unit_name: newUnitName,
-              unit_number: 0,
-              position: 0,
+              unit_number: newUnitPosition, // FIX: pakai newUnitPosition bukan hardcode 0
+              position: newUnitPosition,    // FIX: pakai newUnitPosition bukan hardcode 0
             })
             .select()
             .single();
 
-          if (unitError) {
-            alert(`❌ Gagal membuat unit: ${unitError.message}`);
-            setLoading(false);
-            return;
-          }
+          if (unitError) { alert(`❌ Gagal membuat unit: ${unitError.message}`); setLoading(false); return; }
           actualUnitId = newUnit.id;
         }
 
-        // ✅ Lesson dibuat oleh route.ts (bukan client) agar bisa di-rollback kalau gagal
         const formData = new FormData();
         formData.append('title', newLessonName || selectedLesson);
         formData.append('category', 'live_zoom');
@@ -317,8 +289,8 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         formData.append('is_published', isPublished.toString());
         formData.append('content_data', JSON.stringify({ platform, url: canvaUrl || url }));
         formData.append('canva_url', canvaUrl);
-        formData.append('student_content_url', slidesUrl); // Google Drive PDF untuk siswa
-        formData.append('slides_url', tutorSlidesUrl); // Google Slides untuk tutor
+        formData.append('student_content_url', slidesUrl);
+        formData.append('slides_url', tutorSlidesUrl);
 
         const response = await fetch('/api/admin/materials', { method: 'POST', body: formData });
         const result = await response.json();
@@ -349,34 +321,21 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
         <>
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">Mata Pelajaran *</label>
-            <select
-              value={selectedCourse}
-              onChange={(e) => {
-                setSelectedCourse(e.target.value);
-                fetchLevels(e.target.value);
-              }}
+            <select value={selectedCourse}
+              onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }}
               required
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"
-            >
+              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
               <option value="">Pilih Mata Pelajaran</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">Level Kurikulum *</label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"
-            >
+            <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} required
+              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
               <option value="">Pilih Level</option>
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>{level.name}</option>
-              ))}
+              {levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}
             </select>
           </div>
 
@@ -384,68 +343,42 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             <>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter * (WAJIB)</label>
-                <select
-                  value={selectedChapter}
-                  onChange={(e) => setSelectedChapter(e.target.value)}
-                  required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"
-                >
+                <select value={selectedChapter} onChange={(e) => setSelectedChapter(e.target.value)} required
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
                   <option value="">Pilih Chapter</option>
                   <option value="NEW">+ Buat Chapter Baru</option>
-                  {chapters.map((ch) => (
-                    <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>
-                  ))}
+                  {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
                 </select>
                 {selectedChapter === 'NEW' && (
-                  <input
-                    type="text"
-                    value={newChapterTitle}
+                  <input type="text" value={newChapterTitle}
                     onChange={(e) => setNewChapterTitle(e.target.value)}
-                    placeholder="Nama Chapter Baru (contoh: Mover)"
-                    required
-                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"
-                  />
+                    placeholder="Nama Chapter Baru (contoh: Mover)" required
+                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"/>
                 )}
-                <p className="text-xs text-gray-600 mt-2">
-                  🔒 Unit hanya akan menampilkan yang sesuai dengan Chapter yang dipilih
-                </p>
+                <p className="text-xs text-gray-600 mt-2">🔒 Unit hanya akan menampilkan yang sesuai dengan Chapter yang dipilih</p>
               </div>
 
               {selectedChapter && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
-                  <select
-                    value={selectedUnit}
-                    onChange={(e) => setSelectedUnit(e.target.value)}
-                    required
-                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"
-                  >
+                  <select value={selectedUnit} onChange={(e) => setSelectedUnit(e.target.value)} required
+                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
                     <option value="">Pilih Unit</option>
                     <option value="NEW">+ Buat Unit Baru</option>
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>{u.unit_name}</option>
-                    ))}
+                    {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
                   </select>
                   {selectedUnit === 'NEW' && (
                     <div className="mt-2 space-y-2">
-                      <input
-                        type="text"
-                        value={newUnitName}
+                      <input type="text" value={newUnitName}
                         onChange={(e) => setNewUnitName(e.target.value)}
-                        placeholder="Nama Unit Baru (contoh: 01 Clothes I like)"
-                        required
-                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                      />
+                        placeholder="Nama Unit Baru (contoh: 01 Clothes I like)" required
+                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
                       <div className="flex items-center gap-3">
                         <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Unit *</label>
-                        <input
-                          type="number"
-                          value={newUnitPosition}
+                        <input type="number" value={newUnitPosition}
                           onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)}
-                          min="1"
-                          required
-                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                        />
+                          min="1" required  {/* FIX: min="1" */}
+                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
                         <span className="text-xs text-gray-500">Menentukan urutan tampil unit di daftar materi</span>
                       </div>
                     </div>
@@ -456,38 +389,24 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
               {selectedUnit && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson (Nama Materi) *</label>
-                  <select
-                    value={selectedLesson}
-                    onChange={(e) => setSelectedLesson(e.target.value)}
-                    required
-                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"
-                  >
+                  <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required
+                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
                     <option value="">Pilih Lesson</option>
                     <option value="NEW">+ Buat Lesson Baru</option>
-                    {lessons.map((l) => (
-                      <option key={l.id} value={l.id}>{l.lesson_name}</option>
-                    ))}
+                    {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
                   </select>
                   {selectedLesson === 'NEW' && (
                     <div className="mt-2 space-y-2">
-                      <input
-                        type="text"
-                        value={newLessonName}
+                      <input type="text" value={newLessonName}
                         onChange={(e) => setNewLessonName(e.target.value)}
-                        placeholder="Nama Lesson Baru (contoh: 01_The Magic Crystal)"
-                        required
-                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                      />
+                        placeholder="Nama Lesson Baru (contoh: 01_The Magic Crystal)" required
+                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
                       <div className="flex items-center gap-3">
                         <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Lesson *</label>
-                        <input
-                          type="number"
-                          value={newLessonPosition}
+                        <input type="number" value={newLessonPosition}
                           onChange={(e) => setNewLessonPosition(parseInt(e.target.value) || 1)}
-                          min="1"
-                          required
-                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                        />
+                          min="1" required  {/* FIX: min="1" */}
+                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
                         <span className="text-xs text-gray-500">Menentukan urutan tampil lesson di daftar materi</span>
                       </div>
                     </div>
@@ -522,13 +441,9 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter Title *</label>
-                <input
-                  type="text"
-                  value={editChapterTitle}
-                  onChange={(e) => setEditChapterTitle(e.target.value)}
-                  required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                />
+                <input type="text" value={editChapterTitle}
+                  onChange={(e) => setEditChapterTitle(e.target.value)} required
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
               </div>
             </div>
           )}
@@ -547,24 +462,16 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Unit Name *</label>
-                <input
-                  type="text"
-                  value={editUnitName}
-                  onChange={(e) => setEditUnitName(e.target.value)}
-                  required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                />
+                <input type="text" value={editUnitName}
+                  onChange={(e) => setEditUnitName(e.target.value)} required
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Unit Position *</label>
-                <input
-                  type="number"
-                  value={editUnitPosition}
-                  onChange={(e) => setEditUnitPosition(parseInt(e.target.value))}
-                  min="0"
-                  required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                />
+                <input type="number" value={editUnitPosition}
+                  onChange={(e) => setEditUnitPosition(Math.max(parseInt(e.target.value) || 1, 1))}
+                  min="1" required  {/* FIX: min="1", bukan "0" */}
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
               </div>
             </div>
           </div>
@@ -583,24 +490,16 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson Name *</label>
-                <input
-                  type="text"
-                  value={editLessonName}
-                  onChange={(e) => setEditLessonName(e.target.value)}
-                  required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                />
+                <input type="text" value={editLessonName}
+                  onChange={(e) => setEditLessonName(e.target.value)} required
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson Position *</label>
-                <input
-                  type="number"
-                  value={editLessonPosition}
-                  onChange={(e) => setEditLessonPosition(parseInt(e.target.value))}
-                  min="0"
-                  required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"
-                />
+                <input type="number" value={editLessonPosition}
+                  onChange={(e) => setEditLessonPosition(Math.max(parseInt(e.target.value) || 1, 1))}
+                  min="1" required  {/* FIX: min="1", bukan "0" */}
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
               </div>
             </div>
           </div>
@@ -610,66 +509,44 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
       <div className={isEditing ? 'border-t-2 border-gray-200 pt-6' : ''}>
         {isEditing && <h3 className="text-lg font-semibold text-gray-900 mb-4">📄 Material Content</h3>}
 
-        {/* Info banner */}
         <div className="bg-purple-50 border-2 border-[#5C4FE5]/30 rounded-xl p-4 mb-4">
           <p className="text-sm font-semibold text-[#5C4FE5] mb-1">📋 Konten per Tipe Akses</p>
           <p className="text-xs text-gray-600">Isi sesuai kebutuhan. Tidak semua field wajib diisi sekaligus.</p>
         </div>
 
-        {/* Canva URL — untuk Owner */}
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
           <label className="block text-sm font-bold text-orange-700 mb-1">
             🎨 Canva URL <span className="text-xs font-normal">(untuk Tutor Owner)</span>
           </label>
-          <input
-            type="url"
-            value={canvaUrl}
-            onChange={(e) => setCanvaUrl(e.target.value)}
+          <input type="url" value={canvaUrl} onChange={(e) => setCanvaUrl(e.target.value)}
             placeholder="https://canva.link/..."
-            className="w-full px-3 py-2.5 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400 bg-white text-gray-900 font-medium"
-          />
+            className="w-full px-3 py-2.5 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-400 bg-white text-gray-900 font-medium"/>
         </div>
 
-        {/* Google Drive PDF — untuk Siswa */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <label className="block text-sm font-bold text-blue-700 mb-1">
             📄 Konten Siswa – Google Drive PDF <span className="text-xs font-normal">(untuk Siswa EduKazia)</span>
           </label>
-          <input
-            type="url"
-            value={slidesUrl}
-            onChange={(e) => setSlidesUrl(e.target.value)}
+          <input type="url" value={slidesUrl} onChange={(e) => setSlidesUrl(e.target.value)}
             placeholder="https://drive.google.com/file/d/..."
-            className="w-full px-3 py-2.5 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 bg-white text-gray-900 font-medium"
-          />
+            className="w-full px-3 py-2.5 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 bg-white text-gray-900 font-medium"/>
           <p className="text-xs text-blue-600 mt-1">⚠️ Pastikan file di-share ke service account EduKazia</p>
         </div>
 
-        {/* Google Slides — untuk Freelancer & B2B */}
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
           <label className="block text-sm font-bold text-green-700 mb-1">
             📊 Konten Tutor – Google Slides <span className="text-xs font-normal">(untuk Tutor Freelancer & B2B)</span>
           </label>
-          <input
-            type="url"
-            value={tutorSlidesUrl}
-            onChange={(e) => setTutorSlidesUrl(e.target.value)}
+          <input type="url" value={tutorSlidesUrl} onChange={(e) => setTutorSlidesUrl(e.target.value)}
             placeholder="https://docs.google.com/presentation/d/..."
-            className="w-full px-3 py-2.5 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-400 bg-white text-gray-900 font-medium"
-          />
+            className="w-full px-3 py-2.5 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-400 bg-white text-gray-900 font-medium"/>
           <p className="text-xs text-green-600 mt-1">⚠️ Pastikan file di-share ke service account EduKazia</p>
         </div>
 
-        {/* Order Number disembunyikan — default 1 */}
-
         <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="isPublished"
-            checked={isPublished}
+          <input type="checkbox" id="isPublished" checked={isPublished}
             onChange={(e) => setIsPublished(e.target.checked)}
-            className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] border-gray-400 rounded"
-          />
+            className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] border-gray-400 rounded"/>
           <label htmlFor="isPublished" className="text-sm font-semibold text-gray-900">
             Publish (siswa bisa lihat)
           </label>
@@ -677,18 +554,12 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
       </div>
 
       <div className="flex gap-3 pt-4 border-t-2 border-gray-200">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-colors"
-        >
+        <button type="button" onClick={onCancel}
+          className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-colors">
           Batal
         </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex-1 px-4 py-2.5 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-semibold shadow-md transition-all"
-        >
+        <button type="submit" disabled={loading}
+          className="flex-1 px-4 py-2.5 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-50 font-semibold shadow-md transition-all">
           {loading ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
         </button>
       </div>
