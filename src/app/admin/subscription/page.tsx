@@ -19,9 +19,9 @@ type Subscription = {
   payment_proof: string | null
   is_active: boolean
   created_at: string
-  tutors?: { profiles: { full_name: string }[] | null } | null
-  courses?: { name: string; color: string | null } | null
-  levels?: { name: string } | null
+  tutors?: { profiles: { full_name: string }[] | null }[] | null
+  courses?: { name: string; color: string | null }[] | null
+  levels?: { name: string }[] | null
 }
 
 type Tutor = { id: string; full_name: string; tutor_type: string }
@@ -225,9 +225,9 @@ export default function TutorSubscriptionPage() {
               {subs.map(s => {
                 const status = STATUS_CONFIG[s.status ?? 'pending'] ?? STATUS_CONFIG.pending
                 const StatusIcon = status.icon
-                const tutorName = (s.tutors as any)?.profiles?.[0]?.full_name ?? '—'
-                const courseName = (s.courses as any)?.name
-                const courseColor = (s.courses as any)?.color
+                const tutorName = (s.tutors as any)?.[0]?.profiles?.[0]?.full_name ?? '—'
+                const courseName = (s.courses as any)?.[0]?.name
+                const courseColor = (s.courses as any)?.[0]?.color
                 const expiring = isExpiringSoon(s.end_date)
 
                 return (
