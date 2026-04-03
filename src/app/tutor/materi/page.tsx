@@ -453,12 +453,9 @@ export default function TutorMateriPage() {
                                   <div key={material.id}
                                     className="flex items-center justify-between pl-14 pr-5 py-3 hover:bg-[#F0EFFF] transition-colors">
                                     <div className="flex-1 min-w-0 mr-3">
-                                      <p className={`text-sm font-medium truncate ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-400'}`}>
+                                      <p className={`text-sm font-semibold truncate ${status === 'allowed' ? 'text-[#5C4FE5]' : 'text-gray-400'}`}>
                                         {material.title}
                                       </p>
-                                      {material.lesson_name && (
-                                        <p className="text-xs text-[#7B78A8] truncate">{material.lesson_name}</p>
-                                      )}
                                     </div>
                                     <button onClick={() => openMaterial(material)}
                                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex-shrink-0
