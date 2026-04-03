@@ -489,10 +489,23 @@ export default function KelasPage() {
             </span>
           </p>
         </div>
-        <Link href="/admin/kelas/baru"
-          className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
-          + Buat Kelas
-        </Link>
+        <div className="flex items-center gap-2">
+          {kelasArsip.length > 0 && (
+            <button onClick={() => setShowArsip(prev => !prev)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border-2 transition-colors
+                ${showArsip ? 'bg-gray-100 border-gray-300 text-gray-600' : 'border-[#E5E3FF] text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5]'}`}>
+              <Archive size={15}/>
+              Arsip
+              <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {kelasArsip.length}
+              </span>
+            </button>
+          )}
+          <Link href="/admin/kelas/baru"
+            className="bg-[#5C4FE5] text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-[#3D34C4] transition-colors">
+            + Buat Kelas
+          </Link>
+        </div>
       </div>
 
       {/* Search & Filters */}
