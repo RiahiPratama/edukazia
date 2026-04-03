@@ -81,11 +81,18 @@ export default function TutorMateriPage() {
     setTutorInfo(tutor)
 
     // Get class groups tutor ini
-    const { data: classGroups } = await supabase
+    // Owner: semua class group (termasuk arsip)
+    // Freelancer/B2B: hanya active
+    let classGroupsQuery = supabase
       .from('class_groups')
       .select('id')
       .eq('tutor_id', tutor.id)
-      .eq('status', 'active')
+    
+    if (!tutor.is_owner) {
+      classGroupsQuery = classGroupsQuery.eq('status', 'active')
+    }
+
+    const { data: classGroups } = await classGroupsQuery
 
     const classGroupIds = classGroups?.map(cg => cg.id) || []
 
@@ -281,8 +288,15 @@ export default function TutorMateriPage() {
   type Group = { level: string; chapter: string | null; unit: string; items: Material[] }
   const groups: Group[] = []
 
-  tabMaterials.forEach(m => {
-    const key = `${m.level_name}__${m.chapter_title || ''}__${m.unit_name}`
+  // Sort materials: level → chapter → unit → lesson
+  const sorted = [...tabMaterials].sort((a, b) => {
+    if (a.level_name !== b.level_name) return a.level_name.localeCompare(b.level_name)
+    if ((a.chapter_title || '') !== (b.chapter_title || '')) 
+      return (a.chapter_title || '').localeCompare(b.chapter_title || '')
+    return a.unit_name.localeCompare(b.unit_name)
+  })
+
+  sorted.forEach(m => {
     const existing = groups.find(g =>
       g.level === m.level_name &&
       g.chapter === m.chapter_title &&
@@ -392,19 +406,20 @@ export default function TutorMateriPage() {
                   className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#F7F6FF] transition-colors text-left">
                   <div className="flex items-center gap-3 min-w-0">
                     {isOpen
-                      ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      ? <ChevronDown className="w-4 h-4 text-[#5C4FE5] flex-shrink-0" />
                       : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-medium text-[#7B78A8]">{group.level}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap text-xs text-[#7B78A8]">
+                        <span className="font-semibold text-[#5C4FE5]">{group.level}</span>
                         {group.chapter && (
                           <>
-                            <span className="text-[#E5E3FF]">›</span>
-                            <span className="text-xs font-medium text-[#7B78A8]">{group.chapter}</span>
+                            <ChevronRight className="w-3 h-3 inline" />
+                            <span>{group.chapter}</span>
                           </>
                         )}
+                        <ChevronRight className="w-3 h-3 inline" />
+                        <span className="font-bold text-[#1A1640]">{group.unit}</span>
                       </div>
-                      <p className="font-bold text-[#1A1640] text-sm truncate">{group.unit}</p>
                     </div>
                   </div>
                   <span className="text-xs text-[#7B78A8] flex-shrink-0 ml-3">
