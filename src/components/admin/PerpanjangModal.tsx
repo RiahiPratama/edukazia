@@ -40,7 +40,7 @@ type Props = {
   kelasId: string
   kelasLabel: string
   kelasZoomLink: string | null
-  kelasClassTypeId: string   // ← sudah ada di Props
+  kelasClassTypeId: string
   enrollment: Enrollment
   onClose: () => void
   onSuccess: () => void
@@ -50,7 +50,7 @@ export default function PerpanjangModal({
   kelasId,
   kelasLabel,
   kelasZoomLink,
-  kelasClassTypeId,           // ← FIX: sekarang di-destructure
+  kelasClassTypeId,
   enrollment,
   onClose,
   onSuccess,
@@ -64,10 +64,8 @@ export default function PerpanjangModal({
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
 
-  // course_id di-fetch dari class_groups (tidak ada di props)
   const [kelasCourseId, setKelasCourseId] = useState<string | null>(null)
 
-  // Form state
   const [packageId,     setPackageId]     = useState('')
   const [sessionsTotal, setSessionsTotal] = useState('8')
   const [startOffset,   setStartOffset]   = useState('1')
@@ -76,8 +74,6 @@ export default function PerpanjangModal({
   const [zoomLink,      setZoomLink]      = useState('') // selalu kosong — admin wajib input link baru
   const [jadwalMode,    setJadwalMode]    = useState<'auto' | 'manual'>('auto')
   const [jadwalRows,    setJadwalRows]    = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
-
-  // Preview
   const [previewSessions, setPreviewSessions] = useState<PreviewSession[]>([])
 
   useEffect(() => { fetchData() }, [])
@@ -85,7 +81,7 @@ export default function PerpanjangModal({
   async function fetchData() {
     setLoading(true)
 
-    // FIX: fetch course_id dari class_groups dulu, baru filter packages
+    // Fetch course_id dari class_groups
     const { data: kelasData } = await supabase
       .from('class_groups')
       .select('course_id')
@@ -95,13 +91,13 @@ export default function PerpanjangModal({
     const courseId = kelasData?.course_id ?? null
     setKelasCourseId(courseId)
 
-    // FIX: filter packages by course_id + class_type_id
+    // Filter packages by course_id + class_type_id
     const pkgQuery = supabase
       .from('packages')
       .select('id, name, total_sessions, price')
       .eq('is_active', true)
 
-    if (courseId)        pkgQuery.eq('course_id', courseId)
+    if (courseId)         pkgQuery.eq('course_id', courseId)
     if (kelasClassTypeId) pkgQuery.eq('class_type_id', kelasClassTypeId)
 
     const [pkgRes, sessRes] = await Promise.all([
@@ -125,42 +121,25 @@ export default function PerpanjangModal({
 
   function detectAndSetAutoJadwal(allSessions: Session[]) {
     const patternMap: Record<string, { time: string; count: number; lastDate: string }> = {}
-
     allSessions.forEach(s => {
       const d = new Date(s.scheduled_at)
-      const dayOfWeek = d.getDay()
-      const time = d.toTimeString().substring(0, 5)
-      const key = `${dayOfWeek}-${time}`
-      if (!patternMap[key]) {
-        patternMap[key] = { time, count: 0, lastDate: s.scheduled_at }
-      }
+      const key = `${d.getDay()}-${d.toTimeString().substring(0, 5)}`
+      if (!patternMap[key]) patternMap[key] = { time: d.toTimeString().substring(0, 5), count: 0, lastDate: s.scheduled_at }
       patternMap[key].count++
-      if (new Date(s.scheduled_at) > new Date(patternMap[key].lastDate)) {
-        patternMap[key].lastDate = s.scheduled_at
-      }
+      if (new Date(s.scheduled_at) > new Date(patternMap[key].lastDate)) patternMap[key].lastDate = s.scheduled_at
     })
 
-    const lastSession = allSessions[allSessions.length - 1]
-    const lastDate    = new Date(lastSession.scheduled_at)
+    const lastDate = new Date(allSessions[allSessions.length - 1].scheduled_at)
+    const rows: JadwalRow[] = Object.values(patternMap)
+      .sort((a, b) => new Date(a.lastDate).getDay() - new Date(b.lastDate).getDay())
+      .map(p => {
+        const nextDate = new Date(p.lastDate)
+        nextDate.setDate(nextDate.getDate() + 7)
+        while (nextDate <= lastDate) nextDate.setDate(nextDate.getDate() + 7)
+        return { date: nextDate.toISOString().split('T')[0], time: p.time, repeat: 1 }
+      })
 
-    const patterns = Object.values(patternMap).sort((a, b) => {
-      return new Date(a.lastDate).getDay() - new Date(b.lastDate).getDay()
-    })
-
-    if (patterns.length === 0) return
-
-    const rows: JadwalRow[] = patterns.map(p => {
-      const nextDate = new Date(p.lastDate)
-      nextDate.setDate(nextDate.getDate() + 7)
-      while (nextDate <= lastDate) nextDate.setDate(nextDate.getDate() + 7)
-      return {
-        date: nextDate.toISOString().split('T')[0],
-        time: p.time,
-        repeat: 1,
-      }
-    })
-
-    setJadwalRows(rows)
+    if (rows.length > 0) setJadwalRows(rows)
   }
 
   function handlePackageChange(id: string) {
@@ -202,7 +181,14 @@ export default function PerpanjangModal({
   async function handleSave() {
     setSaving(true); setError('')
     try {
-      // 1. Insert enrollment baru — dapatkan id-nya untuk payment
+      // 1. Set enrollment LAMA jadi 'renewed'
+      const { error: renewErr } = await supabase
+        .from('enrollments')
+        .update({ status: 'renewed' })
+        .eq('id', enrollment.id)
+      if (renewErr) throw renewErr
+
+      // 2. Insert enrollment BARU
       const { data: newEnrollment, error: enrErr } = await supabase
         .from('enrollments')
         .insert({
@@ -217,10 +203,9 @@ export default function PerpanjangModal({
         })
         .select('id')
         .single()
-
       if (enrErr) throw enrErr
 
-      // 2. Generate & insert sessions
+      // 3. Generate & insert sessions baru
       const rows = jadwalMode === 'auto'
         ? jadwalRows.map(r => ({ ...r, repeat: Math.ceil(parseInt(sessionsTotal) / jadwalRows.length) }))
         : jadwalRows
@@ -244,25 +229,24 @@ export default function PerpanjangModal({
         if (sessErr) throw sessErr
       }
 
-      // 3. Update zoom link & pastikan kelas aktif
-      await supabase
-        .from('class_groups')
+      // 4. Update zoom link kelas + pastikan status active
+      await supabase.from('class_groups')
         .update({ zoom_link: zoomLink || null, status: 'active' })
         .eq('id', kelasId)
 
-      // FIX: insert payment pakai enrollment_id (bukan class_group_id)
+      // 5. Insert payment jika ada nominal
       if (payment && parseInt(payment) > 0 && newEnrollment?.id) {
         const now = new Date()
         await supabase.from('payments').insert({
-          student_id:    enrollment.student_id,
-          enrollment_id: newEnrollment.id,            // ← FIX: enrollment_id
-          amount:        parseInt(payment),
-          base_amount:   parseInt(payment),
-          method:        paymentMethod,
+          student_id:     enrollment.student_id,
+          enrollment_id:  newEnrollment.id,
+          amount:         parseInt(payment),
+          base_amount:    parseInt(payment),
+          method:         paymentMethod,
           payment_method: 'manual',
-          status:        'pending',
-          period_label:  `Perpanjang - ${now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
-          paid_at:       now.toISOString(),
+          status:         'pending',
+          period_label:   `Perpanjang - ${now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
+          paid_at:        now.toISOString(),
         })
       }
 
@@ -309,11 +293,7 @@ export default function PerpanjangModal({
                   Tidak ada paket aktif untuk kelas ini. Tambahkan paket di menu Kursus & Paket.
                 </div>
               ) : (
-                <select
-                  value={packageId}
-                  onChange={e => handlePackageChange(e.target.value)}
-                  className={inputCls}
-                >
+                <select value={packageId} onChange={e => handlePackageChange(e.target.value)} className={inputCls}>
                   <option value="">Pilih paket...</option>
                   {packages.map(p => (
                     <option key={p.id} value={p.id}>
@@ -330,9 +310,7 @@ export default function PerpanjangModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-[#7B78A8] mb-1 block">Nominal (Rp)</label>
-                  <input type="number" value={payment}
-                    onChange={e => setPayment(e.target.value)}
-                    placeholder="0" className={inputCls}/>
+                  <input type="number" value={payment} onChange={e => setPayment(e.target.value)} placeholder="0" className={inputCls}/>
                 </div>
                 <div>
                   <label className="text-xs text-[#7B78A8] mb-1 block">Metode</label>
@@ -351,14 +329,12 @@ export default function PerpanjangModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-[#7B78A8] mb-1 block">Total Sesi</label>
-                  <input type="number" min={1} max={100} value={sessionsTotal}
-                    onChange={e => setSessionsTotal(e.target.value)} className={inputCls}/>
+                  <input type="number" min={1} max={100} value={sessionsTotal} onChange={e => setSessionsTotal(e.target.value)} className={inputCls}/>
                   <p className="text-[10px] text-[#7B78A8] mt-1">Otomatis dari paket, bisa diedit</p>
                 </div>
                 <div>
                   <label className="text-xs text-[#7B78A8] mb-1 block">Mulai dari Sesi ke-</label>
-                  <input type="number" min={1} max={parseInt(sessionsTotal)} value={startOffset}
-                    onChange={e => setStartOffset(e.target.value)} className={inputCls}/>
+                  <input type="number" min={1} max={parseInt(sessionsTotal)} value={startOffset} onChange={e => setStartOffset(e.target.value)} className={inputCls}/>
                   <p className="text-[10px] text-[#7B78A8] mt-1">
                     {startOffset === '1' ? 'Paket baru dari awal' : `Mulai sesi ke-${startOffset}`}
                   </p>
@@ -376,10 +352,7 @@ export default function PerpanjangModal({
                 ].map(opt => (
                   <button type="button" key={opt.value}
                     onClick={() => setJadwalMode(opt.value as 'auto' | 'manual')}
-                    className={`p-3 rounded-xl border-2 text-left transition-all
-                      ${jadwalMode === opt.value
-                        ? 'border-[#5C4FE5] bg-[#F0EFFF]'
-                        : 'border-[#E5E3FF] hover:border-[#5C4FE5]'}`}>
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${jadwalMode === opt.value ? 'border-[#5C4FE5] bg-[#F0EFFF]' : 'border-[#E5E3FF] hover:border-[#5C4FE5]'}`}>
                     <p className="text-xs font-bold text-[#1A1640]">{opt.label}</p>
                     <p className="text-[10px] text-[#7B78A8] mt-0.5">{opt.desc}</p>
                   </button>
@@ -398,20 +371,14 @@ export default function PerpanjangModal({
                         return (
                           <div key={idx} className="flex items-center gap-2 text-xs text-[#1A1640]">
                             <span className="w-4 h-4 rounded-full bg-[#5C4FE5] text-white text-[10px] flex items-center justify-center font-bold">{idx + 1}</span>
-                            <span className="font-semibold">
-                              {d.toLocaleDateString('id-ID', { weekday: 'long' })} jam {row.time}
-                            </span>
-                            <span className="text-[#7B78A8]">
-                              (mulai {d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })})
-                            </span>
+                            <span className="font-semibold">{d.toLocaleDateString('id-ID', { weekday: 'long' })} jam {row.time}</span>
+                            <span className="text-[#7B78A8]">(mulai {d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })})</span>
                           </div>
                         )
                       })}
                     </div>
                   )}
-                  <p className="text-[10px] text-[#7B78A8] mt-2">
-                    Total sesi akan dibagi merata sesuai pola jadwal di atas
-                  </p>
+                  <p className="text-[10px] text-[#7B78A8] mt-2">Total sesi akan dibagi merata sesuai pola jadwal di atas</p>
                 </div>
               )}
 
@@ -438,9 +405,7 @@ export default function PerpanjangModal({
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">
-                          Ulangi setiap minggu (maks {MAX_REPEAT})
-                        </label>
+                        <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Ulangi setiap minggu (maks {MAX_REPEAT})</label>
                         <div className="flex items-center gap-3">
                           <input type="range" min={1} max={MAX_REPEAT} value={row.repeat}
                             onChange={e => updateRow(idx, 'repeat', Number(e.target.value))}
@@ -473,9 +438,7 @@ export default function PerpanjangModal({
               <p className="text-xs text-[#7B78A8] mt-1">Wajib diisi dengan link Zoom terbaru untuk periode ini</p>
             </div>
 
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-semibold">{error}</div>
-            )}
+            {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-semibold">{error}</div>}
           </div>
         ) : (
           /* PREVIEW */
@@ -499,7 +462,6 @@ export default function PerpanjangModal({
                 )}
               </div>
             </div>
-
             <div>
               <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">
                 Jadwal yang Akan Dibuat ({previewSessions.length} sesi)
@@ -507,19 +469,14 @@ export default function PerpanjangModal({
               <div className="space-y-1.5 max-h-60 overflow-y-auto">
                 {previewSessions.map((s, idx) => (
                   <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-[#F7F6FF] rounded-lg text-xs">
-                    <span className="w-5 h-5 rounded-full bg-[#5C4FE5] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0">
-                      {idx + 1}
-                    </span>
+                    <span className="w-5 h-5 rounded-full bg-[#5C4FE5] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0">{idx + 1}</span>
                     <span className="font-semibold text-[#1A1640]">{s.date}</span>
                     <span className="text-[#7B78A8] ml-auto">{s.time}</span>
                   </div>
                 ))}
               </div>
             </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-semibold">{error}</div>
-            )}
+            {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-semibold">{error}</div>}
           </div>
         )}
 

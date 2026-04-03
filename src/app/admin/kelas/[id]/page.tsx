@@ -25,9 +25,9 @@ type Enrollment = {
   sessions_total: number
   session_start_offset: number
   sessions_used: number
-  status: string
+  status: 'active' | 'renewed' | 'inactive' | 'completed' | 'paused' | 'transferred'
   student_name: string
-  attended_count: number         // ← FIX: tambah ini
+  attended_count: number
 }
 
 type Session = {
@@ -200,11 +200,12 @@ export default function KelasDetailPage() {
       .single()
     setKelas(k as any)
 
-    // Fetch enrollments
+    // Fetch enrollments — include 'renewed' supaya history perpanjang tetap tampil
     const { data: enr } = await supabase
       .from('enrollments')
       .select('id, student_id, sessions_total, session_start_offset, sessions_used, status')
       .eq('class_group_id', kelasId)
+      .order('created_at', { ascending: true })
 
     if (enr && enr.length > 0) {
       // Fetch nama siswa
@@ -476,45 +477,69 @@ export default function KelasDetailPage() {
         ))}
       </div>
 
-      {/* Tab: Siswa */}
       {activeTab === 'siswa' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
           {enrollments.length === 0 ? (
             <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Belum ada siswa terdaftar.</div>
           ) : (
             enrollments.map((enr, idx) => {
-              // FIX: formula progress — hitung dari attended_count, bukan sessions_used yang stale
-              // done = (start_offset - 1) + jumlah sesi yang benar-benar hadir
-              // Contoh Fazila: (8-1) + 1 = 8 → 8/8 = 100% ✅
               const done = (enr.session_start_offset - 1) + (enr.attended_count ?? 0)
               const pct  = Math.min((done / enr.sessions_total) * 100, 100)
-              const st   = enr.status === 'active'   ? { label: 'Aktif',    cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
-                         : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
-                         : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
+
+              // Badge & tombol berdasarkan status enrollment
+              const isActive  = enr.status === 'active'
+              const isRenewed = enr.status === 'renewed'
+              const st = isActive  ? { label: 'Aktif',          cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
+                       : isRenewed ? { label: 'Diperpanjang',   cls: 'bg-[#EEEDFE] text-[#5C4FE5]' }
+                       : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
+                       : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
+
+              // Warna progress bar: renewed = ungu muted, active = ungu penuh
+              const barColor = isRenewed ? 'bg-[#C4BFFF]' : 'bg-[#5C4FE5]'
+
               return (
-                <div key={enr.id} className={`flex items-center gap-3 px-5 py-4 ${idx < enrollments.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                <div key={enr.id} className={`flex items-center gap-3 px-5 py-4 ${idx < enrollments.length - 1 ? 'border-b border-[#E5E3FF]' : ''} ${isRenewed ? 'bg-[#FAFAFE]' : ''}`}>
                   <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
                     style={{backgroundColor: AVATAR_COLORS[idx % AVATAR_COLORS.length]}}>
                     {getInitials(enr.student_name)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-[#1A1640]">{enr.student_name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-sm font-bold text-[#1A1640]">{enr.student_name}</div>
+                      {isRenewed && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#EEEDFE] text-[#5C4FE5]">
+                          Periode Lama
+                        </span>
+                      )}
+                      {isActive && enrollments.some(e => e.student_id === enr.student_id && e.status === 'renewed') && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#E6F4EC] text-[#1A5C36]">
+                          Periode Baru
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-1">
                       <div className="w-24 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#5C4FE5] rounded-full transition-all" style={{width: `${pct}%`}}/>
+                        <div className={`h-full ${barColor} rounded-full transition-all`} style={{width: `${pct}%`}}/>
                       </div>
-                      {/* FIX: tampilkan done/total bukan hardcode session_start_offset */}
-                      <span className="text-[10px] font-bold text-[#5C4FE5]">
+                      <span className={`text-[10px] font-bold ${isRenewed ? 'text-[#C4BFFF]' : 'text-[#5C4FE5]'}`}>
                         {done}/{enr.sessions_total} sesi
                       </span>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.cls}`}>{st.label}</span>
-                  {enr.status === 'active' && (
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
+                    {st.label}
+                  </span>
+                  {/* Tombol aksi berdasarkan status */}
+                  {isActive && (
                     <button onClick={() => openPerpanjang(enr)}
                       className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#F0EFFF] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors flex-shrink-0">
                       🔄 Perpanjang
                     </button>
+                  )}
+                  {isRenewed && (
+                    <div className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-400 flex-shrink-0 flex items-center gap-1">
+                      ✅ Diperpanjang
+                    </div>
                   )}
                 </div>
               )
