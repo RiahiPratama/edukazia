@@ -100,13 +100,6 @@ export default function KelasDetailPage() {
   const [activeTab,   setActiveTab]   = useState<'siswa' | 'jadwal' | 'pembayaran' | 'level' | 'progress'>('siswa')
 
   // Progress state
-  const [classType,         setClassType]         = useState<string>('')
-  const [classCurrentUnit,  setClassCurrentUnit]  = useState<number>(1)
-  const [studentProgress,   setStudentProgress]   = useState<Record<string, number>>({})
-  const [units,             setUnits]             = useState<{id: string; unit_name: string; position: number}[]>([])
-  const [savingProgress,    setSavingProgress]    = useState(false)
-
-  // Progress state
   const [classType,        setClassType]        = useState<string>('')
   const [classCurrentUnit, setClassCurrentUnit] = useState<number>(1)
   const [studentProgress,  setStudentProgress]  = useState<Record<string, number>>({})
@@ -132,7 +125,6 @@ export default function KelasDetailPage() {
 
   useEffect(() => { fetchAll() }, [kelasId])
   useEffect(() => { if (kelasId) fetchLevels() }, [kelasId])
-  useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
   useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
 
   async function fetchProgress() {
@@ -191,35 +183,6 @@ export default function KelasDetailPage() {
       }, { onConflict: 'student_id,class_group_id' })
     setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
     setSavingProgress(false)
-  }
-
-  async function fetchProgress() {
-    const { data: cg } = await supabase
-      .from('class_groups')
-      .select('current_unit_position, class_types(name), class_group_levels(level_id)')
-      .eq('id', kelasId).single()
-    if (!cg) return
-    setClassCurrentUnit((cg as any).current_unit_position ?? 1)
-    const typeName = (cg as any).class_types?.name ?? ''
-    setClassType(typeName)
-    const levelIds = ((cg as any).class_group_levels ?? []).map((l: any) => l.level_id)
-    if (levelIds.length > 0) {
-      const { data: u } = await supabase.from('units').select('id, unit_name, position').in('level_id', levelIds).order('position')
-      setUnits(u ?? [])
-    }
-    if (typeName === 'Privat') {
-      const { data: sp } = await supabase.from('student_unit_progress').select('student_id, current_unit_position').eq('class_group_id', kelasId)
-      const map: Record<string, number> = {}
-      sp?.forEach((p: any) => { map[p.student_id] = p.current_unit_position })
-      setStudentProgress(map)
-    }
-  }
-
-  async function saveClassProgress() {
-    setSavingProgress(true)
-    await supabase.from('class_groups').update({ current_unit_position: classCurrentUnit }).eq('id', kelasId)
-    setSavingProgress(false)
-    alert('✅ Progress kelas disimpan!')
   }
 
   async function saveStudentProgress(studentId: string, unitPos: number) {
