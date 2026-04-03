@@ -261,9 +261,10 @@ export default function TutorEditPage() {
           <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Jenis Tutor</p>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { value: 'owner',    label: '👑 Owner',      desc: 'Akses penuh semua materi',   color: 'border-purple-400 bg-purple-50' },
-              { value: 'internal', label: '👤 Freelancer', desc: 'Akses terbatas waktu kelas', color: 'border-green-400 bg-green-50' },
-              { value: 'b2b',      label: '🏢 B2B',        desc: 'Tutor dari bimbel mitra',    color: 'border-blue-400 bg-blue-50' },
+              { value: 'owner',    label: '👑 Owner',      desc: 'Akses penuh semua materi',          color: 'border-purple-400 bg-purple-50' },
+              { value: 'internal', label: '👤 Freelancer', desc: 'Akses terbatas waktu kelas',        color: 'border-green-400 bg-green-50' },
+              { value: 'b2b',      label: '🏢 B2B',        desc: 'Tutor dari bimbel mitra',           color: 'border-blue-400 bg-blue-50' },
+              { value: 'hybrid',   label: '🔀 Hybrid',     desc: 'Freelancer + B2B subscription',    color: 'border-orange-400 bg-orange-50' },
             ].map(opt => (
               <button type="button" key={opt.value}
                 onClick={() => setForm(prev => ({

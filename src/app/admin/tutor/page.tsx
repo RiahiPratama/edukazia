@@ -61,6 +61,7 @@ export default function TutorPage() {
   const getTutorTypeBadge = (t: any) => {
     if (t.is_owner) return { label: 'Owner', color: 'bg-purple-100 text-purple-700 border border-purple-300', icon: <Crown size={10} className="inline mr-1"/> }
     if (t.tutor_type === 'b2b') return { label: 'B2B', color: 'bg-blue-100 text-blue-700 border border-blue-300', icon: <Building2 size={10} className="inline mr-1"/> }
+    if (t.tutor_type === 'hybrid') return { label: 'Hybrid', color: 'bg-orange-100 text-orange-700 border border-orange-300', icon: <Users size={10} className="inline mr-1"/> }
     return { label: 'Freelancer', color: 'bg-green-100 text-green-700 border border-green-300', icon: <Users size={10} className="inline mr-1"/> }
   }
 
