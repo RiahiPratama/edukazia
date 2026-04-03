@@ -83,30 +83,36 @@ export default function TutorMateriPage() {
     setTutorInfo(tutor)
 
     // Get class groups tutor ini
-    // Owner: semua class group (termasuk arsip)
-    // Freelancer/B2B: hanya active
-    let classGroupsQuery = supabase
-      .from('class_groups')
-      .select('id')
-      .eq('tutor_id', tutor.id)
-    
-    if (!tutor.is_owner) {
-      classGroupsQuery = classGroupsQuery.eq('status', 'active')
+    // Owner: tampilkan SEMUA level di platform
+    // Freelancer/B2B: hanya level dari class group active
+    let levelIds: string[] = []
+
+    if (tutor.is_owner) {
+      // Owner: fetch semua level
+      const { data: allLevels } = await supabase
+        .from('levels')
+        .select('id')
+      levelIds = allLevels?.map((l: any) => l.id) || []
+    } else {
+      // Non-owner: filter by class group
+      const { data: classGroups } = await supabase
+        .from('class_groups')
+        .select('id')
+        .eq('tutor_id', tutor.id)
+        .eq('status', 'active')
+
+      const classGroupIds = classGroups?.map(cg => cg.id) || []
+
+      const { data: cgl } = classGroupIds.length > 0
+        ? await supabase
+            .from('class_group_levels')
+            .select('level_id')
+            .in('class_group_id', classGroupIds)
+        : { data: [] }
+
+      levelIds = Array.from(new Set(cgl?.map((c: any) => c.level_id).filter(Boolean) || []))
     }
 
-    const { data: classGroups } = await classGroupsQuery
-
-    const classGroupIds = classGroups?.map(cg => cg.id) || []
-
-    // Get level IDs
-    const { data: cgl } = classGroupIds.length > 0
-      ? await supabase
-          .from('class_group_levels')
-          .select('level_id')
-          .in('class_group_id', classGroupIds)
-      : { data: [] }
-
-    const levelIds = Array.from(new Set(cgl?.map((c: any) => c.level_id).filter(Boolean) || []))
     if (levelIds.length === 0) { setLoading(false); return }
 
     // Get levels
@@ -164,10 +170,18 @@ export default function TutorMateriPage() {
     // Check time-based access for freelancer
     if (!tutor.is_owner && tutor.tutor_type === 'internal') {
       const now = new Date()
+      // Get classGroupIds for time check
+      const { data: cgForTime } = await supabase
+        .from('class_groups')
+        .select('id')
+        .eq('tutor_id', tutor.id)
+        .eq('status', 'active')
+      const classGroupIdsForTime = cgForTime?.map(cg => cg.id) || []
+
       const { data: sessions } = await supabase
         .from('sessions')
         .select('id, scheduled_at')
-        .in('class_group_id', classGroupIds)
+        .in('class_group_id', classGroupIdsForTime)
         .gte('scheduled_at', new Date(now.getTime() - 60 * 60 * 1000).toISOString())
         .lte('scheduled_at', new Date(now.getTime() + 60 * 60 * 1000).toISOString())
 
