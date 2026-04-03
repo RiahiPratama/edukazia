@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, X, BookOpen, Plus, Trash } from 'lucide-react'
+import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, ChevronDown, ChevronRight, X, BookOpen, Plus, Trash } from 'lucide-react'
 import PerpanjangModal from '@/components/admin/PerpanjangModal'
 
 type KelasDetail = {
