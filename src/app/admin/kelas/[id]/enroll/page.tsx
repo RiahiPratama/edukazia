@@ -97,6 +97,31 @@ export default function EnrollPage() {
 
     if (err) { setError(err.message); setLoading(false); return }
 
+    // ── Auto-link level siswa ke class_group_levels ──
+    const { data: studentData } = await supabase
+      .from('students')
+      .select('level_id')
+      .eq('id', form.student_id)
+      .single()
+
+    if (studentData?.level_id) {
+      // Cek apakah level sudah ada di kelas ini
+      const { data: existing } = await supabase
+        .from('class_group_levels')
+        .select('id')
+        .eq('class_group_id', kelasId)
+        .eq('level_id', studentData.level_id)
+        .maybeSingle()
+
+      // Kalau belum ada → insert otomatis
+      if (!existing) {
+        await supabase.from('class_group_levels').insert({
+          class_group_id: kelasId,
+          level_id: studentData.level_id,
+        })
+      }
+    }
+
     setSuccess('Siswa berhasil didaftarkan!')
     setEnrolled(prev => [...prev, form.student_id])
     setForm(prev => ({ ...prev, student_id: '', package_id: '', start_date: '', sessions_total: 8, session_start_offset: 1 }))
