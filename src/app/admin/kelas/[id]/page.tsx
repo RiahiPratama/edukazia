@@ -106,6 +106,13 @@ export default function KelasDetailPage() {
   const [units,             setUnits]             = useState<{id: string; unit_name: string; position: number}[]>([])
   const [savingProgress,    setSavingProgress]    = useState(false)
 
+  // Progress state
+  const [classType,        setClassType]        = useState<string>('')
+  const [classCurrentUnit, setClassCurrentUnit] = useState<number>(1)
+  const [studentProgress,  setStudentProgress]  = useState<Record<string, number>>({})
+  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number}[]>([])
+  const [savingProgress,   setSavingProgress]   = useState(false)
+
   // Level state
   const [classLevels,     setClassLevels]     = useState<ClassGroupLevel[]>([])
   const [availableLevels, setAvailableLevels] = useState<Level[]>([])
@@ -125,6 +132,7 @@ export default function KelasDetailPage() {
 
   useEffect(() => { fetchAll() }, [kelasId])
   useEffect(() => { if (kelasId) fetchLevels() }, [kelasId])
+  useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
   useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
 
   async function fetchProgress() {
@@ -181,6 +189,42 @@ export default function KelasDetailPage() {
         current_unit_position: unitPos,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'student_id,class_group_id' })
+    setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
+    setSavingProgress(false)
+  }
+
+  async function fetchProgress() {
+    const { data: cg } = await supabase
+      .from('class_groups')
+      .select('current_unit_position, class_types(name), class_group_levels(level_id)')
+      .eq('id', kelasId).single()
+    if (!cg) return
+    setClassCurrentUnit((cg as any).current_unit_position ?? 1)
+    const typeName = (cg as any).class_types?.name ?? ''
+    setClassType(typeName)
+    const levelIds = ((cg as any).class_group_levels ?? []).map((l: any) => l.level_id)
+    if (levelIds.length > 0) {
+      const { data: u } = await supabase.from('units').select('id, unit_name, position').in('level_id', levelIds).order('position')
+      setUnits(u ?? [])
+    }
+    if (typeName === 'Privat') {
+      const { data: sp } = await supabase.from('student_unit_progress').select('student_id, current_unit_position').eq('class_group_id', kelasId)
+      const map: Record<string, number> = {}
+      sp?.forEach((p: any) => { map[p.student_id] = p.current_unit_position })
+      setStudentProgress(map)
+    }
+  }
+
+  async function saveClassProgress() {
+    setSavingProgress(true)
+    await supabase.from('class_groups').update({ current_unit_position: classCurrentUnit }).eq('id', kelasId)
+    setSavingProgress(false)
+    alert('✅ Progress kelas disimpan!')
+  }
+
+  async function saveStudentProgress(studentId: string, unitPos: number) {
+    setSavingProgress(true)
+    await supabase.from('student_unit_progress').upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: unitPos, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
     setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
     setSavingProgress(false)
   }
@@ -423,6 +467,7 @@ export default function KelasDetailPage() {
           { key: 'jadwal',     label: 'Jadwal',     icon: <Calendar size={13}/>,    count: sessions.length },
           { key: 'pembayaran', label: 'Pembayaran', icon: <CreditCard size={13}/>,  count: payments.length },
           { key: 'level',      label: 'Level',      icon: <BookOpen size={13}/>,    count: classLevels.length },
+          { key: 'progress',   label: '📍 Progress', icon: <BookOpen size={13}/>,   count: units.length },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={[
@@ -572,6 +617,64 @@ export default function KelasDetailPage() {
           )}
         </div>
       )}
+      {/* Tab: Progress */}
+      {activeTab === 'progress' && (
+        <div className="space-y-4">
+          <div className="bg-[#F0EFFF] rounded-xl p-4 border border-[#E5E3FF]">
+            <p className="text-sm text-[#4A4580]">{classType === 'Privat' ? '🎯 Kelas Privat — progress diset per siswa' : '👥 Kelas Grup — progress berlaku semua siswa'}</p>
+          </div>
+          {units.length === 0 ? (
+            <div className="bg-white rounded-xl border border-[#E5E3FF] p-8 text-center text-gray-400">Belum ada unit. Tambahkan level ke kelas ini terlebih dahulu.</div>
+          ) : classType === 'Privat' ? (
+            <div className="space-y-3">
+              {enrollments.filter(e => e.status === 'active').map(enr => {
+                const currentPos = studentProgress[enr.student_id] ?? 1
+                return (
+                  <div key={enr.student_id} className="bg-white rounded-xl border border-[#E5E3FF] p-4">
+                    <p className="font-bold text-[#1A1640] mb-3">{enr.student_name}</p>
+                    <div className="space-y-2">
+                      {units.map(unit => {
+                        const isDone = unit.position < currentPos
+                        const isActive = unit.position === currentPos
+                        return (
+                          <div key={unit.id} className={`flex items-center justify-between p-3 rounded-lg border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex items-center gap-2">
+                              <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
+                              <span className={`text-sm font-medium ${unit.position > currentPos ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                            </div>
+                            {isActive && <button onClick={() => saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length))} disabled={savingProgress || currentPos >= units.length} className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">Naik Unit →</button>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-[#E5E3FF] p-4">
+              <p className="font-bold text-[#1A1640] mb-3">Unit Progress Kelas</p>
+              <div className="space-y-2 mb-4">
+                {units.map(unit => {
+                  const isDone = unit.position < classCurrentUnit
+                  const isActive = unit.position === classCurrentUnit
+                  return (
+                    <div key={unit.id} onClick={() => setClassCurrentUnit(unit.position)} className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
+                      <div className="flex items-center gap-2">
+                        <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
+                        <span className={`text-sm font-medium ${unit.position > classCurrentUnit ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                      </div>
+                      {isActive && <span className="text-xs font-bold text-[#5C4FE5] bg-purple-100 px-2 py-0.5 rounded-full">Aktif</span>}
+                    </div>
+                  )
+                })}
+              </div>
+              <button onClick={saveClassProgress} disabled={savingProgress} className="w-full py-2.5 bg-[#5C4FE5] text-white rounded-xl font-semibold text-sm hover:bg-[#4a3ec7] disabled:opacity-50">{savingProgress ? 'Menyimpan...' : '💾 Simpan Progress'}</button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tab: Level */}
       {activeTab === 'level' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
