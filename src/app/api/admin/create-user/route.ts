@@ -135,8 +135,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'User not found — akun login belum dibuat. Buat akun terlebih dahulu.' }, { status: 404 })
     }
 
-    // Update password
-    const { error: updateErr } = await supabase.auth.admin.updateUserById(profile_id, { password })
+    // Update password + confirm email sekaligus
+    // (tutor yang diinvite via email belum terconfirm sampai klik link)
+    const { error: updateErr } = await supabase.auth.admin.updateUserById(profile_id, {
+      password,
+      email_confirm: true,
+    })
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 })
     }
