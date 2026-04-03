@@ -13,6 +13,7 @@ type KelasDetail = {
   status: string
   max_participants: number
   zoom_link: string | null
+  class_type_id: string          // ← FIX: tambah ini
   courses: { name: string } | null
   class_types: { name: string } | null
   tutors: { id: string; profiles: { full_name: string } | null } | null
@@ -26,6 +27,7 @@ type Enrollment = {
   sessions_used: number
   status: string
   student_name: string
+  attended_count: number         // ← FIX: tambah ini
 }
 
 type Session = {
@@ -53,7 +55,6 @@ type Level = {
   sort_order: number
 }
 
-
 type ClassGroupLevel = {
   id: string
   level_id: string
@@ -68,10 +69,10 @@ const STATUS_SESI: Record<string, { label: string; cls: string }> = {
 }
 
 const STATUS_BAYAR: Record<string, { label: string; cls: string }> = {
-  unpaid:  { label: 'Belum Bayar',        cls: 'bg-[#FEE9E9] text-[#991B1B]' },
-  pending: { label: 'Menunggu',           cls: 'bg-[#FEF3E2] text-[#92400E]' },
-  paid:    { label: 'Lunas',              cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
-  overdue: { label: 'Terlambat',          cls: 'bg-[#FEE9E9] text-[#7F1D1D]' },
+  unpaid:  { label: 'Belum Bayar', cls: 'bg-[#FEE9E9] text-[#991B1B]' },
+  pending: { label: 'Menunggu',    cls: 'bg-[#FEF3E2] text-[#92400E]' },
+  paid:    { label: 'Lunas',       cls: 'bg-[#E6F4EC] text-[#1A5C36]' },
+  overdue: { label: 'Terlambat',   cls: 'bg-[#FEE9E9] text-[#7F1D1D]' },
 }
 
 const AVATAR_COLORS = ['#5C4FE5','#27A05A','#D97706','#DC2626','#0891B2','#7C3AED','#BE185D','#065F46']
@@ -90,8 +91,8 @@ function getInitials(name: string) {
 }
 
 export default function KelasDetailPage() {
-  const params  = useParams()
-  const kelasId = params.id as string
+  const params   = useParams()
+  const kelasId  = params.id as string
   const supabase = createClient()
 
   const [kelas,       setKelas]       = useState<KelasDetail | null>(null)
@@ -109,8 +110,8 @@ export default function KelasDetailPage() {
   const [savingProgress,   setSavingProgress]   = useState(false)
 
   // Perpanjang state
-  const [showPerpanjang,    setShowPerpanjang]    = useState(false)
-  const [perpanjangEnr,     setPerpanjangEnr]     = useState<Enrollment | null>(null)
+  const [showPerpanjang, setShowPerpanjang] = useState(false)
+  const [perpanjangEnr,  setPerpanjangEnr]  = useState<Enrollment | null>(null)
 
   // Level state
   const [classLevels,     setClassLevels]     = useState<ClassGroupLevel[]>([])
@@ -120,21 +121,20 @@ export default function KelasDetailPage() {
   const [removingLevelId, setRemovingLevelId] = useState<string | null>(null)
 
   // Edit sesi
-  const [editSession,  setEditSession]  = useState<Session | null>(null)
-  const [eDate,        setEDate]        = useState('')
-  const [eTime,        setETime]        = useState('')
-  const [eZoom,        setEZoom]        = useState('')
-  const [eStatus,      setEStatus]      = useState('')
-  const [eSaving,      setESaving]      = useState(false)
-  const [eErr,         setEErr]         = useState('')
-  const [eOk,          setEOk]          = useState(false)
+  const [editSession, setEditSession] = useState<Session | null>(null)
+  const [eDate,       setEDate]       = useState('')
+  const [eTime,       setETime]       = useState('')
+  const [eZoom,       setEZoom]       = useState('')
+  const [eStatus,     setEStatus]     = useState('')
+  const [eSaving,     setESaving]     = useState(false)
+  const [eErr,        setEErr]        = useState('')
+  const [eOk,         setEOk]         = useState(false)
 
   useEffect(() => { fetchAll() }, [kelasId])
   useEffect(() => { if (kelasId) fetchLevels() }, [kelasId])
   useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
 
   async function fetchProgress() {
-    // Get class type & current_unit_position
     const { data: cg } = await supabase
       .from('class_groups')
       .select('current_unit_position, class_types(name), class_group_levels(level_id)')
@@ -146,7 +146,6 @@ export default function KelasDetailPage() {
     const typeName = (cg.class_types as any)?.name ?? ''
     setClassType(typeName)
 
-    // Get units dari level yang terkait
     const levelIds = (cg.class_group_levels as any[])?.map((l: any) => l.level_id) || []
     if (levelIds.length > 0) {
       const { data: u } = await supabase
@@ -157,7 +156,6 @@ export default function KelasDetailPage() {
       setUnits(u ?? [])
     }
 
-    // Kalau Privat, fetch per-siswa progress
     if (typeName === 'Privat') {
       const { data: sp } = await supabase
         .from('student_unit_progress')
@@ -182,10 +180,10 @@ export default function KelasDetailPage() {
     setSavingProgress(true)
     await supabase.from('student_unit_progress')
       .upsert({
-        student_id: studentId,
-        class_group_id: kelasId,
+        student_id:            studentId,
+        class_group_id:        kelasId,
         current_unit_position: unitPos,
-        updated_at: new Date().toISOString(),
+        updated_at:            new Date().toISOString(),
       }, { onConflict: 'student_id,class_group_id' })
     setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
     setSavingProgress(false)
@@ -194,20 +192,22 @@ export default function KelasDetailPage() {
   async function fetchAll() {
     setLoading(true)
 
-    // Fetch kelas
+    // FIX: tambah class_type_id ke select supaya bisa dikirim ke PerpanjangModal
     const { data: k } = await supabase
       .from('class_groups')
-      .select('id, label, status, max_participants, zoom_link, courses(name), class_types(name), tutors(id, profiles(full_name))')
-      .eq('id', kelasId).single()
+      .select('id, label, status, max_participants, zoom_link, class_type_id, courses(name), class_types(name), tutors(id, profiles(full_name))')
+      .eq('id', kelasId)
+      .single()
     setKelas(k as any)
 
-    // Fetch enrollments + nama siswa
+    // Fetch enrollments
     const { data: enr } = await supabase
       .from('enrollments')
       .select('id, student_id, sessions_total, session_start_offset, sessions_used, status')
       .eq('class_group_id', kelasId)
 
     if (enr && enr.length > 0) {
+      // Fetch nama siswa
       const sIds = enr.map((e: any) => e.student_id)
       const { data: studs } = await supabase.from('students').select('id, profile_id').in('id', sIds)
       const profIds = (studs ?? []).map((s: any) => s.profile_id).filter(Boolean)
@@ -217,7 +217,35 @@ export default function KelasDetailPage() {
         const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]))
         nameMap = Object.fromEntries((studs ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
       }
-      setEnrollments(enr.map((e: any) => ({ ...e, student_name: nameMap[e.student_id] ?? 'Siswa' })))
+
+      // FIX: fetch attended_count dari attendances — jangan pakai sessions_used yang stale
+      const { data: completedSessions } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('class_group_id', kelasId)
+        .eq('status', 'completed')
+
+      const completedIds = (completedSessions ?? []).map((s: any) => s.id)
+      let attendedMap: Record<string, number> = {}
+
+      if (completedIds.length > 0) {
+        const { data: attendances } = await supabase
+          .from('attendances')
+          .select('student_id')
+          .in('session_id', completedIds)
+          .eq('status', 'hadir')
+        ;(attendances ?? []).forEach((a: any) => {
+          attendedMap[a.student_id] = (attendedMap[a.student_id] ?? 0) + 1
+        })
+      }
+
+      setEnrollments(enr.map((e: any) => ({
+        ...e,
+        student_name:   nameMap[e.student_id] ?? 'Siswa',
+        attended_count: attendedMap[e.student_id] ?? 0,
+      })))
+    } else {
+      setEnrollments([])
     }
 
     // Fetch sessions
@@ -228,14 +256,7 @@ export default function KelasDetailPage() {
       .order('scheduled_at', { ascending: true })
     setSessions((sess ?? []) as Session[])
 
-    // Fetch payments
-    const { data: pays } = await supabase
-      .from('payments')
-      .select('id, amount, status, period_label, method, created_at, student_id')
-      .eq('enrollment_id', kelasId) // fallback, coba via enrollment
-      .order('created_at', { ascending: false })
-
-    // Fetch via enrollments jika perlu
+    // Fetch payments via enrollments
     const enrollIds = (enr ?? []).map((e: any) => e.id)
     let payList: any[] = []
     if (enrollIds.length > 0) {
@@ -247,7 +268,6 @@ export default function KelasDetailPage() {
       payList = pays2 ?? []
     }
 
-    // Nama siswa untuk payment
     const sIds2 = [...new Set(payList.map((p: any) => p.student_id))]
     let payNameMap: Record<string, string> = {}
     if (sIds2.length > 0) {
@@ -265,7 +285,6 @@ export default function KelasDetailPage() {
   }
 
   async function fetchLevels() {
-    // Fetch level yang sudah di-assign ke kelas ini
     const { data: cgl } = await supabase
       .from('class_group_levels')
       .select('id, level_id, levels(id, name, description, target_age, sort_order)')
@@ -273,7 +292,6 @@ export default function KelasDetailPage() {
       .order('levels(sort_order)')
     setClassLevels((cgl ?? []).map((c: any) => ({ id: c.id, level_id: c.level_id, level: c.levels })))
 
-    // Fetch semua level dari kursus yang sama dengan kelas ini
     const { data: k } = await supabase
       .from('class_groups')
       .select('course_id')
@@ -287,7 +305,6 @@ export default function KelasDetailPage() {
         .eq('course_id', k.course_id)
         .eq('is_active', true)
         .order('sort_order')
-      // Filter: hanya tampilkan yang belum di-assign
       setAvailableLevels((allLevels ?? []).filter((l: any) => !assignedIds.includes(l.id)))
     }
   }
@@ -322,8 +339,7 @@ export default function KelasDetailPage() {
     setETime(timePart.slice(0, 5))
     setEZoom(s.zoom_link ?? '')
     setEStatus(s.status)
-    setEErr('')
-    setEOk(false)
+    setEErr(''); setEOk(false)
     setEditSession(s)
   }
 
@@ -348,22 +364,15 @@ export default function KelasDetailPage() {
 
   async function markSessionComplete(id: string) {
     await supabase.from('sessions').update({ status: 'completed' }).eq('id', id)
-
-    // Cek auto-arsip: semua sesi sudah completed/cancelled?
     const { data: remainingSessions } = await supabase
       .from('sessions')
       .select('id')
       .eq('class_group_id', kelasId)
       .in('status', ['scheduled', 'rescheduled'])
       .neq('id', id)
-
     if (!remainingSessions || remainingSessions.length === 0) {
-      // Semua sesi selesai → arsip kelas otomatis
-      await supabase.from('class_groups')
-        .update({ status: 'inactive' })
-        .eq('id', kelasId)
+      await supabase.from('class_groups').update({ status: 'inactive' }).eq('id', kelasId)
     }
-
     fetchAll()
   }
 
@@ -446,10 +455,10 @@ export default function KelasDetailPage() {
       {/* Tabs */}
       <div className="flex gap-1 bg-[#F7F6FF] p-1 rounded-xl mb-5 border border-[#E5E3FF]">
         {([
-          { key: 'siswa',      label: 'Siswa',      icon: <Users size={13}/>,       count: enrollments.length },
-          { key: 'jadwal',     label: 'Jadwal',     icon: <Calendar size={13}/>,    count: sessions.length },
-          { key: 'pembayaran', label: 'Pembayaran', icon: <CreditCard size={13}/>,  count: payments.length },
-          { key: 'level',      label: 'Level',      icon: <BookOpen size={13}/>,    count: classLevels.length },
+          { key: 'siswa',      label: 'Siswa',       icon: <Users size={13}/>,      count: enrollments.length },
+          { key: 'jadwal',     label: 'Jadwal',      icon: <Calendar size={13}/>,   count: sessions.length },
+          { key: 'pembayaran', label: 'Pembayaran',  icon: <CreditCard size={13}/>, count: payments.length },
+          { key: 'level',      label: 'Level',       icon: <BookOpen size={13}/>,   count: classLevels.length },
           { key: 'progress',   label: '📍 Progress', icon: <BookOpen size={13}/>,   count: units.length },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
@@ -474,10 +483,14 @@ export default function KelasDetailPage() {
             <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Belum ada siswa terdaftar.</div>
           ) : (
             enrollments.map((enr, idx) => {
-              const pct = Math.min(((enr.session_start_offset - 1 + (enr.sessions_used ?? 0)) / enr.sessions_total) * 100, 100)
-              const st  = enr.status === 'active' ? { label: 'Aktif', cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
-                        : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
-                        : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
+              // FIX: formula progress — hitung dari attended_count, bukan sessions_used yang stale
+              // done = (start_offset - 1) + jumlah sesi yang benar-benar hadir
+              // Contoh Fazila: (8-1) + 1 = 8 → 8/8 = 100% ✅
+              const done = (enr.session_start_offset - 1) + (enr.attended_count ?? 0)
+              const pct  = Math.min((done / enr.sessions_total) * 100, 100)
+              const st   = enr.status === 'active'   ? { label: 'Aktif',    cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
+                         : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
+                         : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
               return (
                 <div key={enr.id} className={`flex items-center gap-3 px-5 py-4 ${idx < enrollments.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
                   <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
@@ -488,10 +501,11 @@ export default function KelasDetailPage() {
                     <div className="text-sm font-bold text-[#1A1640]">{enr.student_name}</div>
                     <div className="flex items-center gap-2 mt-1">
                       <div className="w-24 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#5C4FE5] rounded-full" style={{width: `${pct}%`}}/>
+                        <div className="h-full bg-[#5C4FE5] rounded-full transition-all" style={{width: `${pct}%`}}/>
                       </div>
+                      {/* FIX: tampilkan done/total bukan hardcode session_start_offset */}
                       <span className="text-[10px] font-bold text-[#5C4FE5]">
-                        {enr.session_start_offset}/{enr.sessions_total} sesi
+                        {done}/{enr.sessions_total} sesi
                       </span>
                     </div>
                   </div>
@@ -522,7 +536,6 @@ export default function KelasDetailPage() {
             </div>
           ) : (
             <>
-              {/* Summary sesi */}
               <div className="px-5 py-3 bg-[#F7F6FF] border-b border-[#E5E3FF] flex items-center gap-4 text-xs">
                 <span className="text-[#7B78A8]">Total: <strong className="text-[#1A1640]">{sessions.length} sesi</strong></span>
                 <span className="text-[#7B78A8]">Selesai: <strong className="text-[#27A05A]">{selesai}</strong></span>
@@ -606,6 +619,7 @@ export default function KelasDetailPage() {
           )}
         </div>
       )}
+
       {/* Tab: Progress */}
       {activeTab === 'progress' && (
         <div className="space-y-4">
@@ -623,7 +637,7 @@ export default function KelasDetailPage() {
                     <p className="font-bold text-[#1A1640] mb-3">{enr.student_name}</p>
                     <div className="space-y-2">
                       {units.map(unit => {
-                        const isDone = unit.position < currentPos
+                        const isDone   = unit.position < currentPos
                         const isActive = unit.position === currentPos
                         return (
                           <div key={unit.id} className={`flex items-center justify-between p-3 rounded-lg border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'}`}>
@@ -631,7 +645,14 @@ export default function KelasDetailPage() {
                               <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
                               <span className={`text-sm font-medium ${unit.position > currentPos ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
                             </div>
-                            {isActive && <button onClick={() => saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length))} disabled={savingProgress || currentPos >= units.length} className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">Naik Unit →</button>}
+                            {isActive && (
+                              <button
+                                onClick={() => saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length))}
+                                disabled={savingProgress || currentPos >= units.length}
+                                className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
+                                Naik Unit →
+                              </button>
+                            )}
                           </div>
                         )
                       })}
@@ -645,10 +666,11 @@ export default function KelasDetailPage() {
               <p className="font-bold text-[#1A1640] mb-3">Unit Progress Kelas</p>
               <div className="space-y-2 mb-4">
                 {units.map(unit => {
-                  const isDone = unit.position < classCurrentUnit
+                  const isDone   = unit.position < classCurrentUnit
                   const isActive = unit.position === classCurrentUnit
                   return (
-                    <div key={unit.id} onClick={() => setClassCurrentUnit(unit.position)} className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
+                    <div key={unit.id} onClick={() => setClassCurrentUnit(unit.position)}
+                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-2">
                         <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
                         <span className={`text-sm font-medium ${unit.position > classCurrentUnit ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
@@ -658,7 +680,10 @@ export default function KelasDetailPage() {
                   )
                 })}
               </div>
-              <button onClick={saveClassProgress} disabled={savingProgress} className="w-full py-2.5 bg-[#5C4FE5] text-white rounded-xl font-semibold text-sm hover:bg-[#4a3ec7] disabled:opacity-50">{savingProgress ? 'Menyimpan...' : '💾 Simpan Progress'}</button>
+              <button onClick={saveClassProgress} disabled={savingProgress}
+                className="w-full py-2.5 bg-[#5C4FE5] text-white rounded-xl font-semibold text-sm hover:bg-[#4a3ec7] disabled:opacity-50">
+                {savingProgress ? 'Menyimpan...' : '💾 Simpan Progress'}
+              </button>
             </div>
           )}
         </div>
@@ -667,7 +692,6 @@ export default function KelasDetailPage() {
       {/* Tab: Level */}
       {activeTab === 'level' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-          {/* Tambah level */}
           <div className="px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF]">
             <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">Tambah Level ke Kelas Ini</p>
             {availableLevels.length === 0 ? (
@@ -678,29 +702,21 @@ export default function KelasDetailPage() {
               </p>
             ) : (
               <div className="flex gap-2">
-                <select
-                  value={selectedLevelId}
-                  onChange={e => setSelectedLevelId(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-[#E5E3FF] text-sm text-[#1A1640] bg-white focus:outline-none focus:border-[#5C4FE5]"
-                >
+                <select value={selectedLevelId} onChange={e => setSelectedLevelId(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-[#E5E3FF] text-sm text-[#1A1640] bg-white focus:outline-none focus:border-[#5C4FE5]">
                   <option value="">Pilih level...</option>
                   {availableLevels.map(l => (
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
-                <button
-                  onClick={handleAddLevel}
-                  disabled={!selectedLevelId || addingLevel}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#5C4FE5] text-white text-sm font-semibold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50"
-                >
+                <button onClick={handleAddLevel} disabled={!selectedLevelId || addingLevel}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#5C4FE5] text-white text-sm font-semibold rounded-xl hover:bg-[#3D34C4] transition disabled:opacity-50">
                   <Plus size={14}/>
                   {addingLevel ? 'Menambah...' : 'Tambah'}
                 </button>
               </div>
             )}
           </div>
-
-          {/* Daftar level yang sudah di-assign */}
           {classLevels.length === 0 ? (
             <div className="px-5 py-12 text-center">
               <div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3">
@@ -731,12 +747,8 @@ export default function KelasDetailPage() {
                     : 'Remaja & Dewasa'}
                   </span>
                 )}
-                <button
-                  onClick={() => handleRemoveLevel(cgl.id)}
-                  disabled={removingLevelId === cgl.id}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition disabled:opacity-50"
-                  title="Hapus dari kelas"
-                >
+                <button onClick={() => handleRemoveLevel(cgl.id)} disabled={removingLevelId === cgl.id}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition disabled:opacity-50" title="Hapus dari kelas">
                   <Trash size={14}/>
                 </button>
               </div>
@@ -789,14 +801,8 @@ export default function KelasDetailPage() {
                   placeholder="https://zoom.us/j/..."
                   className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
               </div>
-              {eErr && (
-                <p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-xl border border-red-200">{eErr}</p>
-              )}
-              {eOk && (
-                <p className="text-[11px] text-green-700 px-3 py-2 bg-green-50 rounded-xl border border-green-200 flex items-center gap-1.5">
-                  <Check size={12}/> Berhasil disimpan!
-                </p>
-              )}
+              {eErr && <p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-xl border border-red-200">{eErr}</p>}
+              {eOk  && <p className="text-[11px] text-green-700 px-3 py-2 bg-green-50 rounded-xl border border-green-200 flex items-center gap-1.5"><Check size={12}/> Berhasil disimpan!</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditSession(null)}
                   className="flex-1 py-2.5 border border-[#E5E3FF] text-[#7B78A8] font-semibold rounded-xl text-sm hover:bg-[#F7F6FF] transition">
@@ -811,13 +817,14 @@ export default function KelasDetailPage() {
           </div>
         </div>
       )}
+
       {/* Modal Perpanjang */}
       {showPerpanjang && perpanjangEnr && kelas && (
         <PerpanjangModal
           kelasId={kelasId}
           kelasLabel={kelas.label}
           kelasZoomLink={kelas.zoom_link}
-          kelasClassTypeId={(kelas as any).class_type_id ?? ''}
+          kelasClassTypeId={kelas.class_type_id}   // ← FIX: pakai field langsung, bukan as any
           enrollment={perpanjangEnr}
           onClose={() => setShowPerpanjang(false)}
           onSuccess={() => { setShowPerpanjang(false); fetchAll() }}
