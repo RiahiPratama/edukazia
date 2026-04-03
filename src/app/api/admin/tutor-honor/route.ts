@@ -2,8 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-function createClient() {
-  const cookieStore = cookies()
+// ── Helper — harus dipanggil di dalam handler karena cookies() adalah async di Next.js 15
+async function createClient() {
+  const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -27,7 +28,7 @@ function createClient() {
 // ── GET — ambil semua pembayaran honor ────────────────────────────────────────
 export async function GET() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data: payments, error } = await supabase
       .from('tutor_honor_payments')
@@ -143,7 +144,7 @@ export async function GET() {
 // ── POST — catat pembayaran honor baru ────────────────────────────────────────
 export async function POST(req: Request) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     const body = await req.json()
 
     const { tutor_id, enrollment_id, amount, sessions_count, scheme, paid_at, notes } = body
