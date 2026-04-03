@@ -31,6 +31,10 @@ export default function TambahTutorPage() {
   const [error,           setError]           = useState('')
   const [success,         setSuccess]         = useState(false)
 
+  const [bimbels, setBimbels] = useState<{id: string; name: string}[]>([])
+  const [b2bType, setB2bType] = useState<'solo' | 'bimbel'>('solo')
+  const [selectedBimbelId, setSelectedBimbelId] = useState('')
+
   const [form, setForm] = useState({
     full_name:                 '',
     phone:                     '',
@@ -43,6 +47,7 @@ export default function TambahTutorPage() {
     tutor_type:                'internal',
     is_owner:                  false,
     bimbel_name:               '',
+    bimbel_id:                 '',
     education_level:           '',
     education_major:           '',
     education_university:      '',
@@ -57,6 +62,9 @@ export default function TambahTutorPage() {
   useEffect(() => {
     supabase.from('courses').select('id, name, color').eq('is_active', true).then(({ data }) => {
       if (data) setCourses(data)
+    })
+    supabase.from('bimbels').select('id, name').eq('subscription_status', 'active').then(({ data }) => {
+      if (data) setBimbels(data)
     })
   }, [])
 
@@ -102,6 +110,8 @@ export default function TambahTutorPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...form,
+        bimbel_id: b2bType === 'bimbel' ? selectedBimbelId : null,
+        b2b_type: form.tutor_type === 'b2b' ? b2bType : null,
         subjects,
         achievements,
         selectedCourses,
@@ -181,10 +191,49 @@ export default function TambahTutorPage() {
             ))}
           </div>
           {form.tutor_type === 'b2b' && (
-            <div>
-              <label className={labelCls}>Nama Bimbel *</label>
-              <input name="bimbel_name" value={form.bimbel_name} onChange={handleChange}
-                placeholder="Nama bimbel mitra..." className={inputCls} />
+            <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Tipe B2B</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'solo',   label: '👤 Solo',   desc: 'Tutor individu dengan murid sendiri' },
+                  { value: 'bimbel', label: '🏢 Bimbel',  desc: 'Bagian dari institusi bimbel' },
+                ].map(opt => (
+                  <button type="button" key={opt.value}
+                    onClick={() => setB2bType(opt.value as 'solo' | 'bimbel')}
+                    className={`p-3 rounded-xl border-2 text-left transition-all
+                      ${b2bType === opt.value ? 'border-blue-500 bg-blue-100 ring-2 ring-offset-1 ring-blue-400' : 'border-blue-200 bg-white hover:border-blue-400'}`}>
+                    <p className="font-bold text-sm text-[#1A1640]">{opt.label}</p>
+                    <p className="text-xs text-[#7B78A8] mt-0.5">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+
+              {b2bType === 'solo' && (
+                <div>
+                  <label className={labelCls}>Nama Usaha / Brand (opsional)</label>
+                  <input name="bimbel_name" value={form.bimbel_name} onChange={handleChange}
+                    placeholder="Contoh: Les Privat Bu Ani..." className={inputCls} />
+                </div>
+              )}
+
+              {b2bType === 'bimbel' && (
+                <div>
+                  <label className={labelCls}>Pilih Bimbel *</label>
+                  {bimbels.length === 0 ? (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-700">
+                      ⚠️ Belum ada bimbel aktif. Tambah bimbel dulu di menu <strong>Bimbel (B2B)</strong>.
+                    </div>
+                  ) : (
+                    <select value={selectedBimbelId} onChange={e => setSelectedBimbelId(e.target.value)}
+                      className={inputCls}>
+                      <option value="">Pilih bimbel...</option>
+                      {bimbels.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

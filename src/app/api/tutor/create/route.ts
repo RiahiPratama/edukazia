@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
       tutor_type,
       is_owner,
       bimbel_name,
+      bimbel_id,
+      b2b_type,
       education_level,
       education_major,
       education_university,
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest) {
         tutor_type:                tutor_type ?? 'internal',
         is_owner:                  is_owner ?? false,
         bimbel_name:               bimbel_name?.trim() || null,
+        bimbel_id:                 bimbel_id || null,
         education_level:           education_level || null,
         education_major:           education_major?.trim() || null,
         education_university:      education_university?.trim() || null,
@@ -106,7 +109,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: tutorErr?.message ?? 'Gagal menyimpan tutor.' }, { status: 400 })
     }
 
-    // ── 4. Simpan kursus ──
+    // ── 4. Update bimbel_id di tutors jika B2B bimbel ──
+    if (tutor_type === 'b2b' && b2b_type === 'bimbel' && bimbel_id && tutor) {
+      await supabaseAdmin
+        .from('tutors')
+        .update({ bimbel_id })
+        .eq('id', tutor.id)
+    }
+
+    // ── 5. Simpan kursus ──
     if (selectedCourses?.length > 0) {
       await supabaseAdmin
         .from('tutor_courses')
