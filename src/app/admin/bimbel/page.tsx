@@ -15,7 +15,7 @@ type Bimbel = {
   subscription_end: string | null
   notes: string | null
   created_at: string
-  tutors?: { id: string; profiles: { full_name: string } | null }[]
+  tutors?: { id: string; profiles: { full_name: string }[] | null }[]
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
@@ -224,7 +224,7 @@ export default function BimbelPage() {
                     <div className="flex flex-wrap gap-1">
                       {tutorList.map((t: any) => (
                         <span key={t.id} className="text-xs bg-[#F0EFFF] text-[#5C4FE5] px-2 py-0.5 rounded-full font-medium">
-                          {t.profiles?.full_name ?? '—'}
+                          {Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name ?? '—'}
                         </span>
                       ))}
                     </div>
