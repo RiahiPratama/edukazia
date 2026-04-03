@@ -3,53 +3,65 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, Video, ChevronDown, ChevronRight, Crown, Users, Building2, Clock, Lock, ExternalLink, Loader2, X } from 'lucide-react'
+import {
+  Video, FileText, BookOpen, Headphones,
+  ChevronDown, ChevronRight, ExternalLink,
+  Clock, Lock, Loader2, X, Crown, Users, Building2
+} from 'lucide-react'
 
+// ── Types ─────────────────────────────────────────────────────
 type TutorInfo = {
   id: string
   is_owner: boolean
   tutor_type: string
-  employment_status: string
 }
 
 type Material = {
   id: string
   title: string
   category: string
+  lesson_id: string
+  lesson_name: string
+  unit_name: string
+  chapter_title: string | null
+  level_name: string
   content_url: string | null
   canva_url: string | null
   slides_url: string | null
-  student_content_url: string | null
   storage_path: string | null
-  lesson_id: string
 }
 
-type Unit = {
-  id: string
-  unit_name: string
-  chapter_title: string | null
-  position: number
-  materials: Material[]
+type TabType = 'live_zoom' | 'kosakata' | 'bacaan' | 'cefr'
+
+// ── Tab config per tutor type ─────────────────────────────────
+const TABS_BY_ROLE: Record<string, TabType[]> = {
+  owner:    ['live_zoom', 'kosakata', 'bacaan', 'cefr'],
+  internal: ['live_zoom', 'kosakata'],
+  b2b:      ['live_zoom'],
 }
 
-type LevelData = {
-  level_id: string
-  level_name: string
-  course_name: string
-  units: Unit[]
+const TAB_INFO: Record<TabType, { label: string; icon: any; color: string }> = {
+  live_zoom: { label: 'Live Zoom',  icon: Video,      color: 'text-purple-600' },
+  kosakata:  { label: 'Kosakata',   icon: FileText,   color: 'text-yellow-600' },
+  bacaan:    { label: 'Bacaan',     icon: BookOpen,   color: 'text-blue-600'   },
+  cefr:      { label: 'CEFR',      icon: Headphones, color: 'text-green-600'  },
 }
 
+// ── Main Component ────────────────────────────────────────────
 export default function TutorMateriPage() {
   const supabase = createClient()
   const router = useRouter()
-  const [tutorInfo, setTutorInfo] = useState<TutorInfo | null>(null)
-  const [levelsData, setLevelsData] = useState<LevelData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [openLevels, setOpenLevels] = useState<Set<string>>(new Set())
-  const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
-  const [accessStatus, setAccessStatus] = useState<Record<string, 'allowed' | 'time_locked' | 'no_content'>>({})
-  const [embedModal, setEmbedModal] = useState<{ open: boolean; url: string; title: string; loading: boolean }>
-    ({ open: false, url: '', title: '', loading: false })
+
+  const [tutorInfo, setTutorInfo]     = useState<TutorInfo | null>(null)
+  const [materials, setMaterials]     = useState<Material[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [activeTab, setActiveTab]     = useState<TabType>('live_zoom')
+  const [openGroups, setOpenGroups]   = useState<Set<string>>(new Set())
+  const [hasActiveSession, setHasActiveSession] = useState(false)
+
+  const [embedModal, setEmbedModal] = useState<{
+    open: boolean; url: string; title: string; loading: boolean
+  }>({ open: false, url: '', title: '', loading: false })
 
   useEffect(() => { loadAll() }, [])
 
@@ -61,191 +73,155 @@ export default function TutorMateriPage() {
     // Get tutor info
     const { data: tutor } = await supabase
       .from('tutors')
-      .select('id, is_owner, tutor_type, employment_status')
+      .select('id, is_owner, tutor_type')
       .eq('profile_id', user.id)
       .single()
 
     if (!tutor) { setLoading(false); return }
     setTutorInfo(tutor)
 
-    // Get kelas yang diajar tutor
+    // Get class groups tutor ini
     const { data: classGroups } = await supabase
       .from('class_groups')
-      .select('id, label')
+      .select('id')
       .eq('tutor_id', tutor.id)
       .eq('status', 'active')
 
-    const classGroupIds = classGroups?.map((cg: any) => cg.id) || []
+    const classGroupIds = classGroups?.map(cg => cg.id) || []
 
-    // Get level IDs dari class_group_levels
+    // Get level IDs
     const { data: cgl } = classGroupIds.length > 0
       ? await supabase
           .from('class_group_levels')
-          .select('class_group_id, level_id')
+          .select('level_id')
           .in('class_group_id', classGroupIds)
       : { data: [] }
 
-    // Extract unique level IDs
-    const levelIds = Array.from(new Set(
-      cgl?.map((c: any) => c.level_id).filter(Boolean) || []
-    ))
-
+    const levelIds = Array.from(new Set(cgl?.map((c: any) => c.level_id).filter(Boolean) || []))
     if (levelIds.length === 0) { setLoading(false); return }
 
-    // Fetch levels + courses
+    // Get levels
     const { data: levels } = await supabase
       .from('levels')
-      .select('id, name, course_id, courses:course_id(name)')
+      .select('id, name')
       .in('id', levelIds)
 
-    // Fetch units
+    // Get units
     const { data: units } = await supabase
       .from('units')
-      .select('id, unit_name, position, level_id, chapter_id')
+      .select('id, unit_name, level_id, chapter_id, position')
       .in('level_id', levelIds)
       .order('position')
 
     const unitIds = units?.map(u => u.id) || []
-    const chapterIds = [...new Set(units?.map(u => u.chapter_id).filter(Boolean) || [])]
+    const chapterIds = [...new Set(units?.map(u => u.chapter_id).filter(Boolean) || [])] as string[]
 
-    // Fetch chapters
+    // Get chapters
     const { data: chapters } = chapterIds.length > 0
       ? await supabase.from('chapters').select('id, chapter_title').in('id', chapterIds)
       : { data: [] }
 
-    // Fetch lessons
-    const { data: lessons } = await supabase
-      .from('lessons')
-      .select('id, lesson_name, position, unit_id')
-      .in('unit_id', unitIds)
-      .order('position')
+    // Get lessons
+    const { data: lessons } = unitIds.length > 0
+      ? await supabase
+          .from('lessons')
+          .select('id, lesson_name, unit_id, position')
+          .in('unit_id', unitIds)
+          .order('position')
+      : { data: [] }
 
     const lessonIds = lessons?.map(l => l.id) || []
 
-    // Fetch materials + contents
-    const { data: materials } = await supabase
-      .from('materials')
-      .select('id, title, category, lesson_id, is_published')
-      .in('lesson_id', lessonIds)
-      .eq('is_published', true)
-      .order('position')
+    // Get all materials (semua kategori)
+    const { data: mats } = lessonIds.length > 0
+      ? await supabase
+          .from('materials')
+          .select('id, title, category, lesson_id, position')
+          .in('lesson_id', lessonIds)
+          .eq('is_published', true)
+          .order('position')
+      : { data: [] }
 
-    const materialIds = materials?.map(m => m.id) || []
+    const materialIds = mats?.map(m => m.id) || []
 
-    const { data: contents } = await supabase
-      .from('material_contents')
-      .select('material_id, content_url, canva_url, slides_url, student_content_url, storage_path')
-      .in('material_id', materialIds)
+    // Get material contents
+    const { data: contents } = materialIds.length > 0
+      ? await supabase
+          .from('material_contents')
+          .select('material_id, content_url, canva_url, slides_url, storage_path')
+          .in('material_id', materialIds)
+      : { data: [] }
 
     // Check time-based access for freelancer
-    let timeAccess: Record<string, boolean> = {}
     if (!tutor.is_owner && tutor.tutor_type === 'internal') {
       const now = new Date()
       const { data: sessions } = await supabase
         .from('sessions')
-        .select('id, scheduled_at, class_group_id')
+        .select('id, scheduled_at')
         .in('class_group_id', classGroupIds)
-        .gte('scheduled_at', new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString())
-        .lte('scheduled_at', new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString())
+        .gte('scheduled_at', new Date(now.getTime() - 60 * 60 * 1000).toISOString())
+        .lte('scheduled_at', new Date(now.getTime() + 60 * 60 * 1000).toISOString())
 
-      sessions?.forEach(s => {
-        const sessionTime = new Date(s.scheduled_at)
-        const diffMin = (now.getTime() - sessionTime.getTime()) / 60000
-        // Allow: 20 menit sebelum (-20) sampai 5 menit setelah (+5)
-        if (diffMin >= -20 && diffMin <= 5) {
-          timeAccess[s.class_group_id] = true
-        }
+      const active = sessions?.some(s => {
+        const diffMin = (now.getTime() - new Date(s.scheduled_at).getTime()) / 60000
+        return diffMin >= -20 && diffMin <= 5
       })
+      setHasActiveSession(!!active)
     }
 
-    // Build access status per material
-    const accessMap: Record<string, 'allowed' | 'time_locked' | 'no_content'> = {}
-    materials?.forEach(m => {
+    // Build flat materials list
+    const allMaterials: Material[] = (mats || []).map(m => {
+      const lesson = lessons?.find(l => l.id === m.lesson_id)
+      const unit = units?.find(u => u.id === lesson?.unit_id)
+      const chapter = chapters?.find(c => c.id === unit?.chapter_id)
+      const level = levels?.find(l => l.id === unit?.level_id)
       const content = contents?.find((c: any) => c.material_id === m.id)
 
-      // Non-live_zoom
-      if (m.category !== 'live_zoom') {
-        if (m.category === 'bacaan') {
-          accessMap[m.id] = (content as any)?.storage_path ? 'allowed' : 'no_content'
-        } else if (m.category === 'cefr') {
-          accessMap[m.id] = m.lesson_id ? 'allowed' : 'no_content'
-        } else {
-          accessMap[m.id] = (content as any)?.content_url ? 'allowed' : 'no_content'
-        }
-        return
-      }
-
-      // Live zoom — berdasarkan tutor type
-      if (tutor.is_owner) {
-        accessMap[m.id] = (content as any)?.canva_url ? 'allowed' : 'no_content'
-      } else {
-        if (!(content as any)?.slides_url) {
-          accessMap[m.id] = 'no_content'
-        } else if (tutor.tutor_type === 'internal') {
-          const hasActiveSession = Object.values(timeAccess).some(v => v)
-          accessMap[m.id] = hasActiveSession ? 'allowed' : 'time_locked'
-        } else {
-          accessMap[m.id] = 'allowed'
-        }
-      }
-    })
-    setAccessStatus(accessMap)
-
-    // Build levelsData — sort level by name
-    const sortedLevelIds = [...levelIds].sort((a, b) => {
-      const la = levels?.find(l => l.id === a)?.name || ''
-      const lb = levels?.find(l => l.id === b)?.name || ''
-      return la.localeCompare(lb)
-    })
-
-    const result: LevelData[] = sortedLevelIds.map(levelId => {
-      const level = levels?.find(l => l.id === levelId)
-      if (!level) return null
-      const course = Array.isArray(level.courses) ? level.courses[0] : level.courses
-
-      const levelUnits = units?.filter(u => u.level_id === levelId) || []
-      const builtUnits: Unit[] = levelUnits.map(unit => {
-        const chapter = chapters?.find(c => c.id === unit.chapter_id)
-        const unitLessons = lessons?.filter(l => l.unit_id === unit.id) || []
-        const unitMaterials: Material[] = unitLessons.flatMap(lesson => {
-          return (materials?.filter(m => m.lesson_id === lesson.id) || []).map(m => {
-            const content = contents?.find(c => c.material_id === m.id)
-            return {
-              id: m.id,
-              title: m.title,
-              category: m.category,
-              content_url: (content as any)?.content_url || null,
-              canva_url: (content as any)?.canva_url || null,
-              slides_url: (content as any)?.slides_url || null,
-              student_content_url: (content as any)?.student_content_url || null,
-              storage_path: (content as any)?.storage_path || null,
-              lesson_id: m.lesson_id,
-            }
-          })
-        })
-        return {
-          id: unit.id,
-          unit_name: unit.unit_name,
-          chapter_title: chapter?.chapter_title || null,
-          position: unit.position,
-          materials: unitMaterials,
-        }
-      })
-
       return {
-        level_id: levelId,
-        level_name: level.name,
-        course_name: course?.name || '',
-        units: builtUnits,
+        id: m.id,
+        title: m.title,
+        category: m.category,
+        lesson_id: m.lesson_id,
+        lesson_name: lesson?.lesson_name || '',
+        unit_name: unit?.unit_name || '',
+        chapter_title: chapter?.chapter_title || null,
+        level_name: level?.name || '',
+        content_url: (content as any)?.content_url || null,
+        canva_url: (content as any)?.canva_url || null,
+        slides_url: (content as any)?.slides_url || null,
+        storage_path: (content as any)?.storage_path || null,
       }
-    }).filter(Boolean) as LevelData[]
+    })
 
-    setLevelsData(result)
+    setMaterials(allMaterials)
     setLoading(false)
   }
 
+  // ── Access check ──────────────────────────────────────────
+  const canAccess = (material: Material): 'allowed' | 'time_locked' | 'no_content' => {
+    if (material.category === 'bacaan') {
+      return material.storage_path ? 'allowed' : 'no_content'
+    }
+    if (material.category === 'cefr') {
+      return material.lesson_id ? 'allowed' : 'no_content'
+    }
+    if (material.category === 'kosakata') {
+      return material.content_url ? 'allowed' : 'no_content'
+    }
+    // live_zoom
+    if (tutorInfo?.is_owner) {
+      return material.canva_url ? 'allowed' : 'no_content'
+    }
+    if (!material.slides_url) return 'no_content'
+    if (tutorInfo?.tutor_type === 'internal') {
+      return hasActiveSession ? 'allowed' : 'time_locked'
+    }
+    return 'allowed'
+  }
+
+  // ── Open material ─────────────────────────────────────────
   const openMaterial = async (material: Material) => {
-    const status = accessStatus[material.id]
+    const status = canAccess(material)
     if (status === 'time_locked') {
       alert('🔒 Materi hanya bisa diakses 20 menit sebelum kelas dimulai.')
       return
@@ -255,35 +231,29 @@ export default function TutorMateriPage() {
       return
     }
 
-    // Bacaan → render via tutor render page
+    // Bacaan → render page
     if (material.category === 'bacaan' && material.storage_path) {
       router.push(`/tutor/render/${material.storage_path}`)
       return
     }
-
-    // CEFR → render via tutor render page pakai lesson_id
-    if (material.category === 'cefr' && material.lesson_id) {
+    // CEFR → render page
+    if (material.category === 'cefr') {
       router.push(`/tutor/render/${material.lesson_id}`)
       return
     }
 
-    // Tentukan URL berdasarkan kategori & tutor type
-    let url: string | null = null
-    if (material.category === 'live_zoom') {
-      url = tutorInfo?.is_owner ? material.canva_url : material.slides_url
-    } else {
-      url = material.content_url
-    }
+    // URL-based materials
+    const url = material.category === 'live_zoom'
+      ? (tutorInfo?.is_owner ? material.canva_url : material.slides_url)
+      : material.content_url
 
     if (!url) return
 
-    // Canva → buka tab baru
     if (url.includes('canva')) {
       window.open(url, '_blank')
       return
     }
 
-    // Google URL → embed via modal
     if (url.includes('google.com')) {
       setEmbedModal({ open: true, url: '', title: material.title, loading: true })
       try {
@@ -305,149 +275,178 @@ export default function TutorMateriPage() {
     window.open(url, '_blank')
   }
 
-  const getCategoryInfo = (category: string) => {
-    switch (category) {
-      case 'live_zoom': return { label: 'Live Zoom', color: 'bg-purple-100 text-purple-700', icon: '📹' }
-      case 'kosakata': return { label: 'Kosakata', color: 'bg-yellow-100 text-yellow-700', icon: '📝' }
-      case 'bacaan': return { label: 'Bacaan', color: 'bg-blue-100 text-blue-700', icon: '📖' }
-      case 'cefr': return { label: 'CEFR', color: 'bg-green-100 text-green-700', icon: '🎧' }
-      default: return { label: category, color: 'bg-gray-100 text-gray-600', icon: '📄' }
+  // ── Group materials by level → chapter/unit ───────────────
+  const tabMaterials = materials.filter(m => m.category === activeTab)
+
+  type Group = { level: string; chapter: string | null; unit: string; items: Material[] }
+  const groups: Group[] = []
+
+  tabMaterials.forEach(m => {
+    const key = `${m.level_name}__${m.chapter_title || ''}__${m.unit_name}`
+    const existing = groups.find(g =>
+      g.level === m.level_name &&
+      g.chapter === m.chapter_title &&
+      g.unit === m.unit_name
+    )
+    if (existing) {
+      existing.items.push(m)
+    } else {
+      groups.push({ level: m.level_name, chapter: m.chapter_title, unit: m.unit_name, items: [m] })
     }
+  })
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
   }
 
-  const getTutorBadge = () => {
-    if (!tutorInfo) return null
-    if (tutorInfo.is_owner) return { label: 'Owner', color: 'bg-purple-100 text-purple-700', icon: <Crown size={12} className="inline mr-1"/> }
-    if (tutorInfo.tutor_type === 'b2b') return { label: 'B2B', color: 'bg-blue-100 text-blue-700', icon: <Building2 size={12} className="inline mr-1"/> }
-    return { label: 'Freelancer', color: 'bg-green-100 text-green-700', icon: <Users size={12} className="inline mr-1"/> }
-  }
+  // ── Tutor badge ───────────────────────────────────────────
+  const tutorBadge = tutorInfo?.is_owner
+    ? { label: 'Owner', color: 'bg-purple-100 text-purple-700', icon: Crown }
+    : tutorInfo?.tutor_type === 'b2b'
+    ? { label: 'B2B', color: 'bg-blue-100 text-blue-700', icon: Building2 }
+    : { label: 'Freelancer', color: 'bg-green-100 text-green-700', icon: Users }
 
-  const badge = getTutorBadge()
+  const roleKey = tutorInfo?.is_owner ? 'owner' : (tutorInfo?.tutor_type || 'internal')
+  const allowedTabs = TABS_BY_ROLE[roleKey] || ['live_zoom']
 
   if (loading) return (
     <div className="flex items-center justify-center p-16">
-      <Loader2 className="w-8 h-8 animate-spin text-[#5C4FE5]"/>
+      <Loader2 className="w-8 h-8 animate-spin text-[#5C4FE5]" />
     </div>
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora, sans-serif' }}>Materi Ajar</h1>
-          <p className="text-sm text-[#7B78A8] mt-1">Materi Live Zoom sesuai kelas yang kamu ajar</p>
+          <h1 className="text-2xl font-black text-[#1A1640]" style={{ fontFamily: 'Sora, sans-serif' }}>
+            Materi Ajar
+          </h1>
+          <p className="text-sm text-[#7B78A8] mt-0.5">
+            {materials.length} materi tersedia dari {[...new Set(materials.map(m => m.level_name))].length} level
+          </p>
         </div>
-        {badge && (
-          <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${badge.color}`}>
-            {badge.icon}{badge.label}
-          </span>
-        )}
+        {tutorInfo && (() => {
+          const BadgeIcon = tutorBadge.icon
+          return (
+            <span className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full ${tutorBadge.color}`}>
+              <BadgeIcon size={12} />{tutorBadge.label}
+            </span>
+          )
+        })()}
       </div>
 
-      {/* Access info banner */}
+      {/* Time lock banner for freelancer */}
       {tutorInfo && !tutorInfo.is_owner && tutorInfo.tutor_type === 'internal' && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3">
-          <Clock className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-yellow-800">Akses Terbatas Waktu</p>
-            <p className="text-xs text-yellow-700 mt-0.5">Materi hanya bisa dibuka <strong>20 menit sebelum</strong> kelas dimulai dan ditutup <strong>5 menit setelah</strong> kelas selesai.</p>
-          </div>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-center gap-3">
+          <Clock className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+          <p className="text-xs text-yellow-800">
+            <strong>Live Zoom</strong> hanya bisa dibuka 20 menit sebelum – 5 menit setelah kelas.
+            {hasActiveSession ? ' ✅ Sesi aktif sekarang.' : ' 🔒 Belum ada sesi aktif.'}
+          </p>
         </div>
       )}
 
-      {levelsData.length === 0 ? (
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white border border-[#E5E3FF] rounded-xl p-1">
+        {allowedTabs.map(tab => {
+          const info = TAB_INFO[tab]
+          const Icon = info.icon
+          const count = materials.filter(m => m.category === tab).length
+          const isActive = activeTab === tab
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all
+                ${isActive ? 'bg-[#5C4FE5] text-white shadow-md' : 'text-[#7B78A8] hover:bg-[#F0EFFF] hover:text-[#5C4FE5]'}`}>
+              <Icon size={15} />
+              <span className="hidden sm:inline">{info.label}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold
+                ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Content */}
+      {groups.length === 0 ? (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-12 text-center">
-          <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4"/>
-          <p className="font-bold text-[#1A1640] mb-1">Belum ada materi tersedia</p>
-          <p className="text-sm text-[#7B78A8]">Materi akan muncul sesuai kelas aktif yang kamu ajar.</p>
+          <div className="text-4xl mb-3">📭</div>
+          <p className="font-bold text-[#1A1640]">Belum ada materi {TAB_INFO[activeTab].label}</p>
+          <p className="text-sm text-[#7B78A8] mt-1">Materi akan muncul sesuai level kelas yang kamu ajar.</p>
         </div>
       ) : (
-        levelsData.map(level => (
-          <div key={level.level_id} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-            {/* Level header — collapsible */}
-            <button onClick={() => setOpenLevels(prev => {
-              const next = new Set(prev)
-              openLevels.has(level.level_id) ? next.delete(level.level_id) : next.add(level.level_id)
-              return next
-            })}
-              className="w-full px-6 py-4 bg-[#5C4FE5] flex items-center justify-between hover:bg-[#4a3ec7] transition-colors text-left">
-              <div>
-                <p className="text-xs text-purple-200 font-medium">{level.course_name}</p>
-                <h2 className="text-lg font-bold text-white">{level.level_name}</h2>
-              </div>
-              <ChevronDown className={`w-5 h-5 text-white transition-transform ${openLevels.has(level.level_id) ? 'rotate-180' : ''}`}/>
-            </button>
-
-            {/* Units — hanya tampil kalau level terbuka */}
-            {openLevels.has(level.level_id) && (
-            <div className="divide-y divide-gray-100">
-              {level.units.map(unit => {
-                const isOpen = openUnits.has(unit.id)
-                return (
-                  <div key={unit.id}>
-                    <button onClick={() => setOpenUnits(prev => {
-                      const next = new Set(prev)
-                      isOpen ? next.delete(unit.id) : next.add(unit.id)
-                      return next
-                    })}
-                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors text-left">
-                      <div className="flex items-center gap-3">
-                        {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                        <div>
-                          {unit.chapter_title && <p className="text-xs text-[#7B78A8]">{unit.chapter_title}</p>}
-                          <p className="font-semibold text-[#1A1640] text-sm">{unit.unit_name}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs text-gray-400">{unit.materials.length} materi</span>
-                    </button>
-
-                    {isOpen && (
-                      <div className="px-6 pb-4 space-y-2">
-                        {unit.materials.length === 0 ? (
-                          <p className="text-sm text-gray-400 pl-7">Belum ada materi</p>
-                        ) : (
-                          unit.materials.map(material => {
-                            const status = accessStatus[material.id]
-                            return (
-                              <div key={material.id}
-                                className={`flex items-center justify-between p-3 rounded-xl border transition-colors
-                                  ${status === 'allowed' ? 'border-[#E5E3FF] bg-[#F7F6FF] hover:border-[#5C4FE5]' :
-                                    status === 'time_locked' ? 'border-yellow-200 bg-yellow-50' :
-                                    'border-gray-200 bg-gray-50'}`}>
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                  <span className="text-base flex-shrink-0">{getCategoryInfo(material.category).icon}</span>
-                                  <div className="min-w-0">
-                                    <p className={`text-sm font-medium truncate ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-500'}`}>
-                                      {material.title}
-                                    </p>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryInfo(material.category).color}`}>
-                                      {getCategoryInfo(material.category).label}
-                                    </span>
-                                  </div>
-                                </div>
-                                <button onClick={() => openMaterial(material)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ml-2
-                                    ${status === 'allowed' ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]' :
-                                      status === 'time_locked' ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed' :
-                                      'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                                  {status === 'allowed' ? <><ExternalLink className="w-3 h-3"/>Buka</> :
-                                    status === 'time_locked' ? <><Clock className="w-3 h-3"/>Terkunci</> :
-                                    <><Lock className="w-3 h-3"/>Belum Tersedia</>}
-                                </button>
-                              </div>
-                            )
-                          })
+        <div className="space-y-3">
+          {groups.map((group, gi) => {
+            const groupKey = `${group.level}__${group.chapter}__${group.unit}`
+            const isOpen = openGroups.has(groupKey)
+            return (
+              <div key={gi} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+                <button onClick={() => toggleGroup(groupKey)}
+                  className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#F7F6FF] transition-colors text-left">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {isOpen
+                      ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-[#7B78A8]">{group.level}</span>
+                        {group.chapter && (
+                          <>
+                            <span className="text-[#E5E3FF]">›</span>
+                            <span className="text-xs font-medium text-[#7B78A8]">{group.chapter}</span>
+                          </>
                         )}
                       </div>
-                    )}
+                      <p className="font-bold text-[#1A1640] text-sm truncate">{group.unit}</p>
+                    </div>
                   </div>
-                )
-              })}
-            </div>
-            )}
-          </div>
-        ))
+                  <span className="text-xs text-[#7B78A8] flex-shrink-0 ml-3">
+                    {group.items.length} materi
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-[#F0EFFF] divide-y divide-[#F7F6FF]">
+                    {group.items.map(material => {
+                      const status = canAccess(material)
+                      return (
+                        <div key={material.id}
+                          className="flex items-center justify-between px-5 py-3 hover:bg-[#F7F6FF] transition-colors">
+                          <div className="flex-1 min-w-0 mr-3">
+                            <p className={`text-sm font-semibold truncate ${status === 'allowed' ? 'text-[#1A1640]' : 'text-gray-400'}`}>
+                              {material.title}
+                            </p>
+                            <p className="text-xs text-[#7B78A8] truncate">{material.lesson_name}</p>
+                          </div>
+                          <button onClick={() => openMaterial(material)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex-shrink-0
+                              ${status === 'allowed'
+                                ? 'bg-[#5C4FE5] text-white hover:bg-[#4a3ec7]'
+                                : status === 'time_locked'
+                                ? 'bg-yellow-100 text-yellow-700 cursor-not-allowed'
+                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                            {status === 'allowed'
+                              ? <><ExternalLink className="w-3 h-3" />Buka</>
+                              : status === 'time_locked'
+                              ? <><Clock className="w-3 h-3" />Terkunci</>
+                              : <><Lock className="w-3 h-3" />Belum Tersedia</>}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {/* Embed Modal */}
@@ -458,17 +457,15 @@ export default function TutorMateriPage() {
               <h2 className="text-lg font-bold text-gray-900 truncate">{embedModal.title}</h2>
               <button onClick={() => setEmbedModal({ open: false, url: '', title: '', loading: false })}
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5"/>
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-hidden rounded-b-2xl">
-              {embedModal.loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5]"/>
-                </div>
-              ) : (
-                <iframe src={embedModal.url} className="w-full h-full border-0" title={embedModal.title} allowFullScreen/>
-              )}
+              {embedModal.loading
+                ? <div className="flex items-center justify-center h-full">
+                    <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5]" />
+                  </div>
+                : <iframe src={embedModal.url} className="w-full h-full border-0" title={embedModal.title} allowFullScreen />}
             </div>
           </div>
         </div>
