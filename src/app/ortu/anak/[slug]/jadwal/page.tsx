@@ -22,7 +22,7 @@ const statusBadge: Record<string, { bg: string; text: string; label: string }> =
   cancelled:  { bg: '#FCEBEB', text: '#791F1F', label: 'Dibatalkan' },
 }
 
-export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function OrtuAnakJadwalPage({ params }: { params: { studentId: string } }) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,24 +38,14 @@ export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) redirect('/login')
 
-  const { slug } = await params
-
-  // Lookup studentId dari slug + verifikasi milik ortu ini
-  const { data: slugRow } = await supabase
-    .from('students')
-    .select('id')
-    .eq('slug', slug)
-    .eq('parent_profile_id', session.user.id)
-    .single()
-
-  const studentId = slugRow?.id ?? null
-  if (!studentId) redirect('/ortu/dashboard')
+  const { studentId } = params
 
   // Verifikasi siswa milik ortu ini
   const { data: student } = await supabase
     .from('students')
     .select(`id, grade, profiles!students_profile_id_fkey(full_name)`)
     .eq('id', studentId)
+    .eq('parent_profile_id', session.user.id)
     .single()
 
   if (!student) redirect('/ortu/dashboard')
@@ -83,25 +73,14 @@ export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{
     ? await supabase.from('class_groups').select('id, label, tutor_id, zoom_link').in('id', cgIds)
     : { data: [] }
 
-  // tutor_id di class_groups merujuk ke tabel tutors (bukan profiles langsung)
-  const tutorTableIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
-  const { data: tutorRows } = tutorTableIds.length > 0
-    ? await supabase.from('tutors').select('id, profile_id').in('id', tutorTableIds)
+  const tutorIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
+  const { data: tutors } = tutorIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name').in('id', tutorIds)
     : { data: [] }
-  const tutorProfileIds = (tutorRows ?? []).map((t: any) => t.profile_id).filter(Boolean)
-  const { data: tutorProfiles } = tutorProfileIds.length > 0
-    ? await supabase.from('profiles').select('id, full_name').in('id', tutorProfileIds)
-    : { data: [] }
-  // Map dari tutor.id → full_name
-  const tutorNameMap: Record<string, string> = {}
-  ;(tutorRows ?? []).forEach((t: any) => {
-    const prof = (tutorProfiles ?? []).find((p: any) => p.id === t.profile_id)
-    if (prof) tutorNameMap[t.id] = prof.full_name
-  })
 
-  // Sessions: 7 hari lalu s/d 28 hari ke depan
+  // Sessions: hari ini s/d 28 hari ke depan
   const nowWIT = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
-  const rangeS = new Date(nowWIT); rangeS.setDate(rangeS.getDate() - 7)
+  const rangeS = new Date(nowWIT); rangeS.setHours(0, 0, 0, 0)
   const rangeE = new Date(nowWIT); rangeE.setDate(rangeE.getDate() + 28)
   const toUTC  = (d: Date) => new Date(d.getTime() - 9 * 60 * 60 * 1000).toISOString()
 
@@ -126,14 +105,14 @@ export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{
 
   const sessionsWithInfo = (sessions ?? []).map((s: any) => {
     const cg    = (classGroups ?? []).find((c: any) => c.id === s.class_group_id)
-    const tutorName = tutorNameMap[cg?.tutor_id] ?? '—'
+    const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
     const att   = (attendances ?? []).find((a: any) => a.session_id === s.id)
     return {
       id:          s.id,
       scheduledAt: s.scheduled_at,
       status:      s.status,
       classLabel:  cg?.label ?? '—',
-      tutorName:   tutorName,
+      tutorName:   tutor?.full_name ?? '—',
       zoomLink:    s.zoom_link ?? cg?.zoom_link ?? null,
       attendance:  att?.status ?? null,
     }
@@ -185,18 +164,12 @@ export default async function OrtuAnakJadwalPage({ params }: { params: Promise<{
                       className="bg-white border border-stone-100 rounded-xl overflow-hidden mb-2"
                       style={{ borderLeft: '3px solid #5C4FE5' }}>
                       <div className="flex items-center gap-3 px-3 py-2.5">
+                        <div className="w-12 text-right flex-shrink-0">
+                          <p className="text-[11px] font-semibold text-stone-700">{fmtTime(item.scheduledAt)}</p>
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 mb-0.5">
-                            <span className="text-[13px] font-bold text-stone-700 flex-shrink-0">
-                              {fmtTime(item.scheduledAt)}
-                            </span>
-                            <span className="text-[12px] font-semibold text-stone-700 truncate">
-                              {item.classLabel}
-                            </span>
-                          </div>
-                          {item.tutorName !== '—' && (
-                            <p className="text-[10px] text-stone-400">{item.tutorName}</p>
-                          )}
+                          <p className="text-[12px] font-semibold text-stone-700">{item.classLabel}</p>
+                          <p className="text-[10px] text-stone-400 mt-0.5">{item.tutorName}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"

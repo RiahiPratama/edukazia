@@ -57,12 +57,13 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   const studentId = student.id
   const studentName = (Array.isArray(student.profiles) ? student.profiles[0] : student.profiles)?.full_name ?? '(Tanpa nama)'
 
-  // Enrollments
+  // Enrollments aktif saja
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select(`id, status, end_date, expired_at, status_override,
+    .select(`id, status, enrolled_at,
       session_start_offset, sessions_total, class_group_id`)
     .eq('student_id', studentId)
+    .eq('status', 'active')
 
   const cgIds = [...new Set((enrollments ?? []).map((e: any) => e.class_group_id).filter(Boolean))]
 
@@ -268,11 +269,18 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
           {(enrollments ?? []).map((e: any) => {
             const cg    = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
             const tutorName = cg ? (tutorNameMap[cg.tutor_id] ?? '—') : '—'
-            const cgCompleted = completedSessions.filter((s: any) => s.class_group_id === e.class_group_id)
+            const enrolledAt  = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
+            const cgCompleted = completedSessions.filter((s: any) =>
+              s.class_group_id === e.class_group_id &&
+              new Date(s.scheduled_at) >= enrolledAt
+            )
             const hadirInCG  = cgCompleted.filter((s: any) =>
               (attendances ?? []).find((a: any) => a.session_id === s.id && a.status === 'hadir')
             ).length
-            const progress = (e.session_start_offset ?? 0) + hadirInCG
+            const progress = Math.min(
+              (e.session_start_offset ?? 1) + hadirInCG,
+              e.sessions_total ?? 8
+            )
             const total    = e.sessions_total ?? 8
 
             return (
