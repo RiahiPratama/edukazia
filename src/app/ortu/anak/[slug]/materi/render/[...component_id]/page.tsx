@@ -71,7 +71,8 @@ export default async function RenderPage({
   
   const jsxContent = await data.text()
 
-  const componentNameMatch = jsxContent.match(/export\s+default\s+(\w+)/)
+  const componentNameMatch = jsxContent.match(/export\s+default\s+function\s+(\w+)/) 
+    ?? jsxContent.match(/export\s+default\s+(\w+)/)
   const componentName = componentNameMatch?.[1] || 'Component'
   
   const cleanJSX = jsxContent
