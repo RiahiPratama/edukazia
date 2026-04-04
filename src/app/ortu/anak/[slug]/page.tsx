@@ -129,6 +129,9 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     const sWIT = new Date(new Date(s.scheduled_at).toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
     return sWIT >= todayStart && sWIT <= todayEnd
   })
+
+  // Semua sesi completed (untuk laporan & rekaman)
+  const completedSessions = (allSessions ?? [])
     .filter((s: any) => s.status === 'completed')
     .sort((a: any, b: any) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
     .slice(0, 20)
