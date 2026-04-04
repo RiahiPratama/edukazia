@@ -423,6 +423,7 @@ export default function TutorAbsensiPage() {
       .from('enrollments')
       .select('id, student_id, session_start_offset, sessions_total')
       .eq('class_group_id', sesi.class_groups.id)
+      .eq('status', 'active')
 
     if (!enrollments || enrollments.length === 0) {
       setSiswaList([]); setLoadingSiswa(false); return
@@ -475,7 +476,7 @@ export default function TutorAbsensiPage() {
       studentId:    e.student_id,
       name:         studentMap[e.student_id]?.name ?? 'Siswa',
       phone:        studentMap[e.student_id]?.phone ?? '',
-      sessionDone:  (e.session_start_offset ?? 0) + (hadirPerSiswa[e.student_id] ?? 0),
+      sessionDone:  Math.min((e.session_start_offset ?? 1) + (hadirPerSiswa[e.student_id] ?? 0), e.sessions_total ?? 8),
       sessionTotal: e.sessions_total ?? 8,
     })))
 

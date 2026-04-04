@@ -92,7 +92,7 @@ export default function AdminAbsensiPage() {
       { data: laporan },
     ] = await Promise.all([
       classIds.length > 0
-        ? supabase.from('enrollments').select('id, student_id, class_group_id').in('class_group_id', classIds as string[])
+        ? supabase.from('enrollments').select('id, student_id, class_group_id').in('class_group_id', classIds as string[]).eq('status', 'active')
         : { data: [] },
       sessionIds.length > 0
         ? supabase.from('attendances').select('session_id, student_id, status, notes').in('session_id', sessionIds)
