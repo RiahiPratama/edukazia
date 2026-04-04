@@ -25,10 +25,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // ✅ Ambil lesson_id sebelum hapus material
+    // ✅ Ambil lesson_id DAN storage_path sebelum hapus material
     const { data: material } = await supabase
       .from('materials')
-      .select('lesson_id')
+      .select('lesson_id, material_contents(storage_path, storage_bucket)')
       .eq('id', id)
       .single();
 
@@ -37,6 +37,21 @@ export async function DELETE(
     }
 
     const lessonId = material.lesson_id;
+
+    // STEP 0: Hapus file dari Storage kalau ada
+    const contents = (material as any).material_contents ?? []
+    for (const mc of contents) {
+      if (mc.storage_path && mc.storage_bucket) {
+        const { error: storageError } = await supabase.storage
+          .from(mc.storage_bucket)
+          .remove([mc.storage_path])
+        if (storageError) {
+          console.warn('⚠️ Gagal hapus file storage:', mc.storage_path, storageError.message)
+        } else {
+          console.log('🗑️ File storage dihapus:', mc.storage_path)
+        }
+      }
+    }
 
     // STEP 1: Hapus material
     const { error: deleteError } = await supabase
