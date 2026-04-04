@@ -188,9 +188,10 @@ export default function PerpanjangModal({
         .from('enrollments')
         .update({ status: 'renewed' })
         .eq('id', enrollment.id)
-      if (renewErr) throw renewErr
+      if (renewErr) throw new Error(`Gagal update enrollment lama: ${renewErr.message}`)
 
       // 2. Insert enrollment BARU
+      // FIX: pakai enrolled_at bukan start_date (tidak ada di schema)
       const { data: newEnrollment, error: enrErr } = await supabase
         .from('enrollments')
         .insert({
@@ -200,12 +201,17 @@ export default function PerpanjangModal({
           sessions_total:       parseInt(sessionsTotal),
           sessions_used:        0,
           session_start_offset: parseInt(startOffset),
-          start_date:           jadwalRows[0]?.date || today(),
+          enrolled_at:          new Date().toISOString(),
           status:               'active',
         })
         .select('id')
         .single()
-      if (enrErr) throw enrErr
+
+      if (enrErr) {
+        // ROLLBACK: kembalikan enrollment lama ke active kalau step 2 gagal
+        await supabase.from('enrollments').update({ status: 'active' }).eq('id', enrollment.id)
+        throw new Error(`Gagal buat enrollment baru: ${enrErr.message}`)
+      }
 
       // 3. Generate & insert sessions baru
       const rows = jadwalMode === 'auto'
@@ -228,18 +234,20 @@ export default function PerpanjangModal({
 
       if (allSessions.length > 0) {
         const { error: sessErr } = await supabase.from('sessions').insert(allSessions)
-        if (sessErr) throw sessErr
+        if (sessErr) throw new Error(`Gagal buat jadwal: ${sessErr.message}`)
       }
 
       // 4. Update zoom link kelas + pastikan status active
-      await supabase.from('class_groups')
+      const { error: cgErr } = await supabase
+        .from('class_groups')
         .update({ zoom_link: zoomLink || null, status: 'active' })
         .eq('id', kelasId)
+      if (cgErr) console.error('Warning: gagal update zoom link:', cgErr.message)
 
       // 5. Insert payment jika ada nominal
       if (payment && parseInt(payment) > 0 && newEnrollment?.id) {
         const now = new Date()
-        await supabase.from('payments').insert({
+        const { error: payErr } = await supabase.from('payments').insert({
           student_id:     enrollment.student_id,
           enrollment_id:  newEnrollment.id,
           amount:         parseInt(payment),
@@ -250,11 +258,15 @@ export default function PerpanjangModal({
           period_label:   `Perpanjang - ${now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
           paid_at:        now.toISOString(),
         })
+        if (payErr) console.error('Warning: gagal insert payment:', payErr.message)
       }
 
+      // ✅ Success notification
+      alert('✅ Kelas berhasil diperpanjang!')
       onSuccess()
     } catch (err: any) {
-      setError(err.message ?? 'Gagal memperpanjang')
+      console.error('[PerpanjangModal] Error:', err)
+      setError(err.message ?? 'Gagal memperpanjang. Silakan coba lagi.')
       setStep('form')
     }
     setSaving(false)
