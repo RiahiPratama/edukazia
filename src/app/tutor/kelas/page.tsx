@@ -205,8 +205,16 @@ export default function TutorKelasPage() {
             .filter((s: any) => s.status === 'scheduled' && new Date(s.scheduled_at) > now)
             .sort((a: any, b: any) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())[0] ?? null
 
-          const completedSesi = kelasSessions.filter((s: any) => s.status === 'completed').length
-          const totalSesi     = kelasSessions.length
+          // FIX: hitung sesi dari enrolled_at enrollment aktif pertama
+          // Ini mencegah sesi lama (periode sebelum perpanjang) ikut dihitung
+          const earliestEnrolledAt = kelasEnroll.length > 0 && kelasEnroll[0]?.enrolled_at
+            ? new Date(kelasEnroll[0].enrolled_at)
+            : new Date(0)
+          const sessionsInPeriod = kelasSessions.filter(
+            (s: any) => new Date(s.scheduled_at) >= earliestEnrolledAt
+          )
+          const completedSesi = sessionsInPeriod.filter((s: any) => s.status === 'completed').length
+          const totalSesi     = sessionsInPeriod.length
 
           return (
             <div key={k.id} className={ki > 0 ? 'border-t border-[#F0EFFF]' : ''}>
