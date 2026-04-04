@@ -410,6 +410,8 @@ export default function KelasDetailPage() {
     if (error) { alert('Gagal konfirmasi: ' + error.message); return }
     fetchAll()
   }
+
+  function openPerpanjang(enr: Enrollment) {
     setPerpanjangEnr(enr)
     setShowPerpanjang(true)
   }
