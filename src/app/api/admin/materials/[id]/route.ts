@@ -25,10 +25,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // ✅ Ambil lesson_id DAN storage_path sebelum hapus material
+    // ✅ Ambil lesson_id sebelum hapus material
     const { data: material } = await supabase
       .from('materials')
-      .select('lesson_id, material_contents(storage_path, storage_bucket)')
+      .select('lesson_id')
       .eq('id', id)
       .single();
 
@@ -38,9 +38,14 @@ export async function DELETE(
 
     const lessonId = material.lesson_id;
 
-    // STEP 0: Hapus file dari Storage kalau ada
-    const contents = (material as any).material_contents ?? []
-    for (const mc of contents) {
+    // STEP 0: Ambil storage info dari material_contents (flat query)
+    const { data: contents } = await supabase
+      .from('material_contents')
+      .select('storage_path, storage_bucket')
+      .eq('material_id', id)
+
+    // Hapus file dari Storage kalau ada
+    for (const mc of (contents ?? [])) {
       if (mc.storage_path && mc.storage_bucket) {
         const { error: storageError } = await supabase.storage
           .from(mc.storage_bucket)
