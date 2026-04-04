@@ -30,6 +30,29 @@ type Enrollment = {
   attended_count: number
 }
 
+type SessionAttendance = {
+  student_id: string
+  student_name: string
+  status: string
+  notes: string | null
+}
+
+type SessionReport = {
+  student_id: string
+  student_name: string
+  materi: string | null
+  perkembangan: string | null
+  saran_siswa: string | null
+  saran_ortu: string | null
+  recording_url: string | null
+}
+
+type SessionDetail = {
+  attendances: SessionAttendance[]
+  reports: SessionReport[]
+  loading: boolean
+}
+
 type Session = {
   id: string
   scheduled_at: string
@@ -110,6 +133,10 @@ export default function KelasDetailPage() {
   const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number}[]>([])
   const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
+
+  // Session detail expand (absensi + laporan)
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
+  const [sessionDetails,    setSessionDetails]    = useState<Record<string, SessionDetail>>({})
 
   // Perpanjang state
   const [showPerpanjang, setShowPerpanjang] = useState(false)
@@ -411,6 +438,64 @@ export default function KelasDetailPage() {
     fetchAll()
   }
 
+  async function toggleSessionDetail(sessionId: string) {
+    // Toggle expand/collapse
+    if (expandedSessionId === sessionId) {
+      setExpandedSessionId(null)
+      return
+    }
+    setExpandedSessionId(sessionId)
+
+    // Kalau sudah di-fetch sebelumnya, tidak perlu fetch lagi
+    if (sessionDetails[sessionId]) return
+
+    // Set loading state
+    setSessionDetails(prev => ({ ...prev, [sessionId]: { attendances: [], reports: [], loading: true } }))
+
+    // Fetch attendances untuk sesi ini
+    const { data: attData } = await supabase
+      .from('attendances')
+      .select('student_id, status, notes')
+      .eq('session_id', sessionId)
+
+    // Fetch session_reports untuk sesi ini
+    const { data: repData } = await supabase
+      .from('session_reports')
+      .select('student_id, materi, perkembangan, saran_siswa, saran_ortu, recording_url')
+      .eq('session_id', sessionId)
+
+    // Ambil nama siswa dari enrollments yang sudah di-load
+    const studentIdSet = new Set([
+      ...(attData ?? []).map((a: any) => a.student_id),
+      ...(repData ?? []).map((r: any) => r.student_id),
+    ])
+
+    // Build name map dari enrollments state
+    const nameMap: Record<string, string> = {}
+    enrollments.forEach(e => {
+      if (studentIdSet.has(e.student_id)) nameMap[e.student_id] = e.student_name
+    })
+
+    const attendances: SessionAttendance[] = (attData ?? []).map((a: any) => ({
+      student_id:   a.student_id,
+      student_name: nameMap[a.student_id] ?? 'Siswa',
+      status:       a.status,
+      notes:        a.notes,
+    }))
+
+    const reports: SessionReport[] = (repData ?? []).map((r: any) => ({
+      student_id:    r.student_id,
+      student_name:  nameMap[r.student_id] ?? 'Siswa',
+      materi:        r.materi,
+      perkembangan:  r.perkembangan,
+      saran_siswa:   r.saran_siswa,
+      saran_ortu:    r.saran_ortu,
+      recording_url: r.recording_url,
+    }))
+
+    setSessionDetails(prev => ({ ...prev, [sessionId]: { attendances, reports, loading: false } }))
+  }
+
   async function konfirmasiPembayaran(paymentId: string) {
     if (!confirm('Konfirmasi pembayaran ini sudah LUNAS?')) return
     const { error } = await supabase
@@ -694,51 +779,165 @@ export default function KelasDetailPage() {
               {sessions.map((s, idx) => {
                 const st = STATUS_SESI[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' }
                 const isCompleted = s.status === 'completed' || s.status === 'cancelled'
+                const isExpanded  = expandedSessionId === s.id
+                const detail      = sessionDetails[s.id]
+
                 return (
-                  <div key={s.id}
-                    className={`flex items-center gap-4 px-5 py-3.5 transition-colors border-b border-[#E5E3FF] last:border-0
-                      ${isCompleted ? 'bg-[#FAFAFE] opacity-70' : 'hover:bg-[#F7F6FF]'}`}>
-                    <div className="min-w-[28px] text-center">
-                      <div className={`text-xs font-bold ${isCompleted ? 'text-[#C4BFFF]' : 'text-[#5C4FE5]'}`}>
-                        {idx + 1}
+                  <div key={s.id} className="border-b border-[#E5E3FF] last:border-0">
+                    {/* Row sesi */}
+                    <div
+                      className={`flex items-center gap-4 px-5 py-3.5 transition-colors
+                        ${isCompleted ? (isExpanded ? 'bg-[#F0EFFF]' : 'bg-[#FAFAFE] hover:bg-[#F0EFFF] cursor-pointer') : 'hover:bg-[#F7F6FF]'}
+                      `}
+                      onClick={isCompleted ? () => toggleSessionDetail(s.id) : undefined}
+                    >
+                      <div className="min-w-[28px] text-center">
+                        <div className={`text-xs font-bold ${isCompleted ? 'text-[#C4BFFF]' : 'text-[#5C4FE5]'}`}>
+                          {idx + 1}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-semibold ${isCompleted ? 'text-[#7B78A8]' : 'text-[#1A1640]'}`}>
-                        {fmtDate(s.scheduled_at)}
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm font-semibold ${isCompleted ? 'text-[#7B78A8]' : 'text-[#1A1640]'}`}>
+                          {fmtDate(s.scheduled_at)}
+                        </div>
+                        <div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div>
                       </div>
-                      <div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div>
+                      {s.zoom_link && !isCompleted && (
+                        <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="text-[#5C4FE5] hover:opacity-70 transition">
+                          <ExternalLink size={13}/>
+                        </a>
+                      )}
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
+                        {st.label}
+                      </span>
+                      {/* Icon expand untuk completed */}
+                      {isCompleted ? (
+                        <div className="flex-shrink-0 text-[#7B78A8]">
+                          {isExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {s.status === 'scheduled' && (
+                            <button onClick={e => { e.stopPropagation(); markSessionComplete(s.id) }}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition"
+                              title="Tandai Selesai">
+                              <Check size={13}/>
+                            </button>
+                          )}
+                          {!isCompleted && (
+                            <button onClick={e => { e.stopPropagation(); openEditSession(s) }}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EFFF] transition"
+                              title="Edit Sesi">
+                              <Pencil size={13}/>
+                            </button>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); deleteSession(s.id) }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                            title="Hapus">
+                            <Trash2 size={13}/>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {s.zoom_link && (
-                      <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                        className="text-[#5C4FE5] hover:opacity-70 transition">
-                        <ExternalLink size={13}/>
-                      </a>
+
+                    {/* Expand panel — absensi + laporan */}
+                    {isCompleted && isExpanded && (
+                      <div className="px-5 pb-4 bg-[#F7F6FF] border-t border-[#E5E3FF]">
+                        {!detail || detail.loading ? (
+                          <div className="flex items-center gap-2 py-4 text-xs text-[#7B78A8]">
+                            <div className="w-3 h-3 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin"/>
+                            Memuat data...
+                          </div>
+                        ) : (
+                          <div className="pt-3 space-y-3">
+
+                            {/* ABSENSI */}
+                            <div>
+                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-2">Absensi</p>
+                              {detail.attendances.length === 0 ? (
+                                <p className="text-xs text-[#7B78A8] italic">Belum ada data absensi</p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {detail.attendances.map(a => (
+                                    <div key={a.student_id} className="flex items-center gap-2.5">
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                        a.status === 'hadir'        ? 'bg-green-100 text-green-700' :
+                                        a.status === 'izin'         ? 'bg-yellow-100 text-yellow-700' :
+                                        a.status === 'tidak_hadir'  ? 'bg-red-100 text-red-700' :
+                                        'bg-gray-100 text-gray-600'
+                                      }`}>
+                                        {a.status === 'hadir' ? '✓ Hadir' : a.status === 'izin' ? '~ Izin' : '✗ Tidak Hadir'}
+                                      </span>
+                                      <span className="text-xs font-semibold text-[#1A1640]">{a.student_name}</span>
+                                      {a.notes && (
+                                        <span className="text-xs text-[#7B78A8] truncate">— {a.notes}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* LAPORAN TUTOR */}
+                            {detail.reports.length > 0 && (
+                              <div className="border-t border-[#E5E3FF] pt-3">
+                                <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-2">Laporan Tutor</p>
+                                {detail.reports.map(r => (
+                                  <div key={r.student_id} className="space-y-2">
+                                    {/* Materi */}
+                                    {r.materi && (
+                                      <div>
+                                        <p className="text-[10px] font-bold text-[#5C4FE5] mb-0.5">Materi</p>
+                                        <p className="text-xs text-[#1A1640] leading-relaxed">{r.materi}</p>
+                                      </div>
+                                    )}
+                                    {/* Perkembangan */}
+                                    {r.perkembangan && (
+                                      <div>
+                                        <p className="text-[10px] font-bold text-[#5C4FE5] mb-0.5">Perkembangan Siswa</p>
+                                        <p className="text-xs text-[#1A1640] leading-relaxed whitespace-pre-line line-clamp-4">{r.perkembangan}</p>
+                                      </div>
+                                    )}
+                                    {/* Saran */}
+                                    {(r.saran_siswa || r.saran_ortu) && (
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {r.saran_siswa && (
+                                          <div className="bg-blue-50 rounded-lg p-2">
+                                            <p className="text-[10px] font-bold text-blue-700 mb-0.5">Saran untuk Siswa</p>
+                                            <p className="text-xs text-blue-900 leading-relaxed line-clamp-3">{r.saran_siswa}</p>
+                                          </div>
+                                        )}
+                                        {r.saran_ortu && (
+                                          <div className="bg-purple-50 rounded-lg p-2">
+                                            <p className="text-[10px] font-bold text-[#5C4FE5] mb-0.5">Saran untuk Ortu</p>
+                                            <p className="text-xs text-[#4A3EC7] leading-relaxed line-clamp-3">{r.saran_ortu}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    {/* Recording */}
+                                    {r.recording_url && (
+                                      <a href={r.recording_url} target="_blank" rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#5C4FE5] hover:underline">
+                                        <ExternalLink size={11}/> Lihat Recording
+                                      </a>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {detail.reports.length === 0 && (
+                              <div className="border-t border-[#E5E3FF] pt-3">
+                                <p className="text-xs text-[#7B78A8] italic">Belum ada laporan tutor untuk sesi ini</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
-                      {st.label}
-                    </span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {s.status === 'scheduled' && (
-                        <button onClick={() => markSessionComplete(s.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition"
-                          title="Tandai Selesai">
-                          <Check size={13}/>
-                        </button>
-                      )}
-                      {!isCompleted && (
-                        <button onClick={() => openEditSession(s)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EFFF] transition"
-                          title="Edit Sesi">
-                          <Pencil size={13}/>
-                        </button>
-                      )}
-                      <button onClick={() => deleteSession(s.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
-                        title="Hapus">
-                        <Trash2 size={13}/>
-                      </button>
-                    </div>
                   </div>
                 )
               })}
