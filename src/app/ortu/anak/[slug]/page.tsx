@@ -103,7 +103,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         .select('id, class_group_id, scheduled_at, status, zoom_link')
         .in('class_group_id', cgIds)
         .or(`and(scheduled_at.gte.${toUTC(todayStart)},status.eq.scheduled),status.eq.completed`)
-        .order('scheduled_at', { ascending: false })
+        .order('scheduled_at', { ascending: true })
         .limit(50)
     : { data: [] }
 
@@ -125,6 +125,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
 
   const completedSessions = (allSessions ?? [])
     .filter((s: any) => s.status === 'completed')
+    .sort((a: any, b: any) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
     .slice(0, 20)
 
   const allSessionIds = (allSessions ?? []).map((s: any) => s.id)
