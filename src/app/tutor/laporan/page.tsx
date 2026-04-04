@@ -101,7 +101,7 @@ export default function TutorLaporanPage() {
       .eq('tutor_id', tutor.id)
       .order('created_at', { ascending: false })
 
-    setKelasList(kelas ?? [])
+    setKelasList((kelas ?? []).sort((a: any, b: any) => a.label.localeCompare(b.label, 'id')))
     setLoading(false)
 
     // Load ringkasan & timeline
@@ -141,7 +141,8 @@ export default function TutorLaporanPage() {
         : { data: [] },
       supabase.from('enrollments')
         .select('student_id, class_group_id')
-        .in('class_group_id', kelasIds),
+        .in('class_group_id', kelasIds)
+        .eq('status', 'active'),
     ])
 
     // Profil siswa
@@ -219,8 +220,9 @@ export default function TutorLaporanPage() {
 
     const { data: enrollments } = await supabase
       .from('enrollments')
-      .select('id, student_id, session_start_offset, sessions_total')
+      .select('id, student_id, session_start_offset, sessions_total, enrolled_at')
       .eq('class_group_id', k.id)
+      .eq('status', 'active')
 
     if (!enrollments || enrollments.length === 0) {
       setLaporanData([]); setLoadingLaporan(false); return
@@ -282,17 +284,29 @@ export default function TutorLaporanPage() {
     })
 
     const laporan = enrollments.map((e: any) => {
-      const nama    = studentMap[e.student_id] ?? 'Siswa'
+      const nama     = studentMap[e.student_id] ?? 'Siswa'
       const siswaAtt = attMap[e.student_id] ?? {}
       const siswaRep = repMap[e.student_id] ?? {}
-      const totalSesi = (sessions ?? []).length
-      const hadir  = Object.values(siswaAtt).filter((a: any) => a.status === 'hadir').length
-      const izin   = Object.values(siswaAtt).filter((a: any) => a.status === 'izin').length
-      const sakit  = Object.values(siswaAtt).filter((a: any) => a.status === 'sakit').length
-      const alpha  = Object.values(siswaAtt).filter((a: any) => a.status === 'alpha').length
+
+      // FIX: hanya hitung sesi SETELAH enrolled_at enrollment active ini
+      const enrolledAt   = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
+      const sessiRelevan = (sessions ?? []).filter((s: any) => new Date(s.scheduled_at) >= enrolledAt)
+      const totalSesi    = sessiRelevan.length
+
+      // Hitung absensi hanya dari sesi relevan
+      const hadir  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'hadir').length
+      const izin   = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'izin').length
+      const sakit  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'sakit').length
+      const alpha  = sessiRelevan.filter((s: any) => !siswaAtt[s.id] && s.status === 'completed').length
       const pctHadir = totalSesi > 0 ? Math.round((hadir / totalSesi) * 100) : 0
 
-      const detailSesi = (sessions ?? []).map((s: any) => ({
+      // FIX progress: session_start_offset + hadir, cap at sessions_total
+      const sessionDone = Math.min(
+        (e.session_start_offset ?? 1) + hadir,
+        e.sessions_total ?? 8
+      )
+
+      const detailSesi = sessiRelevan.map((s: any) => ({
         sessionId:     s.id,
         sessionStatus: s.status,
         scheduledAt:   s.scheduled_at,
@@ -308,11 +322,14 @@ export default function TutorLaporanPage() {
 
       return {
         studentId: e.student_id, nama,
-        sessionOffset: e.session_start_offset,
+        sessionOffset: sessionDone,
         sessionTotal:  e.sessions_total,
         totalSesi, hadir, izin, sakit, alpha, pctHadir, detailSesi,
       }
     })
+
+    // FIX: sort alfabet by nama
+    laporan.sort((a: any, b: any) => a.nama.localeCompare(b.nama, 'id'))
 
     setLaporanData(laporan)
     setLoadingLaporan(false)
