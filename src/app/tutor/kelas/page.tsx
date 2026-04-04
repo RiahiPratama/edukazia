@@ -67,7 +67,8 @@ export default function TutorKelasPage() {
       .order('created_at', { ascending: false })
 
     if (!kelas || kelas.length === 0) { setLoading(false); return }
-    setKelasList(kelas)
+    // FIX: sort kelas alfabet by label
+    setKelasList([...kelas].sort((a: any, b: any) => a.label.localeCompare(b.label, 'id')))
 
     const kelasIds  = kelas.map((k: any) => k.id)
     const courseIds = [...new Set(kelas.map((k: any) => k.course_id).filter(Boolean))] as string[]
@@ -81,7 +82,10 @@ export default function TutorKelasPage() {
     ] = await Promise.all([
       supabase.from('courses').select('id, name, color').in('id', courseIds),
       supabase.from('class_types').select('id, name').in('id', typeIds),
-      supabase.from('enrollments').select('id, class_group_id, session_start_offset, sessions_total, student_id').in('class_group_id', kelasIds),
+      supabase.from('enrollments')
+        .select('id, class_group_id, session_start_offset, sessions_total, student_id, enrolled_at')
+        .in('class_group_id', kelasIds)
+        .eq('status', 'active'),  // FIX: hanya enrollment active
       supabase.from('sessions').select('id, class_group_id, scheduled_at, status').in('class_group_id', kelasIds).order('scheduled_at'),
     ])
 
@@ -107,6 +111,42 @@ export default function TutorKelasPage() {
     ;(sessions ?? []).forEach((s: any) => {
       if (!sMap[s.class_group_id]) sMap[s.class_group_id] = []
       sMap[s.class_group_id].push(s)
+    })
+
+    // FIX: fetch attended count per enrollment untuk progress akurat
+    const completedSessionIds = (sessions ?? [])
+      .filter((s: any) => s.status === 'completed')
+      .map((s: any) => s.id)
+
+    let attendedMap: Record<string, number> = {}
+    if (completedSessionIds.length > 0) {
+      const { data: attendances } = await supabase
+        .from('attendances')
+        .select('session_id, student_id')
+        .in('session_id', completedSessionIds)
+        .eq('status', 'hadir')
+
+      // Hitung per enrollment (filter by enrolled_at)
+      ;(enrollments ?? []).forEach((e: any) => {
+        const enrolledAt = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
+        const relevantSessionIds = new Set(
+          (sessions ?? [])
+            .filter((s: any) => s.status === 'completed' && new Date(s.scheduled_at) >= enrolledAt)
+            .map((s: any) => s.id)
+        )
+        const count = (attendances ?? []).filter(
+          (a: any) => a.student_id === e.student_id && relevantSessionIds.has(a.session_id)
+        ).length
+        attendedMap[e.id] = count
+      })
+    }
+
+    // Tambah attended_count ke setiap enrollment
+    Object.keys(eMap).forEach(kelasId => {
+      eMap[kelasId] = eMap[kelasId]
+        .map((e: any) => ({ ...e, attended_count: attendedMap[e.id] ?? 0 }))
+        // FIX: sort siswa alfabet
+        .sort((a: any, b: any) => (stuMap[a.student_id] ?? '').localeCompare(stuMap[b.student_id] ?? '', 'id'))
     })
 
     setCourseMap(Object.fromEntries((courses ?? []).map((c: any) => [c.id, c])))
@@ -241,11 +281,16 @@ export default function TutorKelasPage() {
                     <p className="text-xs text-[#7B78A8]">Belum ada siswa terdaftar</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {kelasEnroll.map((e: any, idx: number) => {
-                        const nama          = studentMap[e.student_id] ?? 'Siswa'
-                        const avatarColor   = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                        const sessionOffset = e.session_start_offset ?? 1
-                        const sessionTotal  = e.sessions_total ?? 8
+                        {kelasEnroll.map((e: any, idx: number) => {
+                        const nama        = studentMap[e.student_id] ?? 'Siswa'
+                        const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                        const sessionTotal = e.sessions_total ?? 8
+                        // FIX: progress akurat = offset + hadir, cap at total
+                        const sessionDone = Math.min(
+                          (e.session_start_offset ?? 1) + (e.attended_count ?? 0),
+                          sessionTotal
+                        )
+                        const pct = Math.min((sessionDone / sessionTotal) * 100, 100)
                         return (
                           <div key={e.id}
                             className="flex items-center gap-2 bg-white border border-[#E5E3FF] rounded-xl px-3 py-2 min-w-[160px]">
@@ -258,10 +303,10 @@ export default function TutorKelasPage() {
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <div className="flex-1 h-1 bg-[#E5E3FF] rounded-full overflow-hidden">
                                   <div className="h-full rounded-full bg-[#5C4FE5]"
-                                    style={{ width: `${Math.min((sessionOffset / sessionTotal) * 100, 100)}%` }}/>
+                                    style={{ width: `${pct}%` }}/>
                                 </div>
                                 <span className="text-[10px] font-bold text-[#5C4FE5] flex-shrink-0">
-                                  {sessionOffset}/{sessionTotal}
+                                  {sessionDone}/{sessionTotal}
                                 </span>
                               </div>
                             </div>
