@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import BilingualReport from '@/components/shared/BilingualReport'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Laporan · Portal Orang Tua · EduKazia' }
@@ -197,66 +198,17 @@ export default async function OrtuLaporanPage() {
                           </span>
                         )}
                       </div>
-
-                      {rep.materi && (
-                        <div className="mb-1.5">
-                          <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider">Materi · </span>
-                          <span className="text-[11px] text-stone-600">{rep.materi}</span>
-                        </div>
-                      )}
-                      {rep.perkembangan && (
-                        <div className="mb-1.5">
-                          <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider">Perkembangan · </span>
-                          <span className="text-[11px] text-stone-600">{rep.perkembangan}</span>
-                        </div>
-                      )}
-                      {rep.saranOrtu && (
-                        <div className="mt-2 px-3 py-2 rounded-lg"
-                          style={{ background: student.bgColor + '60', borderLeft: `2px solid ${student.color}` }}>
-                          <p className="text-[9px] font-bold uppercase tracking-wider mb-1"
-                            style={{ color: student.textColor }}>
-                            Catatan untuk Orang Tua
-                          </p>
-                          <p className="text-[11px]" style={{ color: student.textColor }}>
-                            {rep.saranOrtu}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* ── Banner Rekaman ── */}
-                      {rep.recordingUrl && (
-                        <div className="mt-2 flex items-center gap-2.5 px-3 py-2 rounded-lg"
-                          style={{ background: '#F0F4FF', border: '0.5px solid #C7D4F7' }}>
-                          {/* Icon kamera */}
-                          <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
-                            style={{ background: '#5C4FE5' }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                              <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
-                            </svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-semibold text-[#3C3489]">
-                              Rekaman kelas tersedia
-                            </p>
-                            <p className="text-[9px] text-[#5C4FE5]">
-                              Download untuk review materi di rumah
-                            </p>
-                          </div>
-                          <a
-                            href={rep.recordingUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
-                            style={{ background: '#5C4FE5', color: '#fff' }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
-                              <path d="M12 16l-6-6h4V4h4v6h4l-6 6z"/>
-                              <path d="M20 18H4v2h16v-2z"/>
-                            </svg>
-                            Download
-                          </a>
-                        </div>
-                      )}
+                      <BilingualReport
+                        laporan={{
+                          materi:       rep.materi,
+                          perkembangan: rep.perkembangan,
+                          saranSiswa:   null,
+                          saranOrtu:    rep.saranOrtu,
+                          recordingUrl: rep.recordingUrl,
+                        }}
+                        audience="ortu"
+                        sessionLabel={fmtDate(rep.scheduledAt)}
+                      />
                     </div>
                   ))}
                 </div>

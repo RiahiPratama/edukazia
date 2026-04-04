@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import BilingualReport from '@/components/shared/BilingualReport'
 
 interface Laporan {
   id: string
@@ -229,27 +230,22 @@ export default function LaporanClient({ laporan, courses, summary, studentName, 
                     </div>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-0 border-t border-[#E5E3FF] space-y-3">
-                      {l.perkembangan && (
-                        <div>
-                          <p className="text-[10px] font-bold text-[#9B97B2] uppercase tracking-wide mb-1 mt-3">Perkembangan Siswa</p>
-                          <p className="text-[12px] text-[#1A1530] leading-relaxed">{l.perkembangan}</p>
-                        </div>
-                      )}
-                      {l.saran_siswa && (
-                        <div>
-                          <p className="text-[10px] font-bold text-[#9B97B2] uppercase tracking-wide mb-1">Saran untuk Siswa</p>
-                          <p className="text-[12px] text-[#1A1530] leading-relaxed">{l.saran_siswa}</p>
-                        </div>
-                      )}
-                      {l.saran_ortu && (
-                        <div>
-                          <p className="text-[10px] font-bold text-[#9B97B2] uppercase tracking-wide mb-1">Saran untuk Orang Tua</p>
-                          <p className="text-[12px] text-[#1A1530] leading-relaxed bg-[#F7F6FF] rounded-xl p-3">{l.saran_ortu}</p>
-                        </div>
-                      )}
+                    <div className="px-4 pb-4 border-t border-[#E5E3FF]">
+                      <div className="pt-3">
+                        <BilingualReport
+                          laporan={{
+                            materi:       l.materi,
+                            perkembangan: l.perkembangan,
+                            saranSiswa:   l.saran_siswa,
+                            saranOrtu:    l.saran_ortu,
+                            recordingUrl: null,
+                          }}
+                          audience="siswa"
+                          defaultOpen={true}
+                        />
+                      </div>
                       {l.attendance?.notes && (
-                        <div>
+                        <div className="mt-3">
                           <p className="text-[10px] font-bold text-[#9B97B2] uppercase tracking-wide mb-1">Catatan Kehadiran</p>
                           <p className="text-[12px] text-[#1A1530] leading-relaxed">{l.attendance.notes}</p>
                         </div>

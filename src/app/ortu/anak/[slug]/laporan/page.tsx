@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import BilingualReport from '@/components/shared/BilingualReport'
 
 export const dynamic = 'force-dynamic'
 
@@ -153,28 +154,17 @@ export default async function OrtuAnakLaporanPage({ params }: { params: Promise<
               </div>
 
               <div className="px-3 py-2.5">
-                {rep.materi && (
-                  <div className="mb-2">
-                    <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider">Materi · </span>
-                    <span className="text-[11px] text-stone-600">{rep.materi}</span>
-                  </div>
-                )}
-                {rep.perkembangan && (
-                  <div className="mb-2">
-                    <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider">Perkembangan · </span>
-                    <span className="text-[11px] text-stone-600">{rep.perkembangan}</span>
-                  </div>
-                )}
-                {/* Pesan khusus untuk siswa — bukan saran_ortu */}
-                {rep.saranSiswa && (
-                  <div className="mt-2 px-3 py-2 rounded-lg"
-                    style={{ background: '#EEEDFE60', borderLeft: '2px solid #5C4FE5' }}>
-                    <p className="text-[9px] font-bold text-[#3C3489] uppercase tracking-wider mb-1">
-                      Pesan dari Tutor
-                    </p>
-                    <p className="text-[11px] text-[#3C3489]">{rep.saranSiswa}</p>
-                  </div>
-                )}
+                <BilingualReport
+                  laporan={{
+                    materi:       rep.materi,
+                    perkembangan: rep.perkembangan,
+                    saranSiswa:   rep.saranSiswa,
+                    saranOrtu:    null,
+                    recordingUrl: null,
+                  }}
+                  audience="siswa"
+                  sessionLabel={fmtDate(rep.scheduledAt)}
+                />
               </div>
             </div>
           ))}

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { BookOpen, ChevronDown, ChevronUp, Users, FileText, Pencil, Save, X, Archive, BarChart2, Clock, AlertTriangle } from 'lucide-react'
+import BilingualReport from '@/components/shared/BilingualReport'
+import { LaporanEditor } from '@/components/shared/LaporanEditor'
 
 const STATUS_COLOR: Record<string, string> = {
   hadir: 'bg-green-100 text-green-700',
@@ -781,22 +783,18 @@ export default function TutorLaporanPage() {
                                   </div>
                                 </div>
                                 {isSesiOpen && hasReport && !isEditing && (
-                                  <div className="mx-5 mb-3 bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-4 space-y-3">
-                                    {[{ lbl: 'Materi', val: sesi.materi }, { lbl: 'Perkembangan', val: sesi.perkembangan }, { lbl: 'Saran Siswa', val: sesi.saranSiswa }, { lbl: 'Saran Ortu', val: sesi.saranOrtu }].filter(f => f.val).map(f => (
-                                      <div key={f.lbl}>
-                                        <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">{f.lbl}</p>
-                                        <p className="text-xs text-[#1A1640]">{f.val}</p>
-                                      </div>
-                                    ))}
-                                    {sesi.recordingUrl && (
-                                      <div>
-                                        <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Link Rekaman</p>
-                                        <a href={sesi.recordingUrl} target="_blank" rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5C4FE5] hover:underline">
-                                          ▶ Buka Rekaman Google Drive
-                                        </a>
-                                      </div>
-                                    )}
+                                  <div className="mx-5 mb-3">
+                                    <BilingualReport
+                                      laporan={{
+                                        materi:       sesi.materi,
+                                        perkembangan: sesi.perkembangan,
+                                        saranSiswa:   sesi.saranSiswa,
+                                        saranOrtu:    sesi.saranOrtu,
+                                        recordingUrl: sesi.recordingUrl,
+                                      }}
+                                      audience="tutor"
+                                      defaultOpen={true}
+                                    />
                                   </div>
                                 )}
                                 {isEditing && (
@@ -805,19 +803,34 @@ export default function TutorLaporanPage() {
                                       <p className="text-[11px] font-bold text-[#5C4FE5] uppercase tracking-wide">{hasReport ? 'Edit Laporan' : 'Isi Laporan'}</p>
                                       <button onClick={cancelEdit} className="text-[#9B97B2] hover:text-red-500"><X size={14}/></button>
                                     </div>
-                                    {[
-                                      { field: 'materi' as keyof ReportForm, label: 'Materi', placeholder: 'Contoh: Phonics level 3...' },
-                                      { field: 'perkembangan' as keyof ReportForm, label: 'Perkembangan Siswa', placeholder: 'Catatan perkembangan...' },
-                                      { field: 'saranSiswa' as keyof ReportForm, label: 'Saran untuk Siswa', placeholder: 'Saran untuk siswa...' },
-                                      { field: 'saranOrtu' as keyof ReportForm, label: 'Saran untuk Orang Tua', placeholder: 'Saran untuk ortu...' },
-                                    ].map(({ field, label, placeholder }) => (
-                                      <div key={field}>
-                                        <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">{label}</label>
-                                        <textarea rows={2} placeholder={placeholder} value={editForm[field]}
-                                          onChange={e => setEditForm(prev => ({ ...prev, [field]: e.target.value }))}
-                                          className={textareaCls}/>
-                                      </div>
-                                    ))}
+                                    <LaporanEditor
+                                      label="Materi"
+                                      value={editForm.materi}
+                                      onChange={v => setEditForm(prev => ({ ...prev, materi: v }))}
+                                      placeholder="Contoh:&#10;---ID---&#10;* Grammar: Present Tense&#10;* Kosakata: hewan&#10;---EN---&#10;* Grammar: Present Tense&#10;* Vocabulary: animals"
+                                      rows={5}
+                                    />
+                                    <LaporanEditor
+                                      label="Perkembangan Siswa"
+                                      value={editForm.perkembangan}
+                                      onChange={v => setEditForm(prev => ({ ...prev, perkembangan: v }))}
+                                      placeholder="Catatan perkembangan siswa..."
+                                      rows={4}
+                                    />
+                                    <LaporanEditor
+                                      label="Saran untuk Siswa"
+                                      value={editForm.saranSiswa}
+                                      onChange={v => setEditForm(prev => ({ ...prev, saranSiswa: v }))}
+                                      placeholder="Saran latihan mandiri untuk siswa..."
+                                      rows={3}
+                                    />
+                                    <LaporanEditor
+                                      label="Saran untuk Orang Tua"
+                                      value={editForm.saranOrtu}
+                                      onChange={v => setEditForm(prev => ({ ...prev, saranOrtu: v }))}
+                                      placeholder="Saran untuk orang tua mendampingi belajar..."
+                                      rows={3}
+                                    />
                                     <div>
                                       <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Link Rekaman <span className="normal-case font-normal">(opsional)</span></label>
                                       <input type="url" placeholder="https://drive.google.com/..." value={editForm.recordingUrl}
