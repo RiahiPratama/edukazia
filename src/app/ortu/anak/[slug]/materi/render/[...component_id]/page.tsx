@@ -76,6 +76,7 @@ export default async function RenderPage({
   
   const cleanJSX = jsxContent
     .replace(/import\s+.*?from\s+['"][^'"]+['"];?\n?/g, '')
+    .replace(/export\s+default\s+function\s+/g, 'function ')
     .replace(/export\s+default\s+\w+;?\n?/g, '')
     .replace(/<BookOpen\s*([^>\/]*)\s*\/>/g, '<span className="inline-block">📖</span>')
     .replace(/<ChevronDown\s*([^>\/]*)\s*\/>/g, '<span className="inline-block">▼</span>')
