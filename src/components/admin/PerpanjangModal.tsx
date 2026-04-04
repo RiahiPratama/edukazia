@@ -384,6 +384,21 @@ export default function PerpanjangModal({
                 <div>
                   <label className="text-xs text-[#7B78A8] mb-1 block">Nominal (Rp)</label>
                   <input type="number" value={payment} onChange={e => setPayment(e.target.value)} placeholder="0" className={inputCls}/>
+                  {/* Indikator peringatan kalau nominal berbeda dari harga paket */}
+                  {(() => {
+                    const pkg = packages.find(p => p.id === packageId)
+                    if (!pkg || !payment) return null
+                    const expectedTotal = pkg.price * jumlahPaket
+                    const inputTotal = parseInt(payment) || 0
+                    if (inputTotal === expectedTotal) return null
+                    const isDibawah = inputTotal < expectedTotal
+                    return (
+                      <p className={`text-[10px] mt-1 font-semibold flex items-center gap-1 ${isDibawah ? 'text-amber-600' : 'text-blue-600'}`}>
+                        {isDibawah ? '⚠️' : 'ℹ️'} Berbeda dari harga paket ({formatRp(expectedTotal)})
+                        {isDibawah && ' — pastikan ini disengaja'}
+                      </p>
+                    )
+                  })()}
                 </div>
                 <div>
                   <label className="text-xs text-[#7B78A8] mb-1 block">Metode</label>
