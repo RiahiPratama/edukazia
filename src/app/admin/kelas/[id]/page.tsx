@@ -884,20 +884,27 @@ export default function KelasDetailPage() {
                             <div className="border-t border-[#E5E3FF] pt-3 flex items-center gap-3">
                               <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Laporan Tutor</p>
                               {detail.reports.length > 0 ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
-                                    ✓ Sudah diinput
-                                  </span>
-                                  {detail.reports[0]?.recording_url && (
-                                    <a href={detail.reports[0].recording_url} target="_blank" rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-[#5C4FE5] hover:underline">
-                                      <ExternalLink size={10}/> Recording
-                                    </a>
-                                  )}
-                                </div>
+                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+                                  ✓ Sudah diinput
+                                </span>
                               ) : (
                                 <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600">
                                   ✗ Belum diinput
+                                </span>
+                              )}
+                            </div>
+
+                            {/* LINK REKAMAN */}
+                            <div className="border-t border-[#E5E3FF] pt-3 flex items-center gap-3">
+                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Link Rekaman</p>
+                              {detail.reports[0]?.recording_url ? (
+                                <a href={detail.reports[0].recording_url} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition">
+                                  <ExternalLink size={10}/> Tersedia — Buka
+                                </a>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
+                                  Belum tersedia
                                 </span>
                               )}
                             </div>
