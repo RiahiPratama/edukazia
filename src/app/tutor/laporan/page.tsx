@@ -235,7 +235,7 @@ export default function TutorLaporanPage() {
       .from('sessions')
       .select('id, scheduled_at, status')
       .eq('class_group_id', k.id)
-      .in('status', ['completed', 'scheduled'])
+      .in('status', ['completed', 'scheduled', 'rescheduled'])
       .order('scheduled_at')
 
     if (filterFrom) sessionQuery = sessionQuery.gte('scheduled_at', filterFrom + 'T00:00:00+09:00')
@@ -328,7 +328,7 @@ export default function TutorLaporanPage() {
         studentId: e.student_id, nama,
         sessionOffset: sessionDone,
         sessionTotal:  e.sessions_total,
-        totalSesi, hadir, izin, sakit, alpha, pctHadir, progressPct, detailSesi,
+        totalSesi, hadir, izin, sakit, alpha, pctHadir, progressPct, completedCount, detailSesi,
       }
     })
 
@@ -703,7 +703,14 @@ export default function TutorLaporanPage() {
                           </div>
                           <div className="text-right flex-shrink-0">
                             <div className="text-lg font-black text-[#5C4FE5]">{siswa.pctHadir}%</div>
-                            <div className="text-[10px] text-[#7B78A8]">kehadiran</div>
+                            <div className="text-[10px] text-[#7B78A8]">
+                              {siswa.hadir}/{siswa.completedCount ?? siswa.totalSesi} sesi selesai
+                            </div>
+                            {(siswa.totalSesi - (siswa.completedCount ?? siswa.totalSesi)) > 0 && (
+                              <div className="text-[10px] text-amber-500 font-semibold">
+                                +{siswa.totalSesi - (siswa.completedCount ?? siswa.totalSesi)} menunggu
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2 flex-wrap mb-3">
@@ -716,7 +723,8 @@ export default function TutorLaporanPage() {
                           )}
                         </div>
                         <div className="w-full h-2 bg-[#E5E3FF] rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-[#5C4FE5] transition-all" style={{ width: `${siswa.progressPct ?? siswa.pctHadir}%` }}/>
+                          <div className="h-full rounded-full bg-[#5C4FE5] transition-all"
+                            style={{ width: `${typeof siswa.progressPct === 'number' ? siswa.progressPct : siswa.pctHadir}%` }}/>
                         </div>
                       </div>
 
