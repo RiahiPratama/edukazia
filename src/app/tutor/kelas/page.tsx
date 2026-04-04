@@ -246,7 +246,9 @@ export default function TutorKelasPage() {
                   <div className="hidden sm:flex items-center gap-3 mr-2">
                     <div className="flex items-center gap-1">
                       <Clock size={12} className="text-[#7B78A8]"/>
-                      <span className="text-xs text-[#7B78A8]">{completedSesi}/{totalSesi}</span>
+                      <span className="text-xs text-[#7B78A8]">
+                        {completedSesi} sesi selesai · {totalSesi} total
+                      </span>
                     </div>
                   </div>
 
@@ -292,10 +294,12 @@ export default function TutorKelasPage() {
                         {kelasEnroll.map((e: any, idx: number) => {
                         const nama        = studentMap[e.student_id] ?? 'Siswa'
                         const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
-                        const sessionTotal = e.sessions_total ?? 8
+                        const sessionTotal  = e.sessions_total ?? 8
+                        const offset        = e.session_start_offset ?? 1
+                        const isBonus       = offset === 0
                         // FIX: progress akurat = offset + hadir, cap at total
                         const sessionDone = Math.min(
-                          (e.session_start_offset ?? 1) + (e.attended_count ?? 0),
+                          offset + (e.attended_count ?? 0),
                           sessionTotal
                         )
                         const pct = Math.min((sessionDone / sessionTotal) * 100, 100)
@@ -307,7 +311,14 @@ export default function TutorKelasPage() {
                               {getInitials(nama)}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-xs font-semibold text-[#1A1640] truncate">{nama}</div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="text-xs font-semibold text-[#1A1640] truncate">{nama}</div>
+                                {isBonus && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0">
+                                    Bonus
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <div className="flex-1 h-1 bg-[#E5E3FF] rounded-full overflow-hidden">
                                   <div className="h-full rounded-full bg-[#5C4FE5]"
