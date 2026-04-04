@@ -490,7 +490,7 @@ export default function KelasDetailPage() {
       {/* Tabs */}
       <div className="flex gap-1 bg-[#F7F6FF] p-1 rounded-xl mb-5 border border-[#E5E3FF]">
         {([
-          { key: 'siswa',      label: 'Siswa',       icon: <Users size={13}/>,      count: enrollments.length },
+          { key: 'siswa',      label: 'Siswa',       icon: <Users size={13}/>,      count: new Set(enrollments.map(e => e.student_id)).size },
           { key: 'jadwal',     label: 'Jadwal',      icon: <Calendar size={13}/>,   count: sessions.length },
           { key: 'pembayaran', label: 'Pembayaran',  icon: <CreditCard size={13}/>, count: payments.length },
           { key: 'level',      label: 'Level',       icon: <BookOpen size={13}/>,   count: classLevels.length },
@@ -511,74 +511,152 @@ export default function KelasDetailPage() {
         ))}
       </div>
 
+      {/* Tab: Siswa — group by student, bukan per enrollment */}
       {activeTab === 'siswa' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
           {enrollments.length === 0 ? (
             <div className="px-5 py-12 text-center text-sm text-[#7B78A8]">Belum ada siswa terdaftar.</div>
-          ) : (
-            enrollments.map((enr, idx) => {
-              const done = (enr.session_start_offset - 1) + (enr.attended_count ?? 0)
-              const pct  = Math.min((done / enr.sessions_total) * 100, 100)
+          ) : (() => {
+            // Group enrollments by student_id
+            const studentMap = new Map<string, Enrollment[]>()
+            enrollments.forEach(enr => {
+              if (!studentMap.has(enr.student_id)) studentMap.set(enr.student_id, [])
+              studentMap.get(enr.student_id)!.push(enr)
+            })
 
-              // Badge & tombol berdasarkan status enrollment
-              const isActive  = enr.status === 'active'
-              const isRenewed = enr.status === 'renewed'
-              const st = isActive  ? { label: 'Aktif',          cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
-                       : isRenewed ? { label: 'Diperpanjang',   cls: 'bg-[#EEEDFE] text-[#5C4FE5]' }
-                       : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
-                       : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
+            // Sort tiap siswa: renewed dulu (periode lama), active terakhir (periode baru)
+            studentMap.forEach(enrs => {
+              enrs.sort((a, b) => {
+                const order = { renewed: 0, completed: 1, inactive: 2, active: 3, paused: 4, transferred: 5 }
+                return (order[a.status as keyof typeof order] ?? 9) - (order[b.status as keyof typeof order] ?? 9)
+              })
+            })
 
-              // Warna progress bar: renewed = ungu muted, active = ungu penuh
-              const barColor = isRenewed ? 'bg-[#C4BFFF]' : 'bg-[#5C4FE5]'
+            const uniqueStudents = [...studentMap.entries()]
+
+            return uniqueStudents.map(([studentId, enrs], sidx) => {
+              const hasMultiple = enrs.length > 1
+              const avatarColor = AVATAR_COLORS[sidx % AVATAR_COLORS.length]
+              const firstName = enrs[0].student_name
 
               return (
-                <div key={enr.id} className={`flex items-center gap-3 px-5 py-4 ${idx < enrollments.length - 1 ? 'border-b border-[#E5E3FF]' : ''} ${isRenewed ? 'bg-[#FAFAFE]' : ''}`}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                    style={{backgroundColor: AVATAR_COLORS[idx % AVATAR_COLORS.length]}}>
-                    {getInitials(enr.student_name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <div className="text-sm font-bold text-[#1A1640]">{enr.student_name}</div>
-                      {isRenewed && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#EEEDFE] text-[#5C4FE5]">
-                          Periode Lama
-                        </span>
-                      )}
-                      {isActive && enrollments.some(e => e.student_id === enr.student_id && e.status === 'renewed') && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#E6F4EC] text-[#1A5C36]">
-                          Periode Baru
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-24 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
-                        <div className={`h-full ${barColor} rounded-full transition-all`} style={{width: `${pct}%`}}/>
+                <div key={studentId} className={`${sidx < uniqueStudents.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
+                  {hasMultiple ? (
+                    /* Siswa dengan riwayat perpanjang — tampil accordion */
+                    <div>
+                      {/* Header siswa */}
+                      <div className="flex items-center gap-3 px-5 py-3 bg-[#F7F6FF]">
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                          style={{ backgroundColor: avatarColor }}>
+                          {getInitials(firstName)}
+                        </div>
+                        <span className="text-sm font-bold text-[#1A1640]">{firstName}</span>
+                        <span className="text-[10px] text-[#7B78A8] font-medium">{enrs.length} periode</span>
                       </div>
-                      <span className={`text-[10px] font-bold ${isRenewed ? 'text-[#C4BFFF]' : 'text-[#5C4FE5]'}`}>
-                        {done}/{enr.sessions_total} sesi
-                      </span>
+
+                      {/* List periode */}
+                      {enrs.map((enr, pidx) => {
+                        // FIX formula: current = session_start_offset + attended (bukan -1)
+                        // session_start_offset=1, attended=0 → 1/8 ✅ "sedang di sesi ke-1"
+                        const current = Math.min(
+                          enr.session_start_offset + (enr.attended_count ?? 0),
+                          enr.sessions_total
+                        )
+                        const pct = Math.min((current / enr.sessions_total) * 100, 100)
+                        const isActive  = enr.status === 'active'
+                        const isRenewed = enr.status === 'renewed'
+                        const barColor  = isRenewed ? 'bg-[#C4BFFF]' : 'bg-[#5C4FE5]'
+
+                        return (
+                          <div key={enr.id}
+                            className={`flex items-center gap-3 pl-14 pr-5 py-3 ${isRenewed ? 'bg-[#FAFAFE] opacity-70' : ''} ${pidx < enrs.length - 1 ? 'border-b border-[#F0EFFE]' : ''}`}>
+
+                            {/* Connector line */}
+                            <span className="text-[10px] text-[#7B78A8] font-semibold flex-shrink-0 w-16">
+                              {pidx === enrs.length - 1 ? '└──' : '├──'} P{pidx + 1}
+                            </span>
+
+                            {/* Progress */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden flex-shrink-0">
+                                  <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }}/>
+                                </div>
+                                <span className={`text-[10px] font-bold ${isRenewed ? 'text-[#C4BFFF]' : 'text-[#5C4FE5]'}`}>
+                                  {current}/{enr.sessions_total} sesi
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Status badge */}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                              isActive  ? 'bg-[#E6F4EC] text-[#1A5C36]' :
+                              isRenewed ? 'bg-[#EEEDFE] text-[#5C4FE5]' :
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {isActive ? 'Aktif' : isRenewed ? 'Diperpanjang' : enr.status}
+                            </span>
+
+                            {/* Tombol perpanjang hanya untuk active */}
+                            {isActive && (
+                              <button onClick={() => openPerpanjang(enr)}
+                                className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#F0EFFF] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors flex-shrink-0">
+                                🔄 Perpanjang
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
-                    {st.label}
-                  </span>
-                  {/* Tombol aksi berdasarkan status */}
-                  {isActive && (
-                    <button onClick={() => openPerpanjang(enr)}
-                      className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#F0EFFF] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors flex-shrink-0">
-                      🔄 Perpanjang
-                    </button>
-                  )}
-                  {isRenewed && (
-                    <div className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-400 flex-shrink-0 flex items-center gap-1">
-                      ✅ Diperpanjang
-                    </div>
+                  ) : (
+                    /* Siswa dengan 1 enrollment — tampil flat */
+                    (() => {
+                      const enr = enrs[0]
+                      const current = Math.min(
+                        enr.session_start_offset + (enr.attended_count ?? 0),
+                        enr.sessions_total
+                      )
+                      const pct     = Math.min((current / enr.sessions_total) * 100, 100)
+                      const isActive = enr.status === 'active'
+                      const st = isActive ? { label: 'Aktif', cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
+                               : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
+                               : enr.status === 'completed' ? { label: 'Selesai', cls: 'bg-blue-100 text-blue-700' }
+                               : { label: enr.status, cls: 'bg-gray-100 text-gray-600' }
+
+                      return (
+                        <div className="flex items-center gap-3 px-5 py-4">
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                            style={{ backgroundColor: avatarColor }}>
+                            {getInitials(enr.student_name)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-[#1A1640]">{enr.student_name}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="w-24 h-1.5 bg-[#E5E3FF] rounded-full overflow-hidden">
+                                <div className="h-full bg-[#5C4FE5] rounded-full transition-all" style={{ width: `${pct}%` }}/>
+                              </div>
+                              <span className="text-[10px] font-bold text-[#5C4FE5]">
+                                {current}/{enr.sessions_total} sesi
+                              </span>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
+                            {st.label}
+                          </span>
+                          {isActive && (
+                            <button onClick={() => openPerpanjang(enr)}
+                              className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#F0EFFF] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors flex-shrink-0">
+                              🔄 Perpanjang
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()
                   )}
                 </div>
               )
             })
-          )}
+          })()}
         </div>
       )}
 
