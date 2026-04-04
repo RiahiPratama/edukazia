@@ -219,7 +219,7 @@ export default function KelasDetailPage() {
     // Fetch enrollments — include 'renewed' supaya history perpanjang tetap tampil
     const { data: enr } = await supabase
       .from('enrollments')
-      .select('id, student_id, sessions_total, session_start_offset, sessions_used, status')
+      .select('id, student_id, sessions_total, session_start_offset, sessions_used, status, enrolled_at')
       .eq('class_group_id', kelasId)
 
     if (enr && enr.length > 0) {
@@ -234,31 +234,40 @@ export default function KelasDetailPage() {
         nameMap = Object.fromEntries((studs ?? []).map((s: any) => [s.id, profMap[s.profile_id] ?? 'Siswa']))
       }
 
-      // FIX: fetch attended_count dari attendances — jangan pakai sessions_used yang stale
-      const { data: completedSessions } = await supabase
+      // FIX A: attended_count hanya dari sessions SETELAH enrollment aktif terbaru
+      // Ini mencegah sesi lama ikut terhitung di enrollment baru
+      const allCompletedSessions = await supabase
         .from('sessions')
-        .select('id')
+        .select('id, scheduled_at')
         .eq('class_group_id', kelasId)
         .eq('status', 'completed')
 
-      const completedIds = (completedSessions ?? []).map((s: any) => s.id)
-      let attendedMap: Record<string, number> = {}
+      // Build attended map per enrollment — filter by enrolled_at
+      const attendedMap: Record<string, number> = {}
+      for (const e of enr) {
+        const enrolledAt = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
+        // Sessions yang terjadi SETELAH enrollment ini dibuat
+        const relevantSessionIds = (allCompletedSessions.data ?? [])
+          .filter((s: any) => new Date(s.scheduled_at) >= enrolledAt)
+          .map((s: any) => s.id)
 
-      if (completedIds.length > 0) {
-        const { data: attendances } = await supabase
-          .from('attendances')
-          .select('student_id')
-          .in('session_id', completedIds)
-          .eq('status', 'hadir')
-        ;(attendances ?? []).forEach((a: any) => {
-          attendedMap[a.student_id] = (attendedMap[a.student_id] ?? 0) + 1
-        })
+        if (relevantSessionIds.length > 0) {
+          const { data: att } = await supabase
+            .from('attendances')
+            .select('student_id')
+            .in('session_id', relevantSessionIds)
+            .eq('student_id', e.student_id)
+            .eq('status', 'hadir')
+          attendedMap[`${e.id}`] = (att ?? []).length
+        } else {
+          attendedMap[`${e.id}`] = 0
+        }
       }
 
       setEnrollments(enr.map((e: any) => ({
         ...e,
         student_name:   nameMap[e.student_id] ?? 'Siswa',
-        attended_count: attendedMap[e.student_id] ?? 0,
+        attended_count: attendedMap[e.id] ?? 0,
       })))
     } else {
       setEnrollments([])
@@ -392,7 +401,15 @@ export default function KelasDetailPage() {
     fetchAll()
   }
 
-  function openPerpanjang(enr: Enrollment) {
+  async function konfirmasiPembayaran(paymentId: string) {
+    if (!confirm('Konfirmasi pembayaran ini sudah LUNAS?')) return
+    const { error } = await supabase
+      .from('payments')
+      .update({ status: 'paid', paid_at: new Date().toISOString() })
+      .eq('id', paymentId)
+    if (error) { alert('Gagal konfirmasi: ' + error.message); return }
+    fetchAll()
+  }
     setPerpanjangEnr(enr)
     setShowPerpanjang(true)
   }
@@ -576,48 +593,80 @@ export default function KelasDetailPage() {
             </div>
           ) : (
             <>
+              {/* Summary sesi */}
               <div className="px-5 py-3 bg-[#F7F6FF] border-b border-[#E5E3FF] flex items-center gap-4 text-xs">
                 <span className="text-[#7B78A8]">Total: <strong className="text-[#1A1640]">{sessions.length} sesi</strong></span>
                 <span className="text-[#7B78A8]">Selesai: <strong className="text-[#27A05A]">{selesai}</strong></span>
                 <span className="text-[#7B78A8]">Terjadwal: <strong className="text-[#5C4FE5]">{terjadwal}</strong></span>
               </div>
-              {sessions.map((s, idx) => {
-                const st = STATUS_SESI[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' }
-                return (
-                  <div key={s.id} className={`flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F6FF] transition-colors ${idx < sessions.length - 1 ? 'border-b border-[#E5E3FF]' : ''}`}>
-                    <div className="min-w-[36px] text-center">
-                      <div className="text-xs font-bold text-[#5C4FE5]">{idx + 1}</div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-[#1A1640]">{fmtDate(s.scheduled_at)}</div>
-                      <div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div>
-                    </div>
-                    {s.zoom_link && (
-                      <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
-                        className="text-[#5C4FE5] hover:opacity-70 transition">
-                        <ExternalLink size={13}/>
-                      </a>
-                    )}
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {s.status === 'scheduled' && (
-                        <button onClick={() => markSessionComplete(s.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
-                          <Check size={13}/>
-                        </button>
+
+              {/* FIX B: Sesi completed (periode lama) — tampil collapsible di atas */}
+              {sessions.filter(s => s.status === 'completed' || s.status === 'cancelled').length > 0 && (
+                <details className="border-b border-[#E5E3FF]">
+                  <summary className="px-5 py-2.5 text-xs font-semibold text-[#7B78A8] cursor-pointer hover:bg-[#F7F6FF] select-none list-none flex items-center gap-2">
+                    <ChevronRight size={12} className="text-[#7B78A8]"/>
+                    Riwayat Sesi Lama ({sessions.filter(s => s.status === 'completed' || s.status === 'cancelled').length} sesi)
+                  </summary>
+                  {sessions
+                    .filter(s => s.status === 'completed' || s.status === 'cancelled')
+                    .map((s, idx) => {
+                      const st = STATUS_SESI[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' }
+                      return (
+                        <div key={s.id} className="flex items-center gap-4 px-5 py-3 bg-[#FAFAFE] border-b border-[#F0EFFE] last:border-0 opacity-60">
+                          <div className="min-w-[36px] text-center">
+                            <div className="text-xs font-bold text-[#7B78A8]">{idx + 1}</div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-[#7B78A8]">{fmtDate(s.scheduled_at)}</div>
+                            <div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
+                        </div>
+                      )
+                    })}
+                </details>
+              )}
+
+              {/* FIX B: Sesi aktif (scheduled/rescheduled) — nomor mulai dari 1 */}
+              {sessions
+                .filter(s => s.status !== 'completed' && s.status !== 'cancelled')
+                .map((s, idx) => {
+                  const st = STATUS_SESI[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' }
+                  return (
+                    <div key={s.id} className={`flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F6FF] transition-colors border-b border-[#E5E3FF] last:border-0`}>
+                      <div className="min-w-[36px] text-center">
+                        <div className="text-xs font-bold text-[#5C4FE5]">{idx + 1}</div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-[#1A1640]">{fmtDate(s.scheduled_at)}</div>
+                        <div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div>
+                      </div>
+                      {s.zoom_link && (
+                        <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
+                          className="text-[#5C4FE5] hover:opacity-70 transition">
+                          <ExternalLink size={13}/>
+                        </a>
                       )}
-                      <button onClick={() => openEditSession(s)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EFFF] transition" title="Edit Sesi">
-                        <Pencil size={13}/>
-                      </button>
-                      <button onClick={() => deleteSession(s.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
-                        <Trash2 size={13}/>
-                      </button>
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {s.status === 'scheduled' && (
+                          <button onClick={() => markSessionComplete(s.id)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai">
+                            <Check size={13}/>
+                          </button>
+                        )}
+                        <button onClick={() => openEditSession(s)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EFFF] transition" title="Edit Sesi">
+                          <Pencil size={13}/>
+                        </button>
+                        <button onClick={() => deleteSession(s.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus">
+                          <Trash2 size={13}/>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
             </>
           )}
         </div>
@@ -653,6 +702,15 @@ export default function KelasDetailPage() {
                     <div className="text-xs text-[#7B78A8]">{new Date(p.created_at).toLocaleDateString('id-ID', {day:'numeric',month:'short',year:'numeric'})}</div>
                   </div>
                   <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
+                  {/* FIX C: Tombol konfirmasi lunas untuk payment pending */}
+                  {p.status === 'pending' && (
+                    <button
+                      onClick={() => konfirmasiPembayaran(p.id)}
+                      className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-colors flex-shrink-0 border border-emerald-200"
+                    >
+                      ✓ Konfirmasi Lunas
+                    </button>
+                  )}
                 </div>
               )
             })
