@@ -414,6 +414,42 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
         </div>
 
+        {/* Upload file JSX */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            File JSX Bacaan {!isEditing && <span className="text-red-500">*</span>}
+          </label>
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".jsx,.tsx,.js"
+                className="hidden"
+                onChange={(e) => setJsxFile(e.target.files?.[0] ?? null)}
+              />
+              <span className="inline-flex items-center gap-2 px-4 py-2 border-2 border-dashed border-[#5C4FE5] text-[#5C4FE5] rounded-lg hover:bg-[#F7F6FF] transition-colors font-medium text-sm">
+                {jsxFile ? '🔄 Ganti File' : '📂 Pilih File JSX'}
+              </span>
+            </label>
+            {jsxFile ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-sm text-gray-600 truncate">{jsxFile.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setJsxFile(null)}
+                  className="text-red-500 hover:text-red-700 text-xs flex-shrink-0"
+                >
+                  ✕ Hapus
+                </button>
+              </div>
+            ) : (
+              <span className="text-sm text-gray-400">
+                {isEditing ? 'Kosongkan jika tidak ingin ganti file' : 'Pilih file .jsx atau .tsx'}
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Order Number hidden — default 1 */}
 
         <div className="flex items-center gap-2">
