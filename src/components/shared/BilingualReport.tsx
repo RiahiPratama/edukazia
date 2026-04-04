@@ -103,6 +103,7 @@ type BilingualReportProps = {
   audience:      'tutor' | 'ortu' | 'siswa'
   defaultOpen?:  boolean
   sessionLabel?: string
+  studentName?:  string  // untuk personalisasi teks recording ortu
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -111,6 +112,7 @@ export default function BilingualReport({
   audience,
   defaultOpen = false,
   sessionLabel,
+  studentName,
 }: BilingualReportProps) {
   const [isOpen,  setIsOpen]  = useState(defaultOpen)
   const [lang,    setLang]    = useState<'id' | 'en'>('id')
@@ -139,7 +141,7 @@ export default function BilingualReport({
   const showPerkembangan = true
   const showSaranSiswa   = audience === 'tutor' || audience === 'siswa'
   const showSaranOrtu    = audience === 'tutor' || audience === 'ortu'
-  const showRecording    = audience === 'tutor'
+  const showRecording    = !!laporan.recordingUrl // tampil di semua audience
 
   const getText = (parsed: { id: string; en: string }) => {
     if (lang === 'en' && parsed.en) return parsed.en
@@ -267,19 +269,53 @@ export default function BilingualReport({
             </div>
           )}
 
-          {/* RECORDING — tutor only */}
+          {/* RECORDING — tampil di semua audience dengan CTA berbeda */}
           {showRecording && laporan.recordingUrl && (
             <div className="border-t border-[#F0EFFF] pt-3">
-              <a
-                href={laporan.recordingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-xs font-bold text-[#5C4FE5] hover:underline"
-              >
-                <Video size={13}/>
-                Lihat Recording Sesi
-                <ExternalLink size={11}/>
-              </a>
+              {audience === 'tutor' && (
+                <a href={laporan.recordingUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-xs font-bold text-[#5C4FE5] hover:underline">
+                  <Video size={13}/>
+                  Lihat Recording Sesi
+                  <ExternalLink size={11}/>
+                </a>
+              )}
+
+              {audience === 'ortu' && (
+                <a href={laporan.recordingUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-[#EEEDFE] to-[#F0F4FF] hover:from-[#E0DEFE] hover:to-[#E8EEFF] transition-all group">
+                  <div className="w-9 h-9 rounded-xl bg-[#5C4FE5] flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <Video size={16} className="text-white"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-[#1A1640]">
+                      🎬 Lihat Rekaman Belajar {studentName ? studentName.split(' ')[0] : 'Anak Anda'}
+                    </p>
+                    <p className="text-[10px] text-[#7B78A8] mt-0.5">
+                      Pantau langsung perkembangan belajarnya dari rumah
+                    </p>
+                  </div>
+                  <ExternalLink size={13} className="text-[#5C4FE5] flex-shrink-0"/>
+                </a>
+              )}
+
+              {audience === 'siswa' && (
+                <a href={laporan.recordingUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-[#EAF3DE] to-[#F0FFF4] hover:from-[#D8ECC8] hover:to-[#E4FFEE] transition-all group">
+                  <div className="w-9 h-9 rounded-xl bg-green-500 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <Video size={16} className="text-white"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-[#1A1640]">
+                      ▶ Tonton Ulang Pelajaran Ini
+                    </p>
+                    <p className="text-[10px] text-[#5A7A3A] mt-0.5">
+                      Review materi biar makin paham dan nilai makin bagus! 💪
+                    </p>
+                  </div>
+                  <ExternalLink size={13} className="text-green-600 flex-shrink-0"/>
+                </a>
+              )}
             </div>
           )}
 

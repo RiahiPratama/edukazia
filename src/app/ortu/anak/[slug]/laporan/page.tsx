@@ -83,7 +83,7 @@ export default async function OrtuAnakLaporanPage({ params }: { params: Promise<
   const { data: reports } = sessionIds.length > 0
     ? await supabase
         .from('session_reports')
-        .select('session_id, materi, perkembangan, saran_siswa, created_at')
+        .select('session_id, materi, perkembangan, saran_siswa, recording_url, created_at')
         .eq('student_id', studentId)
         .in('session_id', sessionIds)
         .order('created_at', { ascending: false })
@@ -118,7 +118,8 @@ export default async function OrtuAnakLaporanPage({ params }: { params: Promise<
       tutorName:   tutor?.full_name ?? '—',
       materi:      r.materi,
       perkembangan: r.perkembangan,
-      saranSiswa:  r.saran_siswa,  // ← saran untuk anak, bukan ortu
+      saranSiswa:  r.saran_siswa,
+      recordingUrl: r.recording_url ?? null,
       attendance:  att?.status ?? null,
     }
   })
@@ -160,10 +161,11 @@ export default async function OrtuAnakLaporanPage({ params }: { params: Promise<
                     perkembangan: rep.perkembangan,
                     saranSiswa:   rep.saranSiswa,
                     saranOrtu:    null,
-                    recordingUrl: null,
+                    recordingUrl: rep.recordingUrl,
                   }}
                   audience="siswa"
                   sessionLabel={fmtDate(rep.scheduledAt)}
+                  studentName={studentName}
                 />
               </div>
             </div>

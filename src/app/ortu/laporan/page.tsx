@@ -208,6 +208,7 @@ export default async function OrtuLaporanPage() {
                         }}
                         audience="ortu"
                         sessionLabel={fmtDate(rep.scheduledAt)}
+                        studentName={student.full_name}
                       />
                     </div>
                   ))}
