@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2,
-  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown
+  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText
 } from 'lucide-react'
 
 // Nav structure dengan sub-menu
@@ -20,7 +20,8 @@ const navGroups = [
   { group: 'Akademik', items: [
     { href: '/admin/siswa',   label: 'Siswa',         icon: GraduationCap },
     { href: '/admin/tutor',   label: 'Tutor',          icon: Users, children: [
-      { href: '/admin/absensi', label: 'Absensi', icon: ClipboardList },
+      { href: '/admin/absensi', label: 'Absensi Siswa',  icon: ClipboardList },
+      { href: '/admin/laporan', label: 'Laporan Siswa',  icon: FileText },
     ]},
     { href: '/admin/kelas',   label: 'Kelas',          icon: BookOpen },
     { href: '/admin/kursus',  label: 'Kursus & Paket', icon: Layers },
@@ -56,7 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   function NavContent({ onClose }: { onClose?: () => void }) {
     const [expanded, setExpanded] = useState<Record<string, boolean>>({
-      '/admin/tutor': pathname.startsWith('/admin/tutor') || pathname.startsWith('/admin/absensi'),
+      '/admin/tutor': pathname.startsWith('/admin/tutor') || pathname.startsWith('/admin/absensi') || pathname.startsWith('/admin/laporan'),
       '/admin/bimbel': pathname.startsWith('/admin/bimbel') || pathname.startsWith('/admin/subscription'),
     })
 
