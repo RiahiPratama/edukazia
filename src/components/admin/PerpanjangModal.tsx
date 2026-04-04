@@ -8,7 +8,7 @@ type Package  = { id: string; name: string; total_sessions: number; price: numbe
 type Session  = { scheduled_at: string; status: string }
 type Enrollment = { id: string; student_id: string; student_name: string; sessions_total: number; sessions_used: number }
 type JadwalRow = { date: string; time: string; repeat: number }
-type PreviewSession = { date: string; time: string }
+type PreviewSession = { date: string; time: string; isoDate: string }
 
 const MAX_ROWS   = 5
 const MAX_REPEAT = 16
@@ -22,10 +22,12 @@ function generateSessions(rows: JadwalRow[]): PreviewSession[] {
       sessions.push({
         date: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }),
         time: row.time,
+        isoDate: d.toISOString(),
       })
     })
   })
-  return sessions.sort((a, b) => a.date.localeCompare(b.date))
+  // FIX: sort by actual date (ISO), bukan string display yang kacau secara alfabet
+  return sessions.sort((a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime())
 }
 
 function today() {
