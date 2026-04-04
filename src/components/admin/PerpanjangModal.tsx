@@ -69,11 +69,12 @@ export default function PerpanjangModal({
   const [kelasCourseId, setKelasCourseId] = useState<string | null>(null)
 
   const [packageId,     setPackageId]     = useState('')
+  const [jumlahPaket,   setJumlahPaket]   = useState(1)
   const [sessionsTotal, setSessionsTotal] = useState('8')
   const [startOffset,   setStartOffset]   = useState('1')
   const [payment,       setPayment]       = useState('')
   const [paymentMethod, setPaymentMethod] = useState('transfer')
-  const [zoomLink,      setZoomLink]      = useState('') // selalu kosong — admin wajib input link baru
+  const [zoomLink,      setZoomLink]      = useState('')
   const [jadwalMode,    setJadwalMode]    = useState<'auto' | 'manual'>('auto')
   const [jadwalRows,    setJadwalRows]    = useState<JadwalRow[]>([{ date: today(), time: '08:00', repeat: 1 }])
   const [previewSessions, setPreviewSessions] = useState<PreviewSession[]>([])
@@ -144,12 +145,23 @@ export default function PerpanjangModal({
     if (rows.length > 0) setJadwalRows(rows)
   }
 
-  function handlePackageChange(id: string) {
+  function handlePackageChange(id: string, qty?: number) {
     const pkg = packages.find(p => p.id === id)
+    const q   = qty ?? jumlahPaket
     setPackageId(id)
     if (pkg) {
-      setSessionsTotal(pkg.total_sessions.toString())
-      setPayment(pkg.price.toString())
+      setSessionsTotal((pkg.total_sessions * q).toString())
+      setPayment((pkg.price * q).toString())
+    }
+  }
+
+  function handleJumlahPaketChange(q: number) {
+    const qty = Math.max(1, Math.min(6, q)) // min 1, max 6 paket
+    setJumlahPaket(qty)
+    const pkg = packages.find(p => p.id === packageId)
+    if (pkg) {
+      setSessionsTotal((pkg.total_sessions * qty).toString())
+      setPayment((pkg.price * qty).toString())
     }
   }
 
@@ -307,14 +319,61 @@ export default function PerpanjangModal({
                   Tidak ada paket aktif untuk kelas ini. Tambahkan paket di menu Kursus & Paket.
                 </div>
               ) : (
-                <select value={packageId} onChange={e => handlePackageChange(e.target.value)} className={inputCls}>
-                  <option value="">Pilih paket...</option>
-                  {packages.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {p.total_sessions} sesi — {formatRp(p.price)}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select value={packageId} onChange={e => handlePackageChange(e.target.value)} className={inputCls}>
+                    <option value="">Pilih paket...</option>
+                    {packages.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {p.total_sessions} sesi — {formatRp(p.price)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Jumlah Paket — hanya tampil kalau paket sudah dipilih */}
+                  {packageId && (() => {
+                    const pkg = packages.find(p => p.id === packageId)!
+                    return (
+                      <div className="mt-3 bg-[#F7F6FF] border border-[#E5E3FF] rounded-xl p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-0.5">Jumlah Paket</p>
+                            <p className="text-[10px] text-[#7B78A8]">Bayar lebih dari 1 paket sekaligus</p>
+                          </div>
+                          {/* Stepper */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleJumlahPaketChange(jumlahPaket - 1)}
+                              disabled={jumlahPaket <= 1}
+                              className="w-8 h-8 rounded-lg bg-white border border-[#E5E3FF] text-[#5C4FE5] font-bold text-lg flex items-center justify-center hover:bg-[#F0EFFF] disabled:opacity-30 transition">
+                              −
+                            </button>
+                            <span className="w-6 text-center font-black text-[#1A1640] text-sm">{jumlahPaket}</span>
+                            <button
+                              onClick={() => handleJumlahPaketChange(jumlahPaket + 1)}
+                              disabled={jumlahPaket >= 6}
+                              className="w-8 h-8 rounded-lg bg-white border border-[#E5E3FF] text-[#5C4FE5] font-bold text-lg flex items-center justify-center hover:bg-[#F0EFFF] disabled:opacity-30 transition">
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Kalkulasi total */}
+                        {jumlahPaket > 1 && (
+                          <div className="mt-2.5 pt-2.5 border-t border-[#E5E3FF] grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-white rounded-lg p-2 text-center">
+                              <p className="text-[#7B78A8]">Total Sesi</p>
+                              <p className="font-black text-[#5C4FE5] text-sm">{pkg.total_sessions} × {jumlahPaket} = {pkg.total_sessions * jumlahPaket} sesi</p>
+                            </div>
+                            <div className="bg-white rounded-lg p-2 text-center">
+                              <p className="text-[#7B78A8]">Total Bayar</p>
+                              <p className="font-black text-[#5C4FE5] text-sm">{formatRp(pkg.price * jumlahPaket)}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </>
               )}
             </div>
 
