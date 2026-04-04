@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import PaketTable from './components/PaketTable'
 
 export default async function KursusPage() {
   const supabase = await createClient()
@@ -18,10 +19,6 @@ export default async function KursusPage() {
     `)
     .order('created_at', { ascending: false })
 
-  function formatRupiah(n: number) {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -31,6 +28,7 @@ export default async function KursusPage() {
         </div>
       </div>
 
+      {/* Mata Pelajaran */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-[#1A1640]">Mata Pelajaran</h2>
@@ -63,6 +61,7 @@ export default async function KursusPage() {
         )}
       </div>
 
+      {/* Paket Belajar */}
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-[#1A1640]">Paket Belajar</h2>
@@ -70,43 +69,7 @@ export default async function KursusPage() {
             + Tambah Paket
           </Link>
         </div>
-        {!paket || paket.length === 0 ? (
-          <div className="text-center py-10 text-[#7B78A8]">
-            <div className="text-4xl mb-3">📦</div>
-            <p className="font-semibold mb-1">Belum ada paket belajar</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#E5E3FF]">
-                  <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Nama Paket</th>
-                  <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Kursus</th>
-                  <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Tipe</th>
-                  <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Sesi</th>
-                  <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Harga</th>
-                  <th className="text-left py-3 px-4 text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paket.map((p: any) => (
-                  <tr key={p.id} className="border-b border-[#F0EFFF] hover:bg-[#F7F6FF] transition-colors">
-                    <td className="py-3 px-4 font-semibold text-[#1A1640]">{p.name}</td>
-                    <td className="py-3 px-4 text-[#4A4580]">{p.courses?.name ?? '—'}</td>
-                    <td className="py-3 px-4 text-[#4A4580]">{p.class_types?.name ?? '—'}</td>
-                    <td className="py-3 px-4 text-[#4A4580]">{p.total_sessions} sesi</td>
-                    <td className="py-3 px-4 font-semibold text-[#1A1640]">{formatRupiah(p.price)}</td>
-                    <td className="py-3 px-4">
-                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {p.is_active ? 'Aktif' : 'Nonaktif'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <PaketTable paket={(paket ?? []) as any} />
       </div>
     </div>
   )
