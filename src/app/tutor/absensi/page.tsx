@@ -421,7 +421,7 @@ export default function TutorAbsensiPage() {
 
     const { data: enrollments } = await supabase
       .from('enrollments')
-      .select('id, student_id, session_start_offset, sessions_total')
+      .select('id, student_id, session_start_offset, sessions_total, enrolled_at')
       .eq('class_group_id', sesi.class_groups.id)
       .eq('status', 'active')
 
@@ -456,21 +456,37 @@ export default function TutorAbsensiPage() {
     setAbsensiMap(preAbsen)
     setNotesMap(preNotes)
 
-    const { data: completedSess } = await supabase
-      .from('sessions').select('id')
-      .eq('class_group_id', sesi.class_groups.id)
-      .eq('status', 'completed')
-
-    const completedIds = (completedSess ?? []).map((s: any) => s.id)
-    const { data: hadirAtts } = completedIds.length > 0
-      ? await supabase.from('attendances').select('student_id')
-          .in('session_id', completedIds).eq('status', 'hadir')
-      : { data: [] }
-
+    // FIX: hitung hadir per siswa hanya dari sesi SETELAH enrolled_at enrollment active
+    // Ini mencegah sesi paket lama ikut terhitung di paket baru
     const hadirPerSiswa: Record<string, number> = {}
-    ;(hadirAtts ?? []).forEach((a: any) => {
-      hadirPerSiswa[a.student_id] = (hadirPerSiswa[a.student_id] ?? 0) + 1
-    })
+
+    for (const e of enrollments) {
+      const enrolledAt = e.enrolled_at ? new Date(e.enrolled_at).toISOString() : null
+
+      const sessQuery = supabase
+        .from('sessions')
+        .select('id')
+        .eq('class_group_id', sesi.class_groups.id)
+        .eq('status', 'completed')
+
+      const { data: completedSessForEnr } = enrolledAt
+        ? await sessQuery.gte('scheduled_at', enrolledAt)
+        : await sessQuery
+
+      const completedIdsForEnr = (completedSessForEnr ?? []).map((s: any) => s.id)
+
+      if (completedIdsForEnr.length > 0) {
+        const { data: hadirAtts } = await supabase
+          .from('attendances')
+          .select('student_id')
+          .in('session_id', completedIdsForEnr)
+          .eq('student_id', e.student_id)
+          .eq('status', 'hadir')
+        hadirPerSiswa[e.student_id] = (hadirAtts ?? []).length
+      } else {
+        hadirPerSiswa[e.student_id] = 0
+      }
+    }
 
     setSiswaList(enrollments.map((e: any) => ({
       studentId:    e.student_id,
