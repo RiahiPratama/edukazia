@@ -880,60 +880,27 @@ export default function KelasDetailPage() {
                               )}
                             </div>
 
-                            {/* LAPORAN TUTOR */}
-                            {detail.reports.length > 0 && (
-                              <div className="border-t border-[#E5E3FF] pt-3">
-                                <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-2">Laporan Tutor</p>
-                                {detail.reports.map(r => (
-                                  <div key={r.student_id} className="space-y-2">
-                                    {/* Materi */}
-                                    {r.materi && (
-                                      <div>
-                                        <p className="text-[10px] font-bold text-[#5C4FE5] mb-0.5">Materi</p>
-                                        <p className="text-xs text-[#1A1640] leading-relaxed">{r.materi}</p>
-                                      </div>
-                                    )}
-                                    {/* Perkembangan */}
-                                    {r.perkembangan && (
-                                      <div>
-                                        <p className="text-[10px] font-bold text-[#5C4FE5] mb-0.5">Perkembangan Siswa</p>
-                                        <p className="text-xs text-[#1A1640] leading-relaxed whitespace-pre-line line-clamp-4">{r.perkembangan}</p>
-                                      </div>
-                                    )}
-                                    {/* Saran */}
-                                    {(r.saran_siswa || r.saran_ortu) && (
-                                      <div className="grid grid-cols-2 gap-2">
-                                        {r.saran_siswa && (
-                                          <div className="bg-blue-50 rounded-lg p-2">
-                                            <p className="text-[10px] font-bold text-blue-700 mb-0.5">Saran untuk Siswa</p>
-                                            <p className="text-xs text-blue-900 leading-relaxed line-clamp-3">{r.saran_siswa}</p>
-                                          </div>
-                                        )}
-                                        {r.saran_ortu && (
-                                          <div className="bg-purple-50 rounded-lg p-2">
-                                            <p className="text-[10px] font-bold text-[#5C4FE5] mb-0.5">Saran untuk Ortu</p>
-                                            <p className="text-xs text-[#4A3EC7] leading-relaxed line-clamp-3">{r.saran_ortu}</p>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                    {/* Recording */}
-                                    {r.recording_url && (
-                                      <a href={r.recording_url} target="_blank" rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#5C4FE5] hover:underline">
-                                        <ExternalLink size={11}/> Lihat Recording
-                                      </a>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {detail.reports.length === 0 && (
-                              <div className="border-t border-[#E5E3FF] pt-3">
-                                <p className="text-xs text-[#7B78A8] italic">Belum ada laporan tutor untuk sesi ini</p>
-                              </div>
-                            )}
+                            {/* LAPORAN TUTOR — cukup status sudah/belum */}
+                            <div className="border-t border-[#E5E3FF] pt-3 flex items-center gap-3">
+                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Laporan Tutor</p>
+                              {detail.reports.length > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+                                    ✓ Sudah diinput
+                                  </span>
+                                  {detail.reports[0]?.recording_url && (
+                                    <a href={detail.reports[0].recording_url} target="_blank" rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-[#5C4FE5] hover:underline">
+                                      <ExternalLink size={10}/> Recording
+                                    </a>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600">
+                                  ✗ Belum diinput
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
