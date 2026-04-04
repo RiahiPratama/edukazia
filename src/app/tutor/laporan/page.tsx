@@ -298,7 +298,8 @@ export default function TutorLaporanPage() {
       const izin   = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'izin').length
       const sakit  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'sakit').length
       const alpha  = sessiRelevan.filter((s: any) => !siswaAtt[s.id] && s.status === 'completed').length
-      const pctHadir = totalSesi > 0 ? Math.round((hadir / totalSesi) * 100) : 0
+      const completedCount = sessiRelevan.filter((s: any) => s.status === 'completed').length
+      const pctHadir = completedCount > 0 ? Math.round((hadir / completedCount) * 100) : 0
 
       // FIX progress: session_start_offset + hadir, cap at sessions_total
       const sessionDone = Math.min(
