@@ -123,7 +123,12 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     return sWIT > todayEnd && sWIT <= new Date(futureEnd)
   })
 
-  const completedSessions = (allSessions ?? [])
+  // Sesi completed hari ini (untuk tampil "Sesi hari ini telah dilaksanakan")
+  const todayCompletedSessions = (allSessions ?? []).filter((s: any) => {
+    if (s.status !== 'completed') return false
+    const sWIT = new Date(new Date(s.scheduled_at).toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
+    return sWIT >= todayStart && sWIT <= todayEnd
+  })
     .filter((s: any) => s.status === 'completed')
     .sort((a: any, b: any) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
     .slice(0, 20)
@@ -252,6 +257,8 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
 
       <OrtuAnakJadwalHariIni
         todaySessions={todaySessions}
+        todayCompletedSessions={todayCompletedSessions}
+        attendances={attendances ?? []}
         nextSession={nextSession}
         studentId={studentId}
         classGroups={classGroups ?? []}
