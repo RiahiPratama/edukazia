@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { ReactElement } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, BookOpen, TrendingUp, Lightbulb, Video } from 'lucide-react'
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ function renderMarkdown(text: string) {
   if (!text) return null
 
   const lines = text.split('\n')
-  const elements: JSX.Element[] = []
+  const elements: ReactElement[] = []
   let bulletGroup: string[] = []
   let keyCounter = 0
 
