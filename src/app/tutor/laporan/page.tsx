@@ -299,7 +299,10 @@ export default function TutorLaporanPage() {
       const sakit  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'sakit').length
       const alpha  = sessiRelevan.filter((s: any) => !siswaAtt[s.id] && s.status === 'completed').length
       const completedCount = sessiRelevan.filter((s: any) => s.status === 'completed').length
+      // Kehadiran % = hadir / sesi yang sudah terjadi (untuk teks)
       const pctHadir = completedCount > 0 ? Math.round((hadir / completedCount) * 100) : 0
+      // Progress bar = sesi completed / total sesi sejak enrolled (untuk bar visual)
+      const progressPct = sessiRelevan.length > 0 ? Math.round((completedCount / sessiRelevan.length) * 100) : 0
 
       // FIX progress: session_start_offset + hadir, cap at sessions_total
       const sessionDone = Math.min(
@@ -325,7 +328,7 @@ export default function TutorLaporanPage() {
         studentId: e.student_id, nama,
         sessionOffset: sessionDone,
         sessionTotal:  e.sessions_total,
-        totalSesi, hadir, izin, sakit, alpha, pctHadir, detailSesi,
+        totalSesi, hadir, izin, sakit, alpha, pctHadir, progressPct, detailSesi,
       }
     })
 
@@ -713,7 +716,7 @@ export default function TutorLaporanPage() {
                           )}
                         </div>
                         <div className="w-full h-2 bg-[#E5E3FF] rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-[#5C4FE5] transition-all" style={{ width: `${siswa.pctHadir}%` }}/>
+                          <div className="h-full rounded-full bg-[#5C4FE5] transition-all" style={{ width: `${siswa.progressPct ?? siswa.pctHadir}%` }}/>
                         </div>
                       </div>
 
