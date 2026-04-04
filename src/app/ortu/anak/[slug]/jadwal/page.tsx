@@ -22,7 +22,7 @@ const statusBadge: Record<string, { bg: string; text: string; label: string }> =
   cancelled:  { bg: '#FCEBEB', text: '#791F1F', label: 'Dibatalkan' },
 }
 
-export default async function OrtuAnakJadwalPage({ params }: { params: { studentId: string } }) {
+export default async function OrtuAnakSlugJadwalPage({ params }: { params: Promise<{ slug: string }> }) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,36 +38,38 @@ export default async function OrtuAnakJadwalPage({ params }: { params: { student
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) redirect('/login')
 
-  const { studentId } = params
+  const { slug } = await params
+
+  // Lookup student by slug + verifikasi milik ortu ini
+  const { data: slugRow } = await supabase
+    .from('students')
+    .select('id')
+    .eq('slug', slug)
+    .eq('parent_profile_id', session.user.id)
+    .single()
+
+  const studentId = slugRow?.id ?? null
+  if (!studentId) redirect('/ortu/dashboard')
 
   // Verifikasi siswa milik ortu ini
   const { data: student } = await supabase
     .from('students')
     .select(`id, grade, profiles!students_profile_id_fkey(full_name)`)
     .eq('id', studentId)
-    .eq('parent_profile_id', session.user.id)
     .single()
 
   if (!student) redirect('/ortu/dashboard')
 
   const studentName = (Array.isArray(student.profiles) ? student.profiles[0] : student.profiles)?.full_name ?? '(Tanpa nama)'
 
-  // Enrollments aktif
+  // Enrollments aktif saja
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select('id, class_group_id, status, end_date, expired_at, status_override')
+    .select('id, class_group_id, status')
     .eq('student_id', studentId)
+    .eq('status', 'active')
 
-  const activeEnrollments = (enrollments ?? []).filter((e: any) => {
-    const now = new Date()
-    if (e.status_override === 'active')   return true
-    if (e.status_override === 'expired')  return false
-    if (e.end_date   && new Date(e.end_date)   < now) return false
-    if (e.expired_at && new Date(e.expired_at) < now) return false
-    return e.status === 'active'
-  })
-
-  const cgIds = [...new Set(activeEnrollments.map((e: any) => e.class_group_id).filter(Boolean))]
+  const cgIds = [...new Set((enrollments ?? []).map((e: any) => e.class_group_id).filter(Boolean))]
 
   const { data: classGroups } = cgIds.length > 0
     ? await supabase.from('class_groups').select('id, label, tutor_id, zoom_link').in('id', cgIds)

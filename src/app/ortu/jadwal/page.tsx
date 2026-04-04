@@ -93,9 +93,9 @@ export default async function OrtuJadwalPage() {
     ? await supabase.from('profiles').select('id, full_name').in('id', tutorIds)
     : { data: [] }
 
-  // Sessions: 7 hari lalu s/d 28 hari ke depan
+  // Sessions: hari ini s/d 28 hari ke depan
   const nowWIT   = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
-  const rangeS   = new Date(nowWIT); rangeS.setDate(rangeS.getDate() - 7)
+  const rangeS   = new Date(nowWIT); rangeS.setHours(0, 0, 0, 0)
   const rangeE   = new Date(nowWIT); rangeE.setDate(rangeE.getDate() + 28)
   const toUTC    = (d: Date) => new Date(d.getTime() - 9 * 60 * 60 * 1000).toISOString()
 

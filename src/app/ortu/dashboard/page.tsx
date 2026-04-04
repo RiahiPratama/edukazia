@@ -62,13 +62,14 @@ export default async function OrtuDashboardPage() {
 
   const studentIds = students.map(s => s.id)
 
-  // Ambil enrollments semua anak
+  // Ambil enrollments aktif saja
   const { data: enrollments } = await supabase
     .from('enrollments')
-    .select(`id, student_id, status, end_date, expired_at, status_override,
+    .select(`id, student_id, status, enrolled_at,
       session_start_offset, sessions_total, package_id,
       class_group_id`)
     .in('student_id', studentIds)
+    .eq('status', 'active')
 
   const classGroupIds = [...new Set((enrollments ?? []).map((e: any) => e.class_group_id).filter(Boolean))]
 
@@ -149,25 +150,27 @@ export default async function OrtuDashboardPage() {
   // Susun data per anak
   const childrenData = students.map(student => {
     const studentEnrollments = (enrollments ?? []).filter((e: any) => e.student_id === student.id)
-    const activeEnrollments = studentEnrollments.filter((e: any) => {
-      const now = new Date()
-      if (e.status_override === 'active') return true
-      if (e.status_override === 'expired') return false
-      if (e.end_date && new Date(e.end_date) < now) return false
-      if (e.expired_at && new Date(e.expired_at) < now) return false
-      return e.status === 'active'
-    })
+    const activeEnrollments = studentEnrollments // sudah difilter active di query
 
     const enrollmentsWithProgress = activeEnrollments.map((e: any) => {
       const cg = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
       const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+      // FIX: hitung hadir hanya dari sesi SETELAH enrolled_at
+      const enrolledAt = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
       const sessIdsForCG = allSessionIds_month
-        .filter((s: any) => s.class_group_id === e.class_group_id)
+        .filter((s: any) =>
+          s.class_group_id === e.class_group_id &&
+          new Date(s.scheduled_at ?? 0) >= enrolledAt
+        )
         .map((s: any) => s.id)
       const hadirCount = (attendances ?? []).filter(
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
-      const progress = (e.session_start_offset ?? 0) + hadirCount
+      // FIX: offset min 1, cap at sessions_total
+      const progress = Math.min(
+        (e.session_start_offset ?? 1) + hadirCount,
+        e.sessions_total ?? 8
+      )
       const total    = e.sessions_total ?? 8
 
       // Prefer scheduled, fallback to rescheduled
