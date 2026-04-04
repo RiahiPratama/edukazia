@@ -73,11 +73,13 @@ export default async function TutorRenderPage({
   if (error || !data) notFound()
 
   const jsxContent = await data.text()
-  const componentNameMatch = jsxContent.match(/export\s+default\s+(\w+)/)
+  const componentNameMatch = jsxContent.match(/export\s+default\s+function\s+(\w+)/)
+    ?? jsxContent.match(/export\s+default\s+(\w+)/)
   const componentName = componentNameMatch?.[1] || 'Component'
 
   const cleanJSX = jsxContent
     .replace(/import\s+.*?from\s+['"][^'"]+['"];?\n?/g, '')
+    .replace(/export\s+default\s+function\s+/g, 'function ')
     .replace(/export\s+default\s+\w+;?\n?/g, '')
     .replace(/<BookOpen\s*([^>\/]*)\s*\/>/g, '<span className="inline-block">📖</span>')
     .replace(/<ChevronDown\s*([^>\/]*)\s*\/>/g, '<span className="inline-block">▼</span>')
