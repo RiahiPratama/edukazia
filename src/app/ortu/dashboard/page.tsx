@@ -90,7 +90,7 @@ export default async function OrtuDashboardPage() {
         .in('class_type_id', classTypeIds)
     : { data: [] }
 
-  // Ambil courses dan tutors
+  // Ambil courses dan tutors (dari kelas aktif)
   const tutorIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
   const { data: tutors } = tutorIds.length > 0
     ? await supabase.from('profiles').select('id, full_name').in('id', tutorIds)
@@ -281,30 +281,44 @@ export default async function OrtuDashboardPage() {
   const allTotal = (attendances ?? []).length
   const avgKehadiran = allTotal > 0 ? Math.round((allHadir / allTotal) * 100) : 0
 
-  // Ambil SEMUA class_groups termasuk yang inactive (arsip)
-  // Arsip = class_groups.status = 'inactive'
-  const allEnrollmentCGIds = [...new Set((enrollments ?? [])
+  // Ambil SEMUA class_groups inactive (arsip) dari semua enrollment siswa
+  const { data: allEnrollmentsForArsip } = await supabase
+    .from('enrollments')
+    .select('id, student_id, class_group_id, sessions_total, status')
+    .in('student_id', studentIds)
+    .in('status', ['completed', 'inactive', 'expired'])
+
+  const arsipCGIds = [...new Set((allEnrollmentsForArsip ?? [])
     .map((e: any) => e.class_group_id).filter(Boolean))]
 
-  const { data: allClassGroupsForArsip } = allEnrollmentCGIds.length > 0
+  const { data: allClassGroupsForArsip } = arsipCGIds.length > 0
     ? await supabase
         .from('class_groups')
         .select('id, label, status, tutor_id')
-        .in('id', allEnrollmentCGIds)
+        .in('id', arsipCGIds)
         .eq('status', 'inactive')
     : { data: [] }
 
+  // Gabungkan tutor dari kelas arsip yang mungkin belum ada di tutors
+  const arsipTutorIds = [...new Set((allClassGroupsForArsip ?? [])
+    .map((cg: any) => cg.tutor_id).filter(Boolean)
+    .filter((id: string) => !(tutors ?? []).some((t: any) => t.id === id))
+  )]
+  const { data: arsipTutors } = arsipTutorIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name').in('id', arsipTutorIds)
+    : { data: [] }
+  const allTutors = [...(tutors ?? []), ...(arsipTutors ?? [])]
+
   // Susun data arsip per anak
   const archivedData = students.map(student => {
-    const studentArchived = (enrollments ?? [])
+    const studentArchived = (allEnrollmentsForArsip ?? [])
       .filter((e: any) => {
         if (e.student_id !== student.id) return false
-        const cg = (allClassGroupsForArsip ?? []).find((c: any) => c.id === e.class_group_id)
-        return !!cg // hanya yang classgroup-nya inactive
+        return (allClassGroupsForArsip ?? []).some((c: any) => c.id === e.class_group_id)
       })
       .map((e: any) => {
         const cg    = (allClassGroupsForArsip ?? []).find((c: any) => c.id === e.class_group_id)
-        const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+        const tutor = allTutors.find((t: any) => t.id === cg?.tutor_id)
         return {
           enrollmentId: e.id,
           classLabel:   cg?.label ?? '—',
