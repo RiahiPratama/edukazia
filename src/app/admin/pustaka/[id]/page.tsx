@@ -16,8 +16,6 @@ type Product = {
   price:                number
   is_free_for_enrolled: boolean
   is_published:         boolean
-  course_id:            string | null
-  level_id:             string | null
 }
 
 function toSlug(str: string) {
@@ -28,10 +26,12 @@ function toSlug(str: string) {
     .replace(/\s+/g, '-')
 }
 
+const inputCls = "w-full border border-[#E5E3FF] rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-300 bg-white focus:outline-none focus:border-[#5C4FE5]"
+
 const TABS = [
-  { key: 'info',    label: 'Info Produk' },
-  { key: 'konten',  label: 'Konten Digital' },
-  { key: 'slide',   label: 'Slide Interaktif' },
+  { key: 'info',   label: 'Info Produk' },
+  { key: 'konten', label: 'Konten Digital' },
+  { key: 'slide',  label: 'Slide Interaktif' },
 ]
 
 export default function EditPustakaPage() {
@@ -44,32 +44,26 @@ export default function EditPustakaPage() {
   const [tab,          setTab]          = useState('info')
   const [loading,      setLoading]      = useState(true)
   const [saving,       setSaving]       = useState(false)
+  const [savingStep,   setSavingStep]   = useState('')
   const [thumbnail,    setThumbnail]    = useState<File | null>(null)
   const [thumbPreview, setThumbPreview] = useState<string | null>(null)
   const [error,        setError]        = useState('')
   const [success,      setSuccess]      = useState('')
   const [notFound,     setNotFound]     = useState(false)
 
-  // Load produk
   useEffect(() => {
     if (!id) return
     fetch(`/api/admin/pustaka/products/${id}`)
-      .then(r => {
-        if (r.status === 404) { setNotFound(true); return null }
-        return r.json()
-      })
-      .then(d => {
-        if (!d) return
+      .then(async r => {
+        if (r.status === 404) { setNotFound(true); return }
+        const d = await r.json()
         setProduct(d.product)
         setForm(d.product)
-        if (d.product.thumbnail_url) setThumbPreview(d.product.thumbnail_url)
+        if (d.product?.thumbnail_url) setThumbPreview(d.product.thumbnail_url)
       })
+      .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
   }, [id])
-
-  const handleTitleChange = (v: string) => {
-    setForm(f => ({ ...f, title: v, slug: toSlug(v) }))
-  }
 
   const handleThumb = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -86,30 +80,38 @@ export default function EditPustakaPage() {
 
     setSaving(true)
     try {
-      let thumbnail_url = form.thumbnail_url
+      let thumbnail_url = form.thumbnail_url ?? null
 
       // Upload thumbnail baru jika ada
       if (thumbnail) {
-        const ext  = thumbnail.name.split('.').pop()
-        const path = `thumbnails/${form.slug}-${Date.now()}.${ext}`
+        setSavingStep('Mengupload thumbnail...')
+        try {
+          const ext  = thumbnail.name.split('.').pop()
+          const path = `thumbnails/${form.slug}-${Date.now()}.${ext}`
 
-        const uploadRes = await fetch('/api/admin/pustaka/upload-thumbnail', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path, contentType: thumbnail.type })
-        })
-        const { signedUrl, publicUrl } = await uploadRes.json()
-
-        if (signedUrl) {
-          await fetch(signedUrl, {
-            method: 'PUT',
-            body: thumbnail,
-            headers: { 'Content-Type': thumbnail.type }
+          const uploadRes = await fetch('/api/admin/pustaka/upload-thumbnail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, contentType: thumbnail.type })
           })
-          thumbnail_url = publicUrl
+
+          if (uploadRes.ok) {
+            const { signedUrl, publicUrl } = await uploadRes.json()
+            if (signedUrl) {
+              await fetch(signedUrl, {
+                method: 'PUT',
+                body: thumbnail,
+                headers: { 'Content-Type': thumbnail.type }
+              })
+              thumbnail_url = publicUrl
+            }
+          }
+        } catch {
+          console.warn('Thumbnail upload gagal')
         }
       }
 
+      setSavingStep('Menyimpan produk...')
       const res = await fetch(`/api/admin/pustaka/products/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -122,32 +124,32 @@ export default function EditPustakaPage() {
       setProduct(data.product)
       setForm(data.product)
       setThumbnail(null)
-      setSuccess('Produk berhasil disimpan!')
+      if (data.product?.thumbnail_url) setThumbPreview(data.product.thumbnail_url)
+      setSuccess('Perubahan berhasil disimpan!')
       setTimeout(() => setSuccess(''), 3000)
 
     } catch {
       setError('Terjadi kesalahan, coba lagi')
     } finally {
       setSaving(false)
+      setSavingStep('')
     }
   }
 
-  // ---- Render states ----
   if (loading) return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="h-8 bg-gray-100 rounded-xl w-48 animate-pulse mb-6" />
+    <div className="p-6 max-w-3xl mx-auto space-y-4">
+      <div className="h-8 bg-gray-100 rounded-xl w-48 animate-pulse" />
+      <div className="h-12 bg-gray-100 rounded-2xl animate-pulse" />
       <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4 animate-pulse">
-        {[1,2,3,4].map(i => <div key={i} className="h-10 bg-gray-100 rounded-xl" />)}
+        {[1,2,3,4,5].map(i => <div key={i} className="h-10 bg-gray-100 rounded-xl" />)}
       </div>
     </div>
   )
 
   if (notFound) return (
-    <div className="p-6 text-center">
+    <div className="p-6 text-center space-y-3">
       <p className="text-gray-500">Produk tidak ditemukan</p>
-      <Link href="/admin/pustaka" className="text-[#5C4FE5] text-sm underline mt-2 inline-block">
-        ← Kembali ke Pustaka
-      </Link>
+      <Link href="/admin/pustaka" className="text-[#5C4FE5] text-sm underline">← Kembali ke Pustaka</Link>
     </div>
   )
 
@@ -156,20 +158,17 @@ export default function EditPustakaPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/pustaka" className="text-gray-400 hover:text-gray-600 text-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <Link href="/admin/pustaka" className="text-gray-400 hover:text-gray-600 text-sm flex-shrink-0">
             ← Pustaka
           </Link>
-          <span className="text-gray-300">/</span>
-          <h1 className="text-lg font-bold text-gray-800 font-sora truncate max-w-xs">
+          <span className="text-gray-300 flex-shrink-0">/</span>
+          <h1 className="text-lg font-bold text-gray-800 font-sora truncate">
             {product?.title}
           </h1>
         </div>
-        {/* Badge status */}
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-          product?.is_published
-            ? 'bg-green-100 text-green-700'
-            : 'bg-gray-100 text-gray-500'
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0 ml-3 ${
+          product?.is_published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
         }`}>
           {product?.is_published ? 'Published' : 'Draft'}
         </span>
@@ -189,13 +188,13 @@ export default function EditPustakaPage() {
           >
             {t.label}
             {(t.key === 'konten' || t.key === 'slide') && (
-              <span className="ml-1.5 text-xs opacity-60">Segera</span>
+              <span className="ml-1 text-xs opacity-50">Segera</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Tab: Info Produk */}
+      {/* TAB: Info Produk */}
       {tab === 'info' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-5">
 
@@ -213,14 +212,12 @@ export default function EditPustakaPage() {
                 <div className="text-center">
                   <div className="text-3xl mb-1">🖼️</div>
                   <p className="text-xs text-gray-400">Klik untuk upload thumbnail</p>
-                  <p className="text-xs text-gray-300">JPG / PNG, max 2MB</p>
+                  <p className="text-xs text-gray-300">JPG / PNG, maks 2MB</p>
                 </div>
               )}
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleThumb} />
-            {thumbnail && (
-              <p className="text-xs text-[#5C4FE5] mt-1">📎 {thumbnail.name} — siap diupload saat simpan</p>
-            )}
+            {thumbnail && <p className="text-xs text-[#5C4FE5] mt-1">📎 {thumbnail.name} — akan diupload saat simpan</p>}
           </div>
 
           {/* Judul */}
@@ -231,8 +228,8 @@ export default function EditPustakaPage() {
             <input
               type="text"
               value={form.title || ''}
-              onChange={e => handleTitleChange(e.target.value)}
-              className="w-full border border-[#E5E3FF] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#5C4FE5]"
+              onChange={e => setForm(f => ({ ...f, title: e.target.value, slug: toSlug(e.target.value) }))}
+              className={inputCls}
             />
           </div>
 
@@ -241,15 +238,15 @@ export default function EditPustakaPage() {
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
               Slug (URL) <span className="text-red-400">*</span>
             </label>
-            <div className="flex items-center border border-[#E5E3FF] rounded-xl overflow-hidden focus-within:border-[#5C4FE5]">
-              <span className="px-3 py-2.5 text-sm text-gray-400 bg-[#F7F6FF] border-r border-[#E5E3FF] whitespace-nowrap">
+            <div className="flex items-center border border-[#E5E3FF] rounded-xl overflow-hidden focus-within:border-[#5C4FE5] bg-white">
+              <span className="px-3 py-2.5 text-sm text-gray-400 bg-[#F7F6FF] border-r border-[#E5E3FF] whitespace-nowrap select-none">
                 /pustaka/
               </span>
               <input
                 type="text"
                 value={form.slug || ''}
                 onChange={e => setForm(f => ({ ...f, slug: toSlug(e.target.value) }))}
-                className="flex-1 px-3 py-2.5 text-sm focus:outline-none"
+                className="flex-1 px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none"
               />
             </div>
           </div>
@@ -261,7 +258,8 @@ export default function EditPustakaPage() {
               value={form.description || ''}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               rows={3}
-              className="w-full border border-[#E5E3FF] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#5C4FE5] resize-none"
+              placeholder="Deskripsi singkat produk ini..."
+              className={`${inputCls} resize-none`}
             />
           </div>
 
@@ -272,7 +270,7 @@ export default function EditPustakaPage() {
               <select
                 value={form.subject || 'english'}
                 onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                className="w-full border border-[#E5E3FF] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#5C4FE5]"
+                className={inputCls}
               >
                 <option value="english">Bahasa Inggris</option>
                 <option value="math">Matematika</option>
@@ -287,7 +285,7 @@ export default function EditPustakaPage() {
                 value={form.level_label || ''}
                 onChange={e => setForm(f => ({ ...f, level_label: e.target.value }))}
                 placeholder="A1, A2, Grade 4..."
-                className="w-full border border-[#E5E3FF] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#5C4FE5]"
+                className={inputCls}
               />
             </div>
           </div>
@@ -325,9 +323,9 @@ export default function EditPustakaPage() {
               value={form.price ?? 0}
               onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))}
               min={0}
-              className="w-full border border-[#E5E3FF] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#5C4FE5]"
+              className={inputCls}
             />
-            <p className="text-xs text-gray-400 mt-1">Isi 0 untuk produk gratis semua orang</p>
+            <p className="text-xs text-gray-400 mt-1">Isi 0 = gratis untuk semua orang</p>
           </div>
 
           {/* Toggle */}
@@ -336,7 +334,7 @@ export default function EditPustakaPage() {
               { key: 'is_free_for_enrolled', label: 'Gratis untuk siswa EduKazia yang aktif enrolled' },
               { key: 'is_published',         label: 'Published — tampil di halaman Pustaka publik' },
             ].map(t => (
-              <label key={t.key} className="flex items-center gap-3 cursor-pointer">
+              <label key={t.key} className="flex items-center gap-3 cursor-pointer select-none">
                 <div
                   onClick={() => setForm(f => ({ ...f, [t.key]: !f[t.key as keyof Product] }))}
                   className={`w-10 h-6 rounded-full transition-colors flex-shrink-0 relative cursor-pointer ${
@@ -355,7 +353,7 @@ export default function EditPustakaPage() {
           {/* Error / Success */}
           {error && (
             <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">
-              {error}
+              ⚠️ {error}
             </div>
           )}
           {success && (
@@ -371,7 +369,7 @@ export default function EditPustakaPage() {
               disabled={saving}
               className="flex-1 bg-[#5C4FE5] hover:bg-[#4a3fd4] text-white font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-60"
             >
-              {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+              {saving ? (savingStep || 'Menyimpan...') : 'Simpan Perubahan'}
             </button>
             <Link
               href={`/pustaka/${form.slug}`}
@@ -384,21 +382,21 @@ export default function EditPustakaPage() {
         </div>
       )}
 
-      {/* Tab: Konten Digital — coming soon */}
+      {/* TAB: Konten Digital */}
       {tab === 'konten' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-16 text-center">
           <div className="text-4xl mb-3">📄</div>
           <p className="font-semibold text-gray-700">Konten Digital</p>
-          <p className="text-sm text-gray-400 mt-1">Upload PDF & audio — akan dikerjakan di step berikutnya</p>
+          <p className="text-sm text-gray-400 mt-1">Upload PDF & audio — segera hadir</p>
         </div>
       )}
 
-      {/* Tab: Slide Interaktif — coming soon */}
+      {/* TAB: Slide Interaktif */}
       {tab === 'slide' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-16 text-center">
           <div className="text-4xl mb-3">🎞️</div>
           <p className="font-semibold text-gray-700">Slide Interaktif</p>
-          <p className="text-sm text-gray-400 mt-1">Slide + hotspot audio — akan dikerjakan di step berikutnya</p>
+          <p className="text-sm text-gray-400 mt-1">Slide + hotspot audio — segera hadir</p>
         </div>
       )}
 
