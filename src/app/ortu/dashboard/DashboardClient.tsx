@@ -111,13 +111,15 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
   }, [])
 
   useEffect(() => {
-    const check = () => setIsDark(localStorage.getItem('ortu-theme') === 'dark')
+    // Deteksi dark mode dari localStorage ortu-theme
+    const check = () => {
+      const theme = localStorage.getItem('ortu-theme')
+      setIsDark(theme === 'dark')
+    }
     check()
-    window.addEventListener('storage', check)
-    // Also observe CSS variable change via MutationObserver
-    const obs = new MutationObserver(check)
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
-    return () => { window.removeEventListener('storage', check); obs.disconnect() }
+    // Poll setiap 300ms untuk deteksi toggle dari layout
+    const poll = setInterval(check, 300)
+    return () => clearInterval(poll)
   }, [])
 
   useEffect(() => {
