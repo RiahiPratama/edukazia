@@ -199,10 +199,76 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
     <>
     <div className="p-4 max-w-4xl mx-auto">
 
-      {/* Header */}
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-[#1A1640]">Materi Pembelajaran</h1>
-        <p className="text-sm text-[#7B78A8] mt-0.5">{levelsData[0]?.course_name}</p>
+      {/* Sapaan Siswa */}
+      <div className="bg-gradient-to-br from-[#5C4FE5] to-[#7C6FE5] rounded-2xl p-5 mb-5 text-white shadow-lg">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 text-lg">
+            👋
+          </div>
+          <div>
+            <h1 className="text-lg font-bold leading-snug">
+              Halo, {studentName}!
+            </h1>
+            <p className="text-sm text-white/80 mt-0.5">
+              {levelsData.length === 1
+                ? <>Kamu sedang belajar di <span className="font-semibold text-white">{levelsData[0].level_name}</span> — terus semangat, setiap langkah kecil membawamu lebih jauh! 🌟</>
+                : <>Kamu aktif di <span className="font-semibold text-white">{levelsData.length} level</span> sekaligus — luar biasa, terus pertahankan! 🔥</>
+              }
+            </p>
+          </div>
+        </div>
+
+        {/* Panduan Tab */}
+        <div className="bg-white/10 rounded-xl p-3 space-y-2">
+          <p className="text-xs font-semibold text-white/70 uppercase tracking-wide mb-2">Panduan Belajar</p>
+          {[
+            {
+              icon: '🎥',
+              label: 'Live Zoom',
+              desc: 'Rekap materi dari sesi kelas yang sudah berlangsung dan preview materi yang akan segera kamu pelajari bersama tutor.',
+              tab: 'live_zoom' as const,
+            },
+            {
+              icon: '📖',
+              label: 'Bacaan',
+              desc: 'Eksplorasi materi lewat teks interaktif yang menyenangkan — klik kata, temukan artinya, dan perkaya pemahamanmu!',
+              tab: 'bacaan' as const,
+            },
+            {
+              icon: '🎧',
+              label: 'Kosakata',
+              desc: 'Dengarkan langsung pengucapan dari Native Speaker dan latih telingamu mengenali kosa kata dalam konteks nyata.',
+              tab: 'kosakata' as const,
+            },
+            {
+              icon: '🔄',
+              label: 'CEFR',
+              desc: 'Uji kemampuanmu beralih antara Bahasa Indonesia dan Inggris — latihan yang bikin otakmu makin lincah!',
+              tab: 'cefr' as const,
+            },
+          ].map(item => (
+            <button
+              key={item.tab}
+              onClick={() => setActiveTab(item.tab)}
+              className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-all ${
+                activeTab === item.tab
+                  ? 'bg-white/20'
+                  : 'hover:bg-white/10'
+              }`}
+            >
+              <span className="text-base flex-shrink-0">{item.icon}</span>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-white block">{item.label}</span>
+                <span className="text-xs text-white/70 leading-snug">{item.desc}</span>
+              </div>
+              {tabCounts[item.tab] > 0 && (
+                <span className="ml-auto flex-shrink-0 bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {tabCounts[item.tab]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tabs — mirip portal tutor */}
