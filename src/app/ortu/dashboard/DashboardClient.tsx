@@ -302,8 +302,8 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 const col = session.childColor
                 return (
                   <div key={`today-${session.id}-${idx}`}
-                    className="bg-white dark:bg-stone-900 rounded-2xl overflow-hidden"
-                    style={{ border: `1.5px solid ${col.top}30` }}>
+                    className="rounded-2xl overflow-hidden"
+                    style={{ border: `1.5px solid ${col.top}30`, background: isDark ? '#1E1E2A' : 'white' }}>
                     <div className="flex items-center gap-3 px-4 py-3"
                       style={{ background: `${col.top}10` }}>
                       {/* Jam */}
@@ -316,7 +316,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       <div className="w-px h-8 flex-shrink-0" style={{ background: `${col.top}30` }} />
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-extrabold text-stone-800 dark:text-stone-100 truncate">
+                        <p className="text-[13px] font-extrabold text-stone-800 truncate">
                           {session.classLabel}
                         </p>
                         <p className="text-[10px] text-stone-400 truncate">
@@ -460,23 +460,26 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
               {childrenData.map((child, idx) => {
                 const childCol = CHILD_COLORS[idx % CHILD_COLORS.length]
                 return (
-                  <div key={child.id} className="bg-white dark:bg-stone-900 rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800"
-                    style={{ borderTop: `3px solid ${childCol.top}` }}>
+                  <div key={child.id} className="rounded-2xl overflow-hidden"
+                    style={{
+                      background: isDark ? '#1E1E2A' : 'white',
+                      border: `1px solid ${isDark ? '#2A2A38' : '#f0f0f0'}`, borderTop: `3px solid ${childCol.top}` }}>
                     {/* Header anak */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-50 dark:border-stone-800">
+                    <div className="flex items-center gap-3 px-4 py-3"
+                      style={{ borderBottom: `1px solid ${isDark ? '#2A2A38' : '#f7f7f7'}` }}>
                       <div className="relative">
                         <div className="w-11 h-11 rounded-full p-[2.5px]"
                           style={{ background: `linear-gradient(135deg, ${childCol.top}, #E6B800)` }}>
-                          <div className="w-full h-full rounded-full flex items-center justify-center text-[12px] font-extrabold border-2 border-white dark:border-stone-900"
+                          <div className="w-full h-full rounded-full flex items-center justify-center text-[12px] font-extrabold border-2 border-white"
                             style={{ background: childCol.bg, color: childCol.text }}>
                             {initials(child.full_name)}
                           </div>
                         </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-stone-900 animate-pulse" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-extrabold text-stone-800 dark:text-stone-100 truncate">{child.full_name}</p>
-                        <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                        <p className="text-[13px] font-extrabold text-stone-800 truncate">{child.full_name}</p>
+                        <p className="text-[10px] text-stone-400">
                           {child.grade ?? '—'}{child.school ? ` · ${child.school}` : ''}
                         </p>
                       </div>
@@ -506,13 +509,15 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                           const barPct = Math.min(100, Math.round((enroll.barProgress ?? enroll.progress) / enroll.total * 100))
                           return (
                             <div key={enroll.enrollmentId}
-                              className="rounded-xl border border-stone-100 dark:border-stone-800 overflow-hidden">
-                              <div className="flex items-center justify-between px-3 py-2 bg-stone-50 dark:bg-stone-800/50">
+                              className="rounded-xl overflow-hidden"
+                              style={{ border: `1px solid ${isDark ? '#2A2A38' : '#f0f0f0'}` }}>
+                              <div className="flex items-center justify-between px-3 py-2"
+                                style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#f9f9f9', borderBottom: `1px solid ${isDark ? '#2A2A38' : '#f0f0f0'}` }}>
                                 <div>
-                                  <p className="text-[12px] font-bold text-stone-700 dark:text-stone-200">{enroll.classLabel}</p>
+                                  <p className="text-[12px] font-bold text-stone-700">{enroll.classLabel}</p>
                                   <p className="text-[10px] text-stone-400">{enroll.tutorName}</p>
                                 </div>
-                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900">
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
                                   Aktif
                                 </span>
                               </div>
@@ -520,27 +525,28 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                               <div className="px-3 py-2.5">
                                 {/* Progress bar */}
                                 <div className="flex items-center justify-between mb-1.5">
-                                  <p className="text-[10px] text-stone-400 dark:text-stone-500">Progress sesi</p>
-                                  <p className="text-[11px] font-extrabold text-stone-700 dark:text-stone-200">
+                                  <p className="text-[10px] text-stone-400">Progress sesi</p>
+                                  <p className="text-[11px] font-extrabold text-stone-700">
                                     {enroll.progress}/{enroll.total}
                                   </p>
                                 </div>
-                                <div className="h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-visible mb-2.5 relative">
+                                <div className="h-2 rounded-full overflow-visible mb-2.5 relative"
+                                  style={{ background: isDark ? '#2A2A38' : '#f0f0f0' }}>
                                   <div className="h-full rounded-full relative transition-all duration-700"
                                     style={{ width: `${barPct}%`, background: childCol.top }}>
-                                    <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 bg-white dark:bg-stone-900"
-                                      style={{ borderColor: childCol.top, boxShadow: `0 0 0 3px ${childCol.top}33` }} />
+                                    <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2"
+                                      style={{ background: isDark ? '#1E1E2A' : 'white', borderColor: childCol.top, boxShadow: `0 0 0 3px ${childCol.top}33` }} />
                                   </div>
                                 </div>
 
                                 {/* Info 3 kolom */}
                                 <div className="grid grid-cols-3 gap-1.5 mb-2">
-                                  <div className="rounded-lg py-1.5 px-2 text-center bg-green-50 dark:bg-green-950/30">
-                                    <p className="text-[12px] font-extrabold text-green-700 dark:text-green-400">{child.hadirPct}%</p>
-                                    <p className="text-[8px] text-green-600 dark:text-green-500 font-semibold">Kehadiran</p>
+                                  <div className="rounded-lg py-1.5 px-2 text-center bg-green-50">
+                                    <p className="text-[12px] font-extrabold text-green-700">{child.hadirPct}%</p>
+                                    <p className="text-[8px] text-green-600 font-semibold">Kehadiran</p>
                                   </div>
-                                  <div className="rounded-lg py-1.5 px-2 text-center bg-indigo-50 dark:bg-indigo-950/30">
-                                    <p className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-400 leading-tight">
+                                  <div className="rounded-lg py-1.5 px-2 text-center bg-indigo-50">
+                                    <p className="text-[11px] font-extrabold text-indigo-700 leading-tight">
                                       {enroll.nextSession ? fmtDateShort(enroll.nextSession).split(',')[0] : '—'}
                                     </p>
                                     <p className="text-[8px] text-indigo-500 font-semibold">Berikutnya</p>
@@ -559,7 +565,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
                                       <CalendarDays size={10} className="text-stone-400" />
-                                      <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                                      <p className="text-[10px] text-stone-500">
                                         {fmtDate(enroll.nextSession)}, {fmtTime(enroll.nextSession)}
                                       </p>
                                     </div>
@@ -635,7 +641,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
             <div className="flex items-center justify-between mb-2">
               <p className="text-[12px] font-bold" style={{ color: 'var(--ortu-text)' }}>Aktivitas Terbaru</p>
               <Link href="/ortu/laporan"
-                className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 hover:underline">
+                className="text-[11px] text-amber-600 flex items-center gap-0.5 hover:underline">
                 Lihat semua <ChevronRight size={11} />
               </Link>
             </div>
@@ -647,9 +653,11 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 const itemCol = CHILD_COLORS[childIdx >= 0 ? childIdx % CHILD_COLORS.length : 0]
                 return (
                   <div key={idx}
-                    className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-100 dark:border-stone-800 p-4 w-full"
+                    className="rounded-2xl p-4 w-full"
                     style={{
                       position: 'absolute',
+                      background: isDark ? '#1E1E2A' : 'white',
+                      border: `1px solid ${isDark ? '#2A2A38' : '#f0f0f0'}`,
                       top: `${idx * 14}px`,
                       zIndex: 10 - idx,
                       transform: `scale(${1 - idx * 0.04})`,
@@ -663,7 +671,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                          <p className="text-[11px] font-bold text-stone-700 dark:text-stone-200">
+                          <p className="text-[11px] font-bold text-stone-700">
                             Laporan {item.classLabel}
                           </p>
                           <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
@@ -672,7 +680,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                           </span>
                         </div>
                         {item.saranOrtu && (
-                          <p className="text-[10px] text-stone-500 dark:text-stone-400 line-clamp-2">
+                          <p className="text-[10px] text-stone-500 line-clamp-2">
                             {item.saranOrtu}
                           </p>
                         )}
@@ -680,7 +688,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                           <p className="text-[10px] text-stone-400">Materi: {item.materi}</p>
                         )}
                       </div>
-                      <p className="text-[10px] text-stone-300 dark:text-stone-600 flex-shrink-0">
+                      <p className="text-[10px] text-stone-300 flex-shrink-0">
                         {timeAgo(item.createdAt)}
                       </p>
                     </div>
@@ -693,7 +701,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
 
         {activityFeed.length === 0 && (
           <div className="flex flex-col items-center py-10 text-center">
-            <FileText size={28} className="text-stone-200 dark:text-stone-700 mb-2" />
+            <FileText size={28} className="text-stone-200 mb-2" />
             <p className="text-[12px] text-stone-400">Belum ada aktivitas terbaru</p>
           </div>
         )}
