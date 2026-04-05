@@ -166,10 +166,19 @@ export default async function OrtuDashboardPage() {
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
 
-      // FIX: offset min 1, cap at sessions_total
+      // Kalau ada sesi scheduled hari ini (belum selesai), cap progress di total-1
+      const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+      const hasScheduledToday = (upcomingSessions ?? []).some((s: any) =>
+        s.class_group_id === e.class_group_id &&
+        new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }) === todayWITStr &&
+        s.status === 'scheduled'
+      )
+      const maxProgress = hasScheduledToday
+        ? (e.sessions_total ?? 8) - 1
+        : (e.sessions_total ?? 8)
       const progress = Math.min(
         (e.session_start_offset ?? 1) + hadirCount,
-        e.sessions_total ?? 8
+        maxProgress
       )
       const total    = e.sessions_total ?? 8
 

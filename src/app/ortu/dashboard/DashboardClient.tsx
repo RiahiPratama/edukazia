@@ -288,7 +288,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                         <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden mb-2">
                           <div className="h-full rounded-full transition-all"
                             style={{
-                              width: `${Math.min(100, Math.round((enroll.hadirCompleted ?? 0) / enroll.total * 100))}%`,
+                              width: `${Math.min(100, Math.round(enroll.progress / enroll.total * 100))}%`,
                               background: col.top,
                             }} />
                         </div>
