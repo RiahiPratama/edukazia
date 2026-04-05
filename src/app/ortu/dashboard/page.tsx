@@ -115,6 +115,19 @@ export default async function OrtuDashboardPage() {
       ).data ?? []
     : []
 
+  // ✅ Sesi scheduled hari ini atau lewat → dihitung sebagai progress
+  const todayEndWIT = new Date(nowWIT)
+  todayEndWIT.setHours(23, 59, 59, 999)
+  const scheduledTodayOrPast = classGroupIds.length > 0
+    ? (await supabase
+        .from('sessions')
+        .select('id, class_group_id, scheduled_at')
+        .in('class_group_id', classGroupIds)
+        .in('status', ['scheduled', 'rescheduled'])
+        .lte('scheduled_at', toUTC(todayEndWIT))
+      ).data ?? []
+    : []
+
   const allSessionIds = allSessionIds_month.map((s: any) => s.id)
   const { data: attendances } = allSessionIds.length > 0
     ? await supabase
@@ -166,9 +179,16 @@ export default async function OrtuDashboardPage() {
       const hadirCount = (attendances ?? []).filter(
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
+
+      // ✅ Sesi scheduled hari ini atau lewat → ikut dihitung sebagai progress
+      const scheduledCountForCG = scheduledTodayOrPast.filter((s: any) =>
+        s.class_group_id === e.class_group_id &&
+        new Date(s.scheduled_at) >= enrolledAt
+      ).length
+
       // FIX: offset min 1, cap at sessions_total
       const progress = Math.min(
-        (e.session_start_offset ?? 1) + hadirCount,
+        (e.session_start_offset ?? 1) + hadirCount + scheduledCountForCG,
         e.sessions_total ?? 8
       )
       const total    = e.sessions_total ?? 8
