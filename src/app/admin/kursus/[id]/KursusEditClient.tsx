@@ -64,6 +64,8 @@ export default function KursusEditClient({
   const [editingLevel, setEditingLevel] = useState<Level | null>(null)
   const [levelName,    setLevelName]    = useState('')
   const [levelDesc,    setLevelDesc]    = useState('')
+  const [levelCode,    setLevelCode]    = useState('')
+  const [levelTopic,   setLevelTopic]   = useState('')
   const [levelAge,     setLevelAge]     = useState('all')
   const [levelOrder,   setLevelOrder]   = useState(0)
   const [levelActive,  setLevelActive]  = useState(true)
@@ -104,6 +106,8 @@ export default function KursusEditClient({
     setEditingLevel(null)
     setLevelName('')
     setLevelDesc('')
+    setLevelCode('')
+    setLevelTopic('')
     setLevelAge('all')
     setLevelOrder(levels.length > 0 ? Math.max(...levels.map(l => l.sort_order)) + 1 : 1)
     setLevelActive(true)
@@ -114,6 +118,8 @@ export default function KursusEditClient({
     setEditingLevel(level)
     setLevelName(level.name)
     setLevelDesc(level.description ?? '')
+    setLevelCode((level as any).code ?? '')
+    setLevelTopic((level as any).topic_name ?? '')
     setLevelAge(level.target_age ?? 'all')
     setLevelOrder(level.sort_order)
     setLevelActive(level.is_active)
@@ -140,6 +146,8 @@ export default function KursusEditClient({
             target_age:  levelAge,
             sort_order:  levelOrder,
             is_active:   levelActive,
+            code:        levelCode.trim(),
+            topic_name:  levelTopic.trim(),
           }),
         })
         if (!res.ok) throw new Error()
@@ -155,6 +163,8 @@ export default function KursusEditClient({
             target_age:  levelAge,
             sort_order:  levelOrder,
             is_active:   levelActive,
+            code:        levelCode.trim(),
+            topic_name:  levelTopic.trim(),
           }),
         })
         if (!res.ok) throw new Error()
@@ -430,9 +440,35 @@ export default function KursusEditClient({
                   value={levelName}
                   onChange={e => setLevelName(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-[#E5E3FF] text-sm text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] bg-[#F7F6FF]"
-                  placeholder="Contoh: Level 1.1 - Phonics"
+                  placeholder="Contoh: ENG 2.1"
                   autoFocus
                 />
+              </div>
+
+              {/* Code + Topic Name */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                    Kode Level <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    value={levelCode}
+                    onChange={e => setLevelCode(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-[#E5E3FF] text-sm text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] bg-[#F7F6FF]"
+                    placeholder="Contoh: ENG-2.1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
+                    Nama Topik <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    value={levelTopic}
+                    onChange={e => setLevelTopic(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-[#E5E3FF] text-sm text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] bg-[#F7F6FF]"
+                    placeholder="Contoh: Elementary Grammar"
+                  />
+                </div>
               </div>
 
               {/* Deskripsi */}
@@ -517,7 +553,7 @@ export default function KursusEditClient({
               </button>
               <button
                 onClick={saveLevel}
-                disabled={savingLevel || !levelName.trim()}
+                disabled={savingLevel || !levelName.trim() || !levelCode.trim() || !levelTopic.trim()}
                 className="flex-1 py-2.5 rounded-xl bg-[#5C4FE5] text-white text-sm font-semibold hover:bg-[#3D34C4] transition-colors disabled:opacity-60"
               >
                 {savingLevel ? 'Menyimpan...' : modal === 'add' ? 'Tambah Level' : 'Simpan'}
