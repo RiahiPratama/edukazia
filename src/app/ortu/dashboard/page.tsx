@@ -166,20 +166,22 @@ export default async function OrtuDashboardPage() {
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
 
-      // Kalau ada sesi scheduled hari ini (belum selesai), cap progress di total-1
+      // Progress angka = offset + hadir, cap di sessions_total
+      const progress = Math.min(
+        (e.session_start_offset ?? 1) + hadirCount,
+        e.sessions_total ?? 8
+      )
+
+      // Progress bar visual = kurangi 1 kalau ada sesi scheduled hari ini
       const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
       const hasScheduledToday = (upcomingSessions ?? []).some((s: any) =>
         s.class_group_id === e.class_group_id &&
         new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }) === todayWITStr &&
         s.status === 'scheduled'
       )
-      const maxProgress = hasScheduledToday
-        ? (e.sessions_total ?? 8) - 1
-        : (e.sessions_total ?? 8)
-      const progress = Math.min(
-        (e.session_start_offset ?? 1) + hadirCount,
-        maxProgress
-      )
+      const barProgress = hasScheduledToday
+        ? Math.max(progress - 1, 0)
+        : progress
       const total    = e.sessions_total ?? 8
 
       // Prefer scheduled, fallback to rescheduled
@@ -192,7 +194,7 @@ export default async function OrtuDashboardPage() {
         classLabel:       cg?.label ?? '—',
         tutorName:        tutor?.full_name ?? '—',
         progress,
-        hadirCompleted:   hadirCount, // sesi completed + hadir saja (untuk progress bar visual)
+        barProgress,
         total,
         nextSession:      nextSesi?.scheduled_at ?? null,
         nextStatus:       nextSesi?.status ?? null,
