@@ -96,7 +96,7 @@ const RING_GLOW: Record<RingColor, string> = {
 const RING_BADGE: Record<RingColor, { bg: string; color: string; label: string }> = {
   yellow: { bg: '#FFF9E6', color: '#92400E', label: 'Hari ini' },
   green:  { bg: '#F0FDF4', color: '#15803D', label: 'Oke ✓' },
-  red:    { bg: '#FEF2F2', color: '#dc2626', label: 'Perhatian!' },
+  red:    { bg: '#FEF2F2', color: '#dc2626', label: 'Cek Paket!' },
   gray:   { bg: '#F3F4F6', color: '#6B7280', label: 'Tidak aktif' },
 }
 
@@ -214,7 +214,27 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
 
         <div className="relative z-10">
           <p className="text-[11px] font-medium mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>{today}</p>
-          <p className="text-[19px] font-extrabold text-white mb-0.5">{greeting}, {firstName}! 👋</p>
+          <p className="text-[19px] font-extrabold text-white mb-0.5">
+            {greeting},{' '}
+            {firstName}!{' '}
+            <span style={{
+              display: 'inline-block',
+              animation: 'wave 2s ease-in-out infinite',
+              transformOrigin: '70% 70%',
+            }}>👋</span>
+          </p>
+          <style>{`
+            @keyframes wave {
+              0%   { transform: rotate(0deg); }
+              10%  { transform: rotate(14deg); }
+              20%  { transform: rotate(-8deg); }
+              30%  { transform: rotate(14deg); }
+              40%  { transform: rotate(-4deg); }
+              50%  { transform: rotate(10deg); }
+              60%  { transform: rotate(0deg); }
+              100% { transform: rotate(0deg); }
+            }
+          `}</style>
           <p className="text-[12px] mb-4" style={{ color: 'rgba(255,255,255,0.65)' }}>
             {stats.totalAnak} anak aktif belajar
           </p>
