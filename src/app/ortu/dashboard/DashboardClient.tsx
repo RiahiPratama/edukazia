@@ -816,9 +816,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
 
                 {/* CTA perpanjang — urgent */}
                 {adminPhone && (
-                  <a href={`https://wa.me/${adminPhone.replace(/\D/g,'')}?text=${encodeURIComponent(
-                    `Halo Admin EduKazia, saya ingin mendaftarkan kembali paket belajar untuk periode berikutnya. Mohon informasi paket yang tersedia. Terima kasih 🙏`
-                  )}`}
+                  <a href={'https://wa.me/' + adminPhone.replace(/\D/g,'') + '?text=' + encodeURIComponent('Halo Admin EduKazia, saya ingin mendaftarkan kembali paket belajar untuk periode berikutnya. Mohon informasi paket yang tersedia. Terima kasih 🙏')}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-extrabold text-[13px] active:scale-95 transition-transform"
                     style={{
