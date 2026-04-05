@@ -10,6 +10,7 @@ interface Props {
   childrenData: any[]
   activityFeed: any[]
   adminPhone: string | null
+  archivedData: any[]
   stats: {
     totalAnak: number
     totalSesiMingguIni: number
@@ -99,7 +100,7 @@ const RING_BADGE: Record<RingColor, { bg: string; color: string; label: string }
   gray:   { bg: '#F3F4F6', color: '#6B7280', label: 'Tidak aktif' },
 }
 
-export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, stats }: Props) {
+export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, archivedData, stats }: Props) {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -187,166 +188,66 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         </div>
       </div>
 
-      {/* ── STORIES ROW — SWITCHER ANAK ── */}
+      {/* ── STORIES ROW — compact pills ── */}
       {childrenData.length > 0 && (
         <div className="px-4 mb-4">
-          {/* Row */}
-          <div className="flex items-start gap-4 overflow-x-auto pb-1"
+          <div className="flex items-center gap-2 overflow-x-auto pb-1"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {childrenData.map((child, idx) => {
               const ring = storyRing(child)
               const badge = RING_BADGE[ring]
               const childCol = CHILD_COLORS[idx % CHILD_COLORS.length]
               const todayEnroll = child.enrollments.find((e: any) => e.nextSession && isToday(e.nextSession))
+              const timeLabel = ring === 'yellow' && todayEnroll
+                ? fmtTime(todayEnroll.nextSession)
+                : badge.label
 
               return (
                 <Link key={child.id}
                   href={`/ortu/anak/${child.slug ?? child.id}`}
-                  className="flex-shrink-0 flex flex-col items-center gap-1.5 active:scale-95"
-                  style={{ transition: 'transform 0.2s' }}>
-                  {/* Avatar ring */}
-                  <div style={{
-                    width: 62, height: 62, borderRadius: '50%',
-                    padding: 2.5,
+                  className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl active:scale-95 transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.7)',
                     border: RING_CSS[ring],
                     boxShadow: RING_GLOW[ring],
-                    transition: 'all 0.25s',
+                    backdropFilter: 'blur(8px)',
                   }}>
-                    <div style={{
-                      width: '100%', height: '100%', borderRadius: '50%',
-                      background: childCol.top,
-                      color: 'white',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 15, fontWeight: 800,
-                      border: '2.5px solid white',
-                    }}>
-                      {initials(child.full_name)}
-                    </div>
-                  </div>
+                  {/* Dot status */}
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: ring === 'yellow' ? '#E6B800'
+                      : ring === 'green' ? '#22c55e'
+                      : ring === 'red' ? '#ef4444' : '#d1d5db',
+                    boxShadow: ring !== 'gray' ? `0 0 0 2px ${
+                      ring === 'yellow' ? 'rgba(230,184,0,0.25)'
+                      : ring === 'green' ? 'rgba(34,197,94,0.25)'
+                      : 'rgba(239,68,68,0.25)'
+                    }` : 'none',
+                  }} />
                   {/* Nama */}
-                  <span style={{
-                    fontSize: 10, fontWeight: 700,
-                    color: '#5C4FE5',
-                    maxWidth: 64, textAlign: 'center', lineHeight: 1.3,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: childCol.text, background: childCol.bg,
+                    padding: '1px 6px', borderRadius: 6 }}>
                     {child.full_name.split(' ')[0]}
                   </span>
-                  {/* Badge status */}
-                  <span style={{
-                    fontSize: 8, fontWeight: 700,
-                    padding: '2px 7px', borderRadius: 99,
-                    background: badge.bg, color: badge.color,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {ring === 'yellow' && todayEnroll
-                      ? fmtTime(todayEnroll.nextSession)
-                      : badge.label}
+                  {/* Status */}
+                  <span style={{ fontSize: 10, fontWeight: 600, color: badge.color, whiteSpace: 'nowrap' }}>
+                    {timeLabel}
                   </span>
                 </Link>
               )
             })}
 
-            {/* Tombol tambah anak */}
-            <button className="flex-shrink-0 flex flex-col items-center gap-1.5 opacity-50 hover:opacity-100 transition-opacity">
-              <div style={{
-                width: 62, height: 62, borderRadius: '50%',
-                border: '2px dashed #d1d5db',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Plus size={22} color="#9CA3AF" />
-              </div>
-              <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 600 }}>Tambah</span>
+            {/* Tambah */}
+            <button className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl opacity-50 hover:opacity-100 transition-opacity"
+              style={{ background: 'rgba(255,255,255,0.5)', border: '1.5px dashed #d1d5db' }}>
+              <Plus size={13} color="#9CA3AF" />
+              <span style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Tambah</span>
             </button>
           </div>
-
-          {/* Label info */}
-          {childrenData.length > 0 && (
-            <div className="flex items-center justify-between mt-3 px-3 py-2 rounded-xl"
-              style={{ background: 'rgba(92,79,229,0.06)', border: '1px solid rgba(92,79,229,0.1)' }}>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-300">
-                  {childrenData.length} anak aktif · ketuk untuk lihat detail
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       <div className="px-4 space-y-4">
-
-        {/* ── SESI HARI INI ── */}
-        {allTodaySessions.length > 0 && (
-          <div>
-            <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300 mb-2">Sesi Hari Ini</p>
-            <div className="flex flex-col gap-2">
-              {allTodaySessions.map((session: any, idx: number) => {
-                const col = session.childColor
-                const diffMs = new Date(session.scheduled_at).getTime() - Date.now()
-                const diffMins = Math.round(diffMs / 60000)
-                const isLive = diffMs <= 0 && diffMs > -90 * 60000
-                const isDone = diffMs <= -90 * 60000
-                return (
-                  <div key={`today-${session.id}-${idx}`}
-                    className="bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 rounded-2xl overflow-hidden">
-                    {/* Top bar warna anak */}
-                    <div className="flex items-center gap-3 px-4 py-3"
-                      style={{ background: `${col.top}15`, borderBottom: `1px solid ${col.top}25` }}>
-                      {/* Jam */}
-                      <div className="flex-shrink-0 text-center min-w-[44px]">
-                        <p className="text-[14px] font-extrabold" style={{ color: col.top }}>
-                          {fmtTime(session.scheduled_at)}
-                        </p>
-                        <p className="text-[9px] text-stone-400 font-semibold">WIT</p>
-                      </div>
-                      <div className="w-px h-8 bg-stone-200 dark:bg-stone-700 flex-shrink-0" />
-                      {/* Info kelas */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-stone-800 dark:text-stone-100 truncate">
-                          {session.classLabel}
-                        </p>
-                        <p className="text-[10px] text-stone-400 truncate">
-                          {session.tutorName} · {session.childName}
-                        </p>
-                      </div>
-                      {/* Status / Zoom */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {isLive && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Live</span>
-                          </div>
-                        )}
-                        {!isLive && !isDone && diffMins <= 180 && (
-                          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900">
-                            <Clock size={10} className="text-amber-600" />
-                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 tabular-nums">
-                              {diffMins >= 60
-                                ? `${Math.floor(diffMins/60)}j ${diffMins%60}m`
-                                : `${diffMins}m`}
-                            </span>
-                          </div>
-                        )}
-                        {session.zoom_link && (
-                          <a href={session.zoom_link} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white active:scale-95 transition-transform"
-                            style={{ background: '#5C4FE5' }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
-                              <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
-                            </svg>
-                            Zoom
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
 
         {/* ── SMART ZOOM CARD ── */}
         {activeSessions.map((enroll: any) => {
@@ -701,6 +602,79 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
           <div className="flex flex-col items-center py-10 text-center">
             <FileText size={28} className="text-stone-200 dark:text-stone-700 mb-2" />
             <p className="text-[12px] text-stone-400">Belum ada aktivitas terbaru</p>
+          </div>
+        )}
+
+        {/* ── KELAS ARSIP ── */}
+        {archivedData.length > 0 && (
+          <div>
+            <p className="text-[12px] font-bold text-stone-500 dark:text-stone-400 mb-2 flex items-center gap-1.5">
+              <span>📦</span> Kelas Selesai
+            </p>
+            <div className="relative rounded-2xl overflow-hidden"
+              style={{ background: 'linear-gradient(135deg, #1A1640 0%, #2D2560 100%)' }}>
+              {/* Dekorasi */}
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none"
+                style={{ background: 'rgba(92,79,229,0.3)' }} />
+              <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl pointer-events-none"
+                style={{ background: 'rgba(230,184,0,0.1)' }} />
+
+              <div className="relative z-10 p-4">
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
+                    style={{ background: 'rgba(230,184,0,0.15)' }}>🏆</div>
+                  <div>
+                    <p className="text-[12px] font-extrabold text-white">Perjalanan belajar sebelumnya</p>
+                    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      Lanjutkan belajar untuk hasil yang lebih baik!
+                    </p>
+                  </div>
+                </div>
+
+                {/* List kelas arsip */}
+                <div className="space-y-2 mb-3">
+                  {archivedData.flatMap(s =>
+                    s.archived.map((kelas: any, ki: number) => (
+                      <div key={`arsip-${s.studentId}-${ki}`}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.1)' }}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-extrabold flex-shrink-0"
+                          style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}>
+                          ✓
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-bold text-white truncate">{kelas.classLabel}</p>
+                          <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                            {s.studentName} · {kelas.total} sesi selesai
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold"
+                          style={{ background: 'rgba(230,184,0,0.15)', color: '#E6B800' }}>
+                          Selesai
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* CTA perpanjang */}
+                {adminPhone && (
+                  <a href={`https://wa.me/${adminPhone.replace(/\D/g,'')}?text=${encodeURIComponent(
+                    `Halo, saya ingin mendaftarkan kembali untuk periode belajar berikutnya. Mohon informasi paket yang tersedia. Terima kasih.`
+                  )}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-extrabold text-[13px] active:scale-95 transition-transform"
+                    style={{ background: '#E6B800', color: '#1A0A00', boxShadow: '0 0 20px rgba(230,184,0,0.25)' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.553 4.122 1.524 5.854L0 24l6.337-1.501A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.373l-.36-.213-3.761.891.946-3.657-.234-.376A9.818 9.818 0 012.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/>
+                    </svg>
+                    Daftar Periode Berikutnya
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

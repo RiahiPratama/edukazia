@@ -281,12 +281,53 @@ export default async function OrtuDashboardPage() {
   const allTotal = (attendances ?? []).length
   const avgKehadiran = allTotal > 0 ? Math.round((allHadir / allTotal) * 100) : 0
 
+  // Ambil enrollments ARSIP (inactive) untuk banner perpanjang
+  const { data: archivedEnrollments } = await supabase
+    .from('enrollments')
+    .select('id, student_id, class_group_id, sessions_total')
+    .in('student_id', studentIds)
+    .eq('status', 'inactive')
+    .order('id', { ascending: false })
+
+  const archivedCGIds = [...new Set((archivedEnrollments ?? [])
+    .map((e: any) => e.class_group_id).filter(Boolean))]
+
+  const { data: archivedClassGroups } = archivedCGIds.length > 0
+    ? await supabase
+        .from('class_groups')
+        .select('id, label, tutor_id')
+        .in('id', archivedCGIds)
+    : { data: [] }
+
+  // Susun data arsip per anak
+  const archivedData = students.map(student => {
+    const studentArchived = (archivedEnrollments ?? [])
+      .filter((e: any) => e.student_id === student.id)
+      .map((e: any) => {
+        const cg    = (archivedClassGroups ?? []).find((c: any) => c.id === e.class_group_id)
+        const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+        return {
+          enrollmentId: e.id,
+          classLabel:   cg?.label ?? '—',
+          tutorName:    tutor?.full_name ?? '—',
+          total:        e.sessions_total ?? 8,
+        }
+      })
+    return {
+      studentId:   student.id,
+      studentName: student.full_name,
+      studentSlug: student.slug ?? student.id,
+      archived:    studentArchived,
+    }
+  }).filter(s => s.archived.length > 0)
+
   return (
     <OrtuDashboardClient
       profile={profile as any}
       childrenData={childrenData}
       activityFeed={activityFeed}
       adminPhone={adminPhone}
+      archivedData={archivedData}
       stats={{
         totalAnak:             students.length,
         totalSesiMingguIni,
