@@ -67,7 +67,7 @@ export async function GET(
           p_profile_id: user.id,
           p_product_id: product.id
         })
-        .single()
+        .single() as { data: { has_access: boolean; access_type: string; expires_at: string | null } | null, error: unknown }
 
       if (access) {
         accessInfo = {
