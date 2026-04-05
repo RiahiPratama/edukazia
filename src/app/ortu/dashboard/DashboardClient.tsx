@@ -101,6 +101,10 @@ const RING_BADGE: Record<RingColor, { bg: string; color: string; label: string }
   gray:   { bg: '#F3F4F6', color: '#6B7280', label: 'Tidak aktif' },
 }
 
+function cleanPhone(phone: string) {
+  return phone.split('').filter(c => c >= '0' && c <= '9').join('')
+}
+
 export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, archivedData, stats }: Props) {
   const [now, setNow] = useState(() => Date.now())
   const [isDark, setIsDark] = useState(false)
@@ -608,7 +612,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                                   `Halo, saya ingin memperpanjang paket belajar untuk ${child.full_name} (${enroll.classLabel}). Sisa sesi tinggal ${sisa}. Mohon informasi untuk periode berikutnya. Terima kasih.`
                                 )
                                 const waUrl = adminPhone
-                                  ? `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${waMsg}`
+                                  ? `https://wa.me/${cleanPhone(adminPhone)}?text=${waMsg}`
                                   : null
                                 return (
                                   <div className="mx-3 mb-3 rounded-xl flex items-center gap-3 px-3 py-2.5"
@@ -816,7 +820,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
 
                 {/* CTA perpanjang — urgent */}
                 {adminPhone && (
-                  <a href={'https://wa.me/' + adminPhone.replace(/\D/g,'') + '?text=' + encodeURIComponent('Halo Admin EduKazia, saya ingin mendaftarkan kembali paket belajar untuk periode berikutnya. Mohon informasi paket yang tersedia. Terima kasih 🙏')}
+                  <a href={'https://wa.me/' + cleanPhone(adminPhone) + '?text=' + encodeURIComponent('Halo Admin EduKazia, saya ingin mendaftarkan kembali paket belajar untuk periode berikutnya. Mohon informasi paket yang tersedia. Terima kasih 🙏')}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-extrabold text-[13px] active:scale-95 transition-transform"
                     style={{
