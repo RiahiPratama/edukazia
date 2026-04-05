@@ -644,14 +644,57 @@ export async function PATCH(request: NextRequest) {
 
     // Update material_contents — hanya update content_url
     if (contentDataStr) {
-      const existingContent = existingMaterial.material_contents?.[0];
-      const newContentUrl = contentData.url || contentData.zoom_link || contentData.canva_link || null;
+      const existingContent = existingMaterial.material_contents?.[0]
+      const newContentUrl = contentData.url || contentData.zoom_link || contentData.canva_link || null
 
       if (existingContent && newContentUrl) {
         await supabase
           .from('material_contents')
           .update({ content_url: newContentUrl })
-          .eq('id', existingContent.id);
+          .eq('id', existingContent.id)
+      }
+    }
+
+    // ✅ HANDLE JSX FILE REPLACEMENT (Bacaan category)
+    const jsxFile = formData.get('jsx_file') as File | null
+    if (jsxFile && jsxFile.size > 0 && category === 'bacaan') {
+      const existingContent = existingMaterial.material_contents?.[0]
+
+      // Hapus file lama dari Storage dulu
+      if (existingContent?.storage_path && existingContent?.storage_bucket) {
+        const { error: removeError } = await supabase.storage
+          .from(existingContent.storage_bucket)
+          .remove([existingContent.storage_path])
+        if (removeError) {
+          console.warn('⚠️ Gagal hapus file lama:', existingContent.storage_path, removeError.message)
+        } else {
+          console.log('🗑️ File lama dihapus:', existingContent.storage_path)
+        }
+      }
+
+      // Upload file baru
+      const timestamp = Date.now()
+      const random = Math.random().toString(36).substring(2, 8)
+      const newPath = `bacaan/${timestamp}-${random}.jsx`
+
+      const { error: uploadError } = await supabase.storage
+        .from('components')
+        .upload(newPath, jsxFile)
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        return NextResponse.json({ error: 'Failed to upload new JSX file', details: uploadError.message }, { status: 500 })
+      }
+
+      console.log('✅ File baru diupload:', newPath)
+
+      // Update storage_path di material_contents
+      if (existingContent) {
+        await supabase
+          .from('material_contents')
+          .update({ storage_path: newPath, storage_bucket: 'components' })
+          .eq('id', existingContent.id)
+        console.log('✅ storage_path diupdate:', newPath)
       }
     }
 
