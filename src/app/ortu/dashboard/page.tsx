@@ -285,12 +285,64 @@ export default async function OrtuDashboardPage() {
   const allTotal = (attendances ?? []).length
   const avgKehadiran = allTotal > 0 ? Math.round((allHadir / allTotal) * 100) : 0
 
+  // ── Kelas Arsip (class_groups.status = 'inactive') ──
+  const { data: allEnrollmentsForArsip } = await supabase
+    .from('enrollments')
+    .select('id, student_id, class_group_id, sessions_total, status')
+    .in('student_id', studentIds)
+    .in('status', ['completed', 'inactive'])
+
+  const arsipCGIds = [...new Set((allEnrollmentsForArsip ?? [])
+    .map((e: any) => e.class_group_id).filter(Boolean))]
+
+  const { data: allClassGroupsForArsip } = arsipCGIds.length > 0
+    ? await supabase
+        .from('class_groups')
+        .select('id, label, status, tutor_id')
+        .in('id', arsipCGIds)
+        .eq('status', 'inactive')
+    : { data: [] }
+
+  const arsipTutorIds = [...new Set((allClassGroupsForArsip ?? [])
+    .map((cg: any) => cg.tutor_id).filter(Boolean)
+    .filter((id: string) => !(tutors ?? []).some((t: any) => t.id === id))
+  )]
+  const { data: arsipTutors } = arsipTutorIds.length > 0
+    ? await supabase.from('profiles').select('id, full_name').in('id', arsipTutorIds)
+    : { data: [] }
+  const allTutors = [...(tutors ?? []), ...(arsipTutors ?? [])]
+
+  const archivedData = students.map(student => {
+    const studentArchived = (allEnrollmentsForArsip ?? [])
+      .filter((e: any) => {
+        if (e.student_id !== student.id) return false
+        return (allClassGroupsForArsip ?? []).some((c: any) => c.id === e.class_group_id)
+      })
+      .map((e: any) => {
+        const cg    = (allClassGroupsForArsip ?? []).find((c: any) => c.id === e.class_group_id)
+        const tutor = allTutors.find((t: any) => t.id === cg?.tutor_id)
+        return {
+          enrollmentId: e.id,
+          classLabel:   cg?.label ?? '—',
+          tutorName:    tutor?.full_name ?? '—',
+          total:        e.sessions_total ?? 8,
+        }
+      })
+    return {
+      studentId:   student.id,
+      studentName: student.full_name,
+      studentSlug: student.slug ?? student.id,
+      archived:    studentArchived,
+    }
+  }).filter(s => s.archived.length > 0)
+
   return (
     <OrtuDashboardClient
       profile={profile as any}
       childrenData={childrenData}
       activityFeed={activityFeed}
       adminPhone={adminPhone}
+      archivedData={archivedData}
       stats={{
         totalAnak:             students.length,
         totalSesiMingguIni,
