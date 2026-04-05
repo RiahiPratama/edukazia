@@ -150,6 +150,21 @@ export async function PATCH(
     }
 
     // Parse form data
+    const contentType = request.headers.get('content-type') || ''
+
+    // ✅ Handle JSON request (untuk toggle publish)
+    if (contentType.includes('application/json')) {
+      const body = await request.json()
+      if (typeof body.is_published === 'boolean') {
+        const { error } = await supabase
+          .from('materials')
+          .update({ is_published: body.is_published })
+          .eq('id', id)
+        if (error) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+        return NextResponse.json({ success: true })
+      }
+    }
+
     const formData = await request.formData();
     const title = formData.get('title') as string;
     const url = formData.get('url') as string;

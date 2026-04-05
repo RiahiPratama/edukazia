@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2 } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 // Available icons for chapters and units
@@ -503,6 +503,20 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       fetchMaterials();
     } catch (error) {
       alert('❌ Gagal menghapus material');
+    }
+  };
+
+  const handleTogglePublish = async (materialId: string, currentStatus: boolean) => {
+    try {
+      const response = await fetch(`/api/admin/materials/${materialId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_published: !currentStatus }),
+      });
+      if (!response.ok) throw new Error();
+      fetchMaterials();
+    } catch {
+      alert('❌ Gagal mengubah status publish');
     }
   };
 
@@ -1164,6 +1178,20 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                   <Upload className="w-4 h-4" />
                                                 </button>
                                               )}
+                                              <button
+                                                onClick={() => handleTogglePublish(material.id, material.is_published)}
+                                                className={`p-2 rounded-lg transition-colors ${
+                                                  material.is_published
+                                                    ? 'text-green-600 hover:bg-green-50'
+                                                    : 'text-gray-400 hover:bg-gray-100'
+                                                }`}
+                                                title={material.is_published ? 'Unpublish' : 'Publish'}
+                                              >
+                                                {material.is_published
+                                                  ? <Eye className="w-4 h-4" />
+                                                  : <EyeOff className="w-4 h-4" />
+                                                }
+                                              </button>
                                               <button
                                                 onClick={() => handleDelete(material.id)}
                                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
