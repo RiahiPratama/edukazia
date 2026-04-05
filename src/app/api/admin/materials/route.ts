@@ -658,7 +658,15 @@ export async function PATCH(request: NextRequest) {
     // ✅ HANDLE JSX FILE REPLACEMENT (Bacaan category)
     const jsxFile = formData.get('jsx_file') as File | null
     if (jsxFile && jsxFile.size > 0 && category === 'bacaan') {
-      const existingContent = existingMaterial.material_contents?.[0]
+
+      // Flat query terpisah — nested join tidak reliable
+      const { data: existingContents } = await supabase
+        .from('material_contents')
+        .select('id, storage_path, storage_bucket')
+        .eq('material_id', materialId)
+        .limit(1)
+
+      const existingContent = existingContents?.[0]
 
       // Hapus file lama dari Storage dulu
       if (existingContent?.storage_path && existingContent?.storage_bucket) {
