@@ -106,7 +106,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
 
   // ✅ OPTIMIZED: Combine 2 session queries into ONE
   // Mundur 90 menit untuk tangkap sesi yang sedang berlangsung
-  const minus90 = new Date(nowWIT.getTime() - 90 * 60 * 1000)
+  const minus90 = new Date(Date.now() - 90 * 60 * 1000)
   const { data: allSessions } = cgIds.length > 0
     ? await supabase
         .from('sessions')
@@ -126,6 +126,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   })
 
   // Active sessions: dalam 3 jam ke depan ATAU sedang berlangsung
+  const nowMs = Date.now()
   const activeSessions = (allSessions ?? [])
     .filter((s: any) => s.status === 'scheduled')
     .map((s: any) => {
@@ -134,11 +135,10 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         d.class_type_id === cg?.class_type_id && d.course_id === cg?.course_id
       )
       const durationMinutes = dur?.duration_minutes ?? 60
-      const startMs = new Date(s.scheduled_at).getTime()
-      const endMs   = startMs + durationMinutes * 60 * 1000
-      const nowMs   = nowWIT.getTime()
+      const startMs  = new Date(s.scheduled_at).getTime()
+      const endMs    = startMs + durationMinutes * 60 * 1000
       const diffMins = Math.round((startMs - nowMs) / 60000)
-      const isLive  = nowMs >= startMs && nowMs < endMs
+      const isLive   = nowMs >= startMs && nowMs < endMs
       const isUpcoming = diffMins >= 0 && diffMins <= 180
       if (!isLive && !isUpcoming) return null
       return {
