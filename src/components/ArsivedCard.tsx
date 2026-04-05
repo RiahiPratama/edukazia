@@ -89,13 +89,13 @@ export default function ArsivedCard({ archivedData, adminPhone }: Props) {
                     <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
                       {s.studentName} · {kelas.tutorName} · {kelas.total} sesi
                     </p>
-                  </div>
-                  <div className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg"
-                    style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#22c55e' }}>Selesai</span>
+                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg mt-1"
+                      style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#22c55e' }}>Selesai</span>
+                    </div>
                   </div>
                 </div>
               ))
