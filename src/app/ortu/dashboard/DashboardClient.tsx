@@ -102,10 +102,28 @@ const RING_BADGE: Record<RingColor, { bg: string; color: string; label: string }
 
 export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, archivedData, stats }: Props) {
   const [now, setNow] = useState(() => Date.now())
+  const [isDark, setIsDark] = useState(false)
+  const [mouse, setMouse] = useState({ x: -999, y: -999 })
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const check = () => setIsDark(localStorage.getItem('ortu-theme') === 'dark')
+    check()
+    window.addEventListener('storage', check)
+    // Also observe CSS variable change via MutationObserver
+    const obs = new MutationObserver(check)
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
+    return () => { window.removeEventListener('storage', check); obs.disconnect() }
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => setMouse({ x: e.clientX, y: e.clientY })
+    window.addEventListener('mousemove', handler)
+    return () => window.removeEventListener('mousemove', handler)
   }, [])
   const firstName = profile.full_name.split(' ')[0]
   const jam = parseInt(new Date().toLocaleString('id-ID', { hour: '2-digit', timeZone: 'Asia/Jayapura', hour12: false }))
@@ -153,24 +171,56 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
     .sort((a: any, b: any) => new Date(a.nextSession).getTime() - new Date(b.nextSession).getTime())[0]
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen pb-16" style={{ position: 'relative' }}>
+
+      {/* ── DOT GRID — dark mode only ── */}
+      {isDark && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='24' height='24' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='rgba(255,255,255,0.1)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
+        }} />
+      )}
+
+      {/* ── SPOTLIGHT — ikuti mouse, dark mode only ── */}
+      {isDark && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1, pointerEvents: 'none',
+          background: `radial-gradient(600px circle at ${mouse.x}px ${mouse.y}px, rgba(92,79,229,0.13), transparent 80%)`,
+          transition: 'background 0.1s',
+        }} />
+      )}
+
+      {/* Content wrapper — di atas dot grid */}
+      <div style={{ position: 'relative', zIndex: 2 }}>
 
       {/* Pengumuman */}
       <AnnouncementFetcher />
 
       {/* ── HERO ── */}
       <div className="relative overflow-hidden rounded-2xl mx-4 mt-4 mb-5 p-5"
-        style={{ background: 'linear-gradient(135deg, #E6B800 0%, #f5c93e 100%)' }}>
-        <div className="absolute -top-10 -right-10 w-44 h-44 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-6 -left-6 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none" />
+        style={{
+          background: isDark
+            ? 'linear-gradient(135deg, rgba(92,79,229,0.25) 0%, rgba(26,22,64,0.8) 100%)'
+            : 'linear-gradient(135deg, #5C4FE5 0%, #4338CA 100%)',
+          border: isDark ? '1px solid rgba(92,79,229,0.3)' : 'none',
+          backdropFilter: isDark ? 'blur(20px)' : 'none',
+        }}>
+        {/* Dekorasi */}
+        <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full pointer-events-none"
+          style={{ background: isDark ? 'rgba(230,184,0,0.06)' : 'rgba(255,255,255,0.1)', filter: 'blur(30px)' }} />
+        <div className="absolute -bottom-6 -left-6 w-28 h-28 rounded-full pointer-events-none"
+          style={{ background: isDark ? 'rgba(92,79,229,0.15)' : 'rgba(255,255,255,0.08)', filter: 'blur(20px)' }} />
 
         <div className="relative z-10">
-          <p className="text-[11px] text-amber-700 font-medium mb-1">{today}</p>
-          <p className="text-[19px] font-extrabold text-amber-950 mb-0.5">{greeting}, {firstName}! 👋</p>
-          <p className="text-[12px] text-amber-700 mb-4">{stats.totalAnak} anak aktif belajar</p>
+          <p className="text-[11px] font-medium mb-1" style={{ color: 'rgba(255,255,255,0.6)' }}>{today}</p>
+          <p className="text-[19px] font-extrabold text-white mb-0.5">{greeting}, {firstName}! 👋</p>
+          <p className="text-[12px] mb-4" style={{ color: 'rgba(255,255,255,0.65)' }}>
+            {stats.totalAnak} anak aktif belajar
+          </p>
 
           {/* Stats grid */}
-          <div className="grid grid-cols-4 gap-2 mt-4">
+          <div className="grid grid-cols-4 gap-2">
             {[
               { num: stats.totalSesiMingguIni, lbl: 'Sesi minggu' },
               { num: `${stats.avgKehadiran}%`, lbl: 'Kehadiran', green: stats.avgKehadiran >= 80 },
@@ -178,10 +228,10 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
               { num: nextSched ? fmtDateShort(nextSched.nextSession).split(',')[0] : '—', lbl: 'Jadwal' },
             ].map((s, i) => (
               <div key={i} className="relative rounded-xl px-2 py-2.5 text-center"
-                style={{ background: 'rgba(255,255,255,0.3)' }}>
-                {s.pulse && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-                <p className={`text-[15px] font-extrabold ${s.green ? 'text-green-800' : 'text-amber-950'}`}>{s.num}</p>
-                <p className="text-[9px] text-amber-700 mt-0.5 leading-tight">{s.lbl}</p>
+                style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                {s.pulse && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
+                <p className="text-[15px] font-extrabold text-white">{s.num}</p>
+                <p className="text-[9px] mt-0.5 leading-tight" style={{ color: 'rgba(255,255,255,0.55)' }}>{s.lbl}</p>
               </div>
             ))}
           </div>
@@ -207,7 +257,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                   href={`/ortu/anak/${child.slug ?? child.id}`}
                   className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl active:scale-95 transition-all"
                   style={{
-                    background: 'rgba(255,255,255,0.7)',
+                    background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)',
                     border: RING_CSS[ring],
                     boxShadow: RING_GLOW[ring],
                     backdropFilter: 'blur(8px)',
@@ -230,7 +280,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                     {child.full_name.split(' ')[0]}
                   </span>
                   {/* Status */}
-                  <span style={{ fontSize: 10, fontWeight: 600, color: badge.color, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isDark ? 'rgba(255,255,255,0.7)' : badge.color, whiteSpace: 'nowrap' }}>
                     {timeLabel}
                   </span>
                 </Link>
@@ -246,7 +296,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {/* ── SESI HARI INI — hanya tampil kalau tidak ada smart card ── */}
         {activeSessions.length === 0 && allTodaySessions.length > 0 && (
           <div>
-            <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300 mb-2">Jadwal Hari Ini</p>
+            <p className="text-[12px] font-bold" style={{ color: "var(--ortu-text)" }} mb-2">Jadwal Hari Ini</p>
             <div className="flex flex-col gap-2">
               {allTodaySessions.map((session: any, idx: number) => {
                 const col = session.childColor
@@ -405,7 +455,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {/* ── RINGKASAN PER ANAK ── */}
         {childrenData.length > 0 && (
           <div>
-            <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300 mb-2">Ringkasan per Anak</p>
+            <p className="text-[12px] font-bold" style={{ color: "var(--ortu-text)" }} mb-2">Ringkasan per Anak</p>
             <div className="flex flex-col gap-3">
               {childrenData.map((child, idx) => {
                 const childCol = CHILD_COLORS[idx % CHILD_COLORS.length]
@@ -583,7 +633,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {activityFeed.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300">Aktivitas Terbaru</p>
+              <p className="text-[12px] font-bold" style={{ color: "var(--ortu-text)" }}">Aktivitas Terbaru</p>
               <Link href="/ortu/laporan"
                 className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 hover:underline">
                 Lihat semua <ChevronRight size={11} />
@@ -764,6 +814,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
       </div>
 
       <div className="h-16" />
+      </div> {/* end content wrapper */}
     </div>
   )
 }
