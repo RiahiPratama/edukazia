@@ -230,18 +230,6 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
               transformOrigin: '70% 70%',
             }}>👋</span>
           </p>
-          <style>{`
-            @keyframes wave {
-              0%   { transform: rotate(0deg); }
-              10%  { transform: rotate(14deg); }
-              20%  { transform: rotate(-8deg); }
-              30%  { transform: rotate(14deg); }
-              40%  { transform: rotate(-4deg); }
-              50%  { transform: rotate(10deg); }
-              60%  { transform: rotate(0deg); }
-              100% { transform: rotate(0deg); }
-            }
-          `}</style>
           <p className="text-[12px] mb-4" style={{ color: 'rgba(255,255,255,0.65)' }}>
             {stats.totalAnak} anak aktif belajar
           </p>
