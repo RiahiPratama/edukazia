@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import OrtuAnakJadwalHariIni from './OrtuAnakJadwalHariIni'
+import OrtuAnakSmartCard from './OrtuAnakSmartCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,16 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   const cgIds = [...new Set((enrollments ?? []).map((e: any) => e.class_group_id).filter(Boolean))]
 
   const { data: classGroups } = cgIds.length > 0
-    ? await supabase.from('class_groups').select('id, label, tutor_id, zoom_link').in('id', cgIds)
+    ? await supabase.from('class_groups').select('id, label, course_id, class_type_id, tutor_id, zoom_link').in('id', cgIds)
+    : { data: [] }
+
+  // Durasi per course + class_type
+  const classTypeIds = [...new Set((classGroups ?? []).map((cg: any) => cg.class_type_id).filter(Boolean))]
+  const { data: durations } = classTypeIds.length > 0
+    ? await supabase
+        .from('course_type_durations')
+        .select('class_type_id, course_id, duration_minutes')
+        .in('class_type_id', classTypeIds)
     : { data: [] }
 
   // ✅ OPTIMIZED: Reduce tutor resolution from 3 queries to 2
@@ -95,14 +105,14 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   const todayEnd   = new Date(nowWIT); todayEnd.setHours(23, 59, 59, 999)
 
   // ✅ OPTIMIZED: Combine 2 session queries into ONE
-  // OLD: Separate queries for "today+future" and "completed" sessions
-  // NEW: One query that gets both, then filter in JavaScript
+  // Mundur 90 menit untuk tangkap sesi yang sedang berlangsung
+  const minus90 = new Date(nowWIT.getTime() - 90 * 60 * 1000)
   const { data: allSessions } = cgIds.length > 0
     ? await supabase
         .from('sessions')
         .select('id, class_group_id, scheduled_at, status, zoom_link')
         .in('class_group_id', cgIds)
-        .or(`and(scheduled_at.gte.${toUTC(todayStart)},status.eq.scheduled),status.eq.completed`)
+        .or(`and(scheduled_at.gte.${toUTC(minus90)},status.eq.scheduled),status.eq.completed`)
         .order('scheduled_at', { ascending: true })
         .limit(50)
     : { data: [] }
@@ -114,6 +124,34 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
     const sWIT  = new Date(sDate.toLocaleString('en-US', { timeZone: 'Asia/Jayapura' }))
     return sWIT >= todayStart && sWIT <= todayEnd
   })
+
+  // Active sessions: dalam 3 jam ke depan ATAU sedang berlangsung
+  const activeSessions = (allSessions ?? [])
+    .filter((s: any) => s.status === 'scheduled')
+    .map((s: any) => {
+      const cg  = (classGroups ?? []).find((c: any) => c.id === s.class_group_id)
+      const dur = (durations ?? []).find((d: any) =>
+        d.class_type_id === cg?.class_type_id && d.course_id === cg?.course_id
+      )
+      const durationMinutes = dur?.duration_minutes ?? 60
+      const startMs = new Date(s.scheduled_at).getTime()
+      const endMs   = startMs + durationMinutes * 60 * 1000
+      const nowMs   = nowWIT.getTime()
+      const diffMins = Math.round((startMs - nowMs) / 60000)
+      const isLive  = nowMs >= startMs && nowMs < endMs
+      const isUpcoming = diffMins >= 0 && diffMins <= 180
+      if (!isLive && !isUpcoming) return null
+      return {
+        id:              s.id,
+        scheduled_at:    s.scheduled_at,
+        zoom_link:       s.zoom_link ?? cg?.zoom_link ?? null,
+        classLabel:      cg?.label ?? '—',
+        tutorName:       tutorNameMap[cg?.tutor_id ?? ''] ?? '—',
+        durationMinutes,
+        studentName,
+      }
+    })
+    .filter(Boolean)
 
   const futureEnd = new Date(nowWIT); futureEnd.setDate(futureEnd.getDate() + 30)
   const nextSession = (allSessions ?? []).find((s: any) => {
@@ -258,16 +296,20 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
         </div>
       </div>
 
-      <OrtuAnakJadwalHariIni
-        todaySessions={todaySessions}
-        todayCompletedSessions={todayCompletedSessions}
-        attendances={attendances ?? []}
-        nextSession={nextSession}
-        studentId={studentId}
-        classGroups={classGroups ?? []}
-        tutors={tutorProfiles ?? []}
-        tutorRows={tutorProfiles ?? []}
-      />
+      <OrtuAnakSmartCard activeSessions={activeSessions as any[]} />
+
+      {activeSessions.length === 0 && (
+        <OrtuAnakJadwalHariIni
+          todaySessions={todaySessions}
+          todayCompletedSessions={todayCompletedSessions}
+          attendances={attendances ?? []}
+          nextSession={nextSession}
+          studentId={studentId}
+          classGroups={classGroups ?? []}
+          tutors={tutorProfiles ?? []}
+          tutorRows={tutorProfiles ?? []}
+        />
+      )}
 
       {/* Kelas aktif */}
       <p className="text-[12px] font-bold text-stone-700 mb-2">Kelas aktif</p>
