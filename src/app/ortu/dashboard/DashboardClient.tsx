@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { CalendarDays, ExternalLink, ChevronRight, FileText, Plus, Clock } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
 
 interface Props {
@@ -99,6 +100,12 @@ const RING_BADGE: Record<RingColor, { bg: string; color: string; label: string }
 }
 
 export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, stats }: Props) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [])
   const firstName = profile.full_name.split(' ')[0]
   const jam = parseInt(new Date().toLocaleString('id-ID', { hour: '2-digit', timeZone: 'Asia/Jayapura', hour12: false }))
   const greeting = jam < 12 ? 'Selamat pagi' : jam < 17 ? 'Selamat siang' : 'Selamat malam'
@@ -107,7 +114,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
     timeZone: 'Asia/Jayapura',
   })
 
-  // Sesi hari ini dari SEMUA anak
+  // Sesi hari ini dari SEMUA anak (upcoming + live)
   const allTodaySessions = childrenData.flatMap((child, idx) =>
     (child.todaySessions ?? []).map((s: any) => ({
       ...s,
@@ -117,23 +124,27 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
     }))
   ).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
 
-  // Sesi dalam 3 jam dari SEMUA anak
-  const upcomingSoon = childrenData.flatMap((child, idx) =>
+  // Sesi yang relevan ditampilkan di zoom card:
+  // - Belum mulai dan dalam 3 jam ke depan, ATAU
+  // - Sedang berlangsung (belum selesai)
+  const activeSessions = childrenData.flatMap((child, idx) =>
     child.enrollments
       .filter((e: any) => {
         if (!e.nextSession) return false
-        const diff = new Date(e.nextSession).getTime() - Date.now()
-        const mins = Math.round(diff / 60000)
-        return mins >= 0 && mins <= 180
+        const start = new Date(e.nextSession).getTime()
+        const end   = start + (e.durationMinutes ?? 60) * 60 * 1000
+        const diffMins = Math.round((start - now) / 60000)
+        return (diffMins >= 0 && diffMins <= 180) || (now >= start && now < end)
       })
       .map((e: any) => ({
         ...e,
-        childName: child.full_name,
-        childSlug: child.slug ?? child.id,
+        childName:  child.full_name,
+        childSlug:  child.slug ?? child.id,
         childColor: CHILD_COLORS[idx % CHILD_COLORS.length],
-        diffMinutes: Math.round((new Date(e.nextSession).getTime() - Date.now()) / 60000),
       }))
-  ).sort((a, b) => a.diffMinutes - b.diffMinutes)
+  ).sort((a: any, b: any) =>
+    new Date(a.nextSession).getTime() - new Date(b.nextSession).getTime()
+  )
 
   // Jadwal terdekat untuk stats (dari semua anak)
   const nextSched = childrenData.flatMap(c => c.enrollments)
@@ -153,27 +164,9 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         <div className="absolute -bottom-6 -left-6 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none" />
 
         <div className="relative z-10">
-          {/* Profil ortu */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-[13px] font-extrabold flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.28)', color: '#412402' }}>
-              {initials(profile.full_name)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-extrabold text-amber-950 truncate">{profile.full_name}</p>
-              <p className="text-[10px] text-amber-700 truncate">{profile.email}</p>
-            </div>
-            <span className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold"
-              style={{ background: 'rgba(255,255,255,0.25)', color: '#412402' }}>
-              Orang Tua
-            </span>
-          </div>
-
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: 14 }}>
-            <p className="text-[11px] text-amber-700 font-medium mb-1">{today}</p>
-            <p className="text-[17px] font-extrabold text-amber-950 mb-0.5">{greeting}, {firstName}! 👋</p>
-            <p className="text-[12px] text-amber-700">{stats.totalAnak} anak aktif belajar</p>
-          </div>
+          <p className="text-[11px] text-amber-700 font-medium mb-1">{today}</p>
+          <p className="text-[19px] font-extrabold text-amber-950 mb-0.5">{greeting}, {firstName}! 👋</p>
+          <p className="text-[12px] text-amber-700 mb-4">{stats.totalAnak} anak aktif belajar</p>
 
           {/* Stats grid */}
           <div className="grid grid-cols-4 gap-2 mt-4">
@@ -355,22 +348,37 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
           </div>
         )}
 
-        {/* ── ZOOM CARD — KELAS SEGERA DIMULAI ── */}
-        {upcomingSoon.map((enroll: any) => {
-          const hours = Math.floor(enroll.diffMinutes / 60)
-          const mins = enroll.diffMinutes % 60
-          const timeText = hours > 0
-            ? `${hours} jam ${mins} menit lagi`
-            : mins === 0 ? 'Sekarang!' : `${mins} menit lagi`
-          const urgent = enroll.diffMinutes <= 15
-          const dashOffset = Math.max(20, 163 - (enroll.diffMinutes / 180) * 143)
+        {/* ── SMART ZOOM CARD ── */}
+        {activeSessions.map((enroll: any) => {
+          const sessionStart = new Date(enroll.nextSession).getTime()
+          const durationMs   = (enroll.durationMinutes ?? 60) * 60 * 1000
+          const sessionEnd   = sessionStart + durationMs
+          const isLive       = now >= sessionStart && now < sessionEnd
+          const diffMs       = sessionStart - now
+          const elapsedMs    = now - sessionStart
+
+          const fmt = (ms: number) => {
+            const total = Math.max(0, ms)
+            const h = Math.floor(total / 3600000)
+            const m = Math.floor((total % 3600000) / 60000)
+            const s = Math.floor((total % 60000) / 1000)
+            return h > 0
+              ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+              : `${m}:${String(s).padStart(2,'0')}`
+          }
+
+          const arcPct = isLive
+            ? Math.min(1, elapsedMs / durationMs)
+            : Math.max(0, 1 - diffMs / (180 * 60000))
+          const dashArr = 163
+          const dashOff = Math.round(dashArr - arcPct * dashArr)
 
           return (
             <div key={enroll.enrollmentId}
               className="relative rounded-2xl overflow-hidden p-5"
               style={{ background: '#1A1640' }}>
               <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full blur-3xl pointer-events-none"
-                style={{ background: 'rgba(230,184,0,0.15)' }} />
+                style={{ background: isLive ? 'rgba(34,197,94,0.15)' : 'rgba(230,184,0,0.15)' }} />
               <div className="absolute -bottom-6 -left-6 w-32 h-32 rounded-full blur-2xl pointer-events-none"
                 style={{ background: 'rgba(92,79,229,0.2)' }} />
 
@@ -378,9 +386,9 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
-                      {urgent && <span className="w-2 h-2 rounded-full bg-red-500 animate-ping flex-shrink-0" />}
-                      <span className="text-[9px] font-extrabold tracking-widest uppercase text-amber-400">
-                        🔴 Kelas Segera Dimulai
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isLive ? 'bg-green-500 animate-ping' : 'bg-red-500 animate-pulse'}`} />
+                      <span className={`text-[9px] font-extrabold tracking-widest uppercase ${isLive ? 'text-green-400' : 'text-amber-400'}`}>
+                        {isLive ? '🟢 Sedang Berlangsung' : '🔴 Kelas Segera Dimulai'}
                       </span>
                     </div>
                     <p className="text-[17px] font-extrabold text-white truncate">{enroll.childName}</p>
@@ -390,42 +398,55 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                   </div>
 
                   {/* Circular timer */}
-                  <div className="relative flex-shrink-0" style={{ width: 64, height: 64 }}>
-                    <svg width="64" height="64" viewBox="0 0 64 64" style={{ transform: 'rotate(-90deg)' }}>
-                      <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4"/>
-                      <circle cx="32" cy="32" r="26" fill="none" stroke="#E6B800" strokeWidth="4"
-                        strokeDasharray="163" strokeDashoffset={dashOffset}
-                        strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s' }}/>
+                  <div className="relative flex-shrink-0" style={{ width: 68, height: 68 }}>
+                    <svg width="68" height="68" viewBox="0 0 68 68" style={{ transform: 'rotate(-90deg)' }}>
+                      <circle cx="34" cy="34" r="26" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4"/>
+                      <circle cx="34" cy="34" r="26" fill="none"
+                        stroke={isLive ? '#22c55e' : '#E6B800'}
+                        strokeWidth="4"
+                        strokeDasharray={dashArr}
+                        strokeDashoffset={dashOff}
+                        strokeLinecap="round"
+                        style={{ transition: 'stroke-dashoffset 1s linear' }}/>
                     </svg>
-                    <div style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: 'white', lineHeight: 1 }}>
-                        {hours > 0 ? `${hours}j` : `${mins}m`}
+                    <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: isLive ? '#4ade80' : 'white', lineHeight: 1 }}>
+                        {isLive ? fmt(elapsedMs) : fmt(diffMs)}
                       </span>
-                      <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.5)' }}>lagi</span>
+                      <span style={{ fontSize: 7, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                        {isLive ? 'berlangsung' : 'lagi'}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl"
                   style={{ background: 'rgba(255,255,255,0.06)' }}>
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-                    {fmtDate(enroll.nextSession)}, {fmtTime(enroll.nextSession)} WIT · {timeText}
-                  </span>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: isLive ? '#22c55e' : '#E6B800', animation: 'pulse 2s infinite' }} />
+                  {isLive ? (
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
+                      Durasi {enroll.durationMinutes ?? 60} menit · Selesai pukul {fmtTime(new Date(sessionEnd).toISOString())} WIT
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+                      {fmtDate(enroll.nextSession)}, {fmtTime(enroll.nextSession)} WIT
+                    </span>
+                  )}
                 </div>
 
                 {enroll.zoomLink ? (
                   <a href={enroll.zoomLink} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full font-extrabold text-[14px] transition-transform active:scale-95"
-                    style={{ background: '#E6B800', color: '#1A0A00', boxShadow: '0 0 28px rgba(230,184,0,0.35)' }}>
+                    className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full font-extrabold text-[14px] active:scale-95 transition-transform"
+                    style={{
+                      background: isLive ? '#22c55e' : '#E6B800',
+                      color: isLive ? 'white' : '#1A0A00',
+                      boxShadow: isLive ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 28px rgba(230,184,0,0.35)',
+                    }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
                     </svg>
-                    Buka Zoom Sekarang
+                    {isLive ? 'Gabung Zoom Sekarang' : 'Buka Zoom Sekarang'}
                   </a>
                 ) : (
                   <p className="text-center text-[11px] py-2" style={{ color: 'rgba(255,255,255,0.4)' }}>

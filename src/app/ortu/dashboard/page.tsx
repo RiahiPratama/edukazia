@@ -81,6 +81,15 @@ export default async function OrtuDashboardPage() {
         .in('id', classGroupIds)
     : { data: [] }
 
+  // Ambil durasi per class_type
+  const classTypeIds = [...new Set((classGroups ?? []).map((cg: any) => cg.class_type_id).filter(Boolean))]
+  const { data: durations } = classTypeIds.length > 0
+    ? await supabase
+        .from('course_type_durations')
+        .select('class_type_id, duration_minutes')
+        .in('class_type_id', classTypeIds)
+    : { data: [] }
+
   // Ambil courses dan tutors
   const tutorIds = [...new Set((classGroups ?? []).map((cg: any) => cg.tutor_id).filter(Boolean))]
   const { data: tutors } = tutorIds.length > 0
@@ -152,8 +161,10 @@ export default async function OrtuDashboardPage() {
     const activeEnrollments = studentEnrollments // sudah difilter active di query
 
     const enrollmentsWithProgress = activeEnrollments.map((e: any) => {
-      const cg = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
+      const cg    = (classGroups ?? []).find((c: any) => c.id === e.class_group_id)
       const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+      const dur   = (durations ?? []).find((d: any) => d.class_type_id === cg?.class_type_id)
+      const durationMinutes = dur?.duration_minutes ?? 60
       // FIX: hitung hadir hanya dari sesi SETELAH enrolled_at
       const enrolledAt = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
       const sessIdsForCG = allSessionIds_month
@@ -200,6 +211,7 @@ export default async function OrtuDashboardPage() {
         classGroupId:     e.class_group_id,
         classLabel:       cg?.label ?? '—',
         tutorName:        tutor?.full_name ?? '—',
+        durationMinutes,
         progress,
         barProgress,
         total,
@@ -214,7 +226,7 @@ export default async function OrtuDashboardPage() {
     const totalAtt    = studentAttendances.length
     const hadirPct    = totalAtt > 0 ? Math.round((hadirCount / totalAtt) * 100) : 0
 
-    // Sesi hari ini untuk anak ini — flat query, no nested join
+    // Sesi hari ini untuk anak ini — flat, no nested join
     const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
     const studentCGIds = activeEnrollments.map((e: any) => e.class_group_id)
     const todaySessions = (upcomingSessions ?? [])
@@ -225,14 +237,16 @@ export default async function OrtuDashboardPage() {
       .map((s: any) => {
         const cg    = (classGroups ?? []).find((c: any) => c.id === s.class_group_id)
         const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+        const dur   = (durations ?? []).find((d: any) => d.class_type_id === cg?.class_type_id)
         return {
-          id:           s.id,
-          scheduled_at: s.scheduled_at,
-          status:       s.status,
-          zoom_link:    s.zoom_link ?? cg?.zoom_link ?? null,
-          classLabel:   cg?.label ?? '—',
-          tutorName:    tutor?.full_name ?? '—',
-          classGroupId: s.class_group_id,
+          id:              s.id,
+          scheduled_at:    s.scheduled_at,
+          status:          s.status,
+          zoom_link:       s.zoom_link ?? cg?.zoom_link ?? null,
+          classLabel:      cg?.label ?? '—',
+          tutorName:       tutor?.full_name ?? '—',
+          durationMinutes: dur?.duration_minutes ?? 60,
+          classGroupId:    s.class_group_id,
         }
       })
 
