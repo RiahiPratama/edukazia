@@ -103,28 +103,14 @@ export default async function OrtuDashboardPage() {
         .order('scheduled_at')
     : { data: [] }
 
-  // Ambil attendances bulan ini untuk kehadiran
+  // Ambil SEMUA sesi completed untuk kalkulasi progress (tanpa batas bulan)
   const startMonth = new Date(nowWIT.getFullYear(), nowWIT.getMonth(), 1)
   const allSessionIds_month = classGroupIds.length > 0
     ? (await supabase
         .from('sessions')
-        .select('id, class_group_id')
-        .in('class_group_id', classGroupIds)
-        .eq('status', 'completed')
-        .gte('scheduled_at', toUTC(startMonth))
-      ).data ?? []
-    : []
-
-  // ✅ Sesi scheduled hari ini atau lewat → dihitung sebagai progress
-  const todayEndWIT = new Date(nowWIT)
-  todayEndWIT.setHours(23, 59, 59, 999)
-  const scheduledTodayOrPast = classGroupIds.length > 0
-    ? (await supabase
-        .from('sessions')
         .select('id, class_group_id, scheduled_at')
         .in('class_group_id', classGroupIds)
-        .in('status', ['scheduled', 'rescheduled'])
-        .lte('scheduled_at', toUTC(todayEndWIT))
+        .eq('status', 'completed')
       ).data ?? []
     : []
 
@@ -180,15 +166,9 @@ export default async function OrtuDashboardPage() {
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
 
-      // ✅ Sesi scheduled hari ini atau lewat → ikut dihitung sebagai progress
-      const scheduledCountForCG = scheduledTodayOrPast.filter((s: any) =>
-        s.class_group_id === e.class_group_id &&
-        new Date(s.scheduled_at) >= enrolledAt
-      ).length
-
       // FIX: offset min 1, cap at sessions_total
       const progress = Math.min(
-        (e.session_start_offset ?? 1) + hadirCount + scheduledCountForCG,
+        (e.session_start_offset ?? 1) + hadirCount,
         e.sessions_total ?? 8
       )
       const total    = e.sessions_total ?? 8
