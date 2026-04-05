@@ -103,9 +103,31 @@ export async function DELETE(
             .eq('unit_id', unitId);
 
           if (remainingLessons === 0) {
+            // Ambil chapter_id sebelum hapus unit
+            const { data: unit } = await supabase
+              .from('units')
+              .select('chapter_id')
+              .eq('id', unitId)
+              .single();
+
+            const chapterId = unit?.chapter_id;
+
             // Hapus unit yang kosong
             await supabase.from('units').delete().eq('id', unitId);
             console.log('🗑️ Empty unit deleted:', unitId);
+
+            // STEP 4: Cek apakah chapter masih punya unit lain
+            if (chapterId) {
+              const { count: remainingUnits } = await supabase
+                .from('units')
+                .select('id', { count: 'exact', head: true })
+                .eq('chapter_id', chapterId);
+
+              if (remainingUnits === 0) {
+                await supabase.from('chapters').delete().eq('id', chapterId);
+                console.log('🗑️ Empty chapter deleted:', chapterId);
+              }
+            }
           }
         }
       }
