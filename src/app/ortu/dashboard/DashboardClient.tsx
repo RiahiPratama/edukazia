@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { CalendarDays, ExternalLink, ChevronRight, FileText, Plus } from 'lucide-react'
-import { useState, useEffect } from 'react'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
 import TodaySessionCard from '@/components/session/TodaySessionCard'
 
@@ -101,8 +100,6 @@ const RING_BADGE: Record<RingColor, { bg: string; color: string; label: string }
 }
 
 export default function OrtuDashboardClient({ profile, childrenData, activityFeed, adminPhone, stats }: Props) {
-  const [activeIdx, setActiveIdx] = useState(0)
-
   const firstName = profile.full_name.split(' ')[0]
   const jam = parseInt(new Date().toLocaleString('id-ID', { hour: '2-digit', timeZone: 'Asia/Jayapura', hour12: false }))
   const greeting = jam < 12 ? 'Selamat pagi' : jam < 17 ? 'Selamat siang' : 'Selamat malam'
@@ -111,30 +108,36 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
     timeZone: 'Asia/Jayapura',
   })
 
-  const activeChild = childrenData[activeIdx]
-  const col = CHILD_COLORS[activeIdx % CHILD_COLORS.length]
+  // Sesi hari ini dari SEMUA anak
+  const allTodaySessions = childrenData.flatMap((child, idx) =>
+    (child.summary?.todaySessions ?? []).map((s: any) => ({
+      ...s,
+      childName: child.full_name,
+      childId: child.id,
+      childColor: CHILD_COLORS[idx % CHILD_COLORS.length],
+    }))
+  ).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
 
-  // Sesi hari ini dari anak aktif
-  const todaySessions = (activeChild?.summary?.todaySessions ?? []).map((s: any) => ({
-    ...s,
-    childName: activeChild.full_name,
-    childId: activeChild.id,
-    childColor: col,
-  }))
+  // Sesi dalam 3 jam dari SEMUA anak
+  const upcomingSoon = childrenData.flatMap((child, idx) =>
+    child.enrollments
+      .filter((e: any) => {
+        if (!e.nextSession) return false
+        const diff = new Date(e.nextSession).getTime() - Date.now()
+        const mins = Math.round(diff / 60000)
+        return mins >= 0 && mins <= 180
+      })
+      .map((e: any) => ({
+        ...e,
+        childName: child.full_name,
+        childSlug: child.slug ?? child.id,
+        childColor: CHILD_COLORS[idx % CHILD_COLORS.length],
+        diffMinutes: Math.round((new Date(e.nextSession).getTime() - Date.now()) / 60000),
+      }))
+  ).sort((a, b) => a.diffMinutes - b.diffMinutes)
 
-  // Sesi dalam 3 jam dari anak aktif
-  const upcomingSoon = (activeChild?.enrollments ?? []).filter((e: any) => {
-    if (!e.nextSession) return false
-    const diff = new Date(e.nextSession).getTime() - Date.now()
-    const mins = Math.round(diff / 60000)
-    return mins >= 0 && mins <= 180
-  }).map((e: any) => ({
-    ...e,
-    diffMinutes: Math.round((new Date(e.nextSession).getTime() - Date.now()) / 60000),
-  }))
-
-  // Jadwal terdekat untuk stats
-  const nextSched = (activeChild?.enrollments ?? [])
+  // Jadwal terdekat untuk stats (dari semua anak)
+  const nextSched = childrenData.flatMap(c => c.enrollments)
     .filter((e: any) => e.nextSession)
     .sort((a: any, b: any) => new Date(a.nextSession).getTime() - new Date(b.nextSession).getTime())[0]
 
@@ -201,28 +204,26 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
             {childrenData.map((child, idx) => {
               const ring = storyRing(child)
               const badge = RING_BADGE[ring]
-              const isActive = idx === activeIdx
               const childCol = CHILD_COLORS[idx % CHILD_COLORS.length]
-              // Waktu sesi hari ini
               const todayEnroll = child.enrollments.find((e: any) => e.nextSession && isToday(e.nextSession))
 
               return (
-                <button key={child.id}
-                  onClick={() => setActiveIdx(idx)}
-                  className="flex-shrink-0 flex flex-col items-center gap-1.5 transition-all active:scale-95"
-                  style={{ transform: isActive ? 'scale(1.08)' : 'scale(1)' }}>
+                <Link key={child.id}
+                  href={`/ortu/anak/${child.slug ?? child.id}`}
+                  className="flex-shrink-0 flex flex-col items-center gap-1.5 active:scale-95"
+                  style={{ transition: 'transform 0.2s' }}>
                   {/* Avatar ring */}
                   <div style={{
                     width: 62, height: 62, borderRadius: '50%',
                     padding: 2.5,
                     border: RING_CSS[ring],
-                    boxShadow: isActive ? RING_GLOW[ring] : 'none',
+                    boxShadow: RING_GLOW[ring],
                     transition: 'all 0.25s',
                   }}>
                     <div style={{
                       width: '100%', height: '100%', borderRadius: '50%',
-                      background: isActive ? childCol.top : childCol.bg,
-                      color: isActive ? 'white' : childCol.text,
+                      background: childCol.top,
+                      color: 'white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 15, fontWeight: 800,
                       border: '2.5px solid white',
@@ -233,7 +234,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                   {/* Nama */}
                   <span style={{
                     fontSize: 10, fontWeight: 700,
-                    color: isActive ? '#5C4FE5' : '#6B7280',
+                    color: '#5C4FE5',
                     maxWidth: 64, textAlign: 'center', lineHeight: 1.3,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
@@ -250,7 +251,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       ? fmtTime(todayEnroll.nextSession)
                       : badge.label}
                   </span>
-                </button>
+                </Link>
               )
             })}
 
@@ -267,17 +268,16 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
             </button>
           </div>
 
-          {/* Label anak aktif */}
-          {activeChild && (
+          {/* Label info */}
+          {childrenData.length > 0 && (
             <div className="flex items-center justify-between mt-3 px-3 py-2 rounded-xl"
               style={{ background: 'rgba(92,79,229,0.06)', border: '1px solid rgba(92,79,229,0.1)' }}>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-300">
-                  Data: <span style={{ color: '#5C4FE5' }}>{activeChild.full_name}</span>
+                  {childrenData.length} anak aktif · ketuk untuk lihat detail
                 </span>
               </div>
-              <span className="text-[9px] text-stone-400">ketuk untuk ganti ›</span>
             </div>
           )}
         </div>
@@ -286,11 +286,11 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
       <div className="px-4 space-y-4">
 
         {/* ── SESI HARI INI ── */}
-        {todaySessions.length > 0 && (
+        {allTodaySessions.length > 0 && (
           <div>
             <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300 mb-2">Sesi Hari Ini</p>
             <div className="bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 rounded-2xl overflow-hidden divide-y divide-stone-50 dark:divide-stone-800">
-              {todaySessions.map((session: any, idx: number) => (
+              {allTodaySessions.map((session: any, idx: number) => (
                 <div key={`${session.id}-${idx}`} className="p-3">
                   <TodaySessionCard session={session} studentId={session.childId} compact showCountdown />
                 </div>
@@ -327,7 +327,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                         🔴 Kelas Segera Dimulai
                       </span>
                     </div>
-                    <p className="text-[17px] font-extrabold text-white truncate">{activeChild?.full_name}</p>
+                    <p className="text-[17px] font-extrabold text-white truncate">{enroll.childName}</p>
                     <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
                       {enroll.classLabel} · {enroll.tutorName}
                     </p>
@@ -381,182 +381,179 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
           )
         })}
 
-        {/* ── PROGRES ANAK AKTIF ── */}
-        {activeChild && (
+        {/* ── RINGKASAN PER ANAK ── */}
+        {childrenData.length > 0 && (
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300">Progres Ananda</p>
-              <Link href={`/ortu/anak/${activeChild.slug ?? activeChild.id}`}
-                className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                Lihat detail <ChevronRight size={11} />
-              </Link>
-            </div>
+            <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300 mb-2">Ringkasan per Anak</p>
+            <div className="flex flex-col gap-3">
+              {childrenData.map((child, idx) => {
+                const childCol = CHILD_COLORS[idx % CHILD_COLORS.length]
+                return (
+                  <div key={child.id} className="bg-white dark:bg-stone-900 rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800"
+                    style={{ borderTop: `3px solid ${childCol.top}` }}>
+                    {/* Header anak */}
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-50 dark:border-stone-800">
+                      <div className="relative">
+                        <div className="w-11 h-11 rounded-full p-[2.5px]"
+                          style={{ background: `linear-gradient(135deg, ${childCol.top}, #E6B800)` }}>
+                          <div className="w-full h-full rounded-full flex items-center justify-center text-[12px] font-extrabold border-2 border-white dark:border-stone-900"
+                            style={{ background: childCol.bg, color: childCol.text }}>
+                            {initials(child.full_name)}
+                          </div>
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-stone-900 animate-pulse" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-extrabold text-stone-800 dark:text-stone-100 truncate">{child.full_name}</p>
+                        <p className="text-[10px] text-stone-400 dark:text-stone-500">
+                          {child.grade ?? '—'}{child.school ? ` · ${child.school}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {child.hadirPct > 0 && (
+                          <div className="text-right">
+                            <p className={`text-[16px] font-extrabold ${child.hadirPct >= 80 ? 'text-green-600' : child.hadirPct >= 60 ? 'text-amber-600' : 'text-red-500'}`}>
+                              {child.hadirPct}%
+                            </p>
+                            <p className="text-[9px] text-stone-400">Hadir</p>
+                          </div>
+                        )}
+                        <Link href={`/ortu/anak/${child.slug ?? child.id}`}
+                          className="text-[10px] text-stone-400 hover:text-stone-700 flex items-center gap-0.5">
+                          <ChevronRight size={14} />
+                        </Link>
+                      </div>
+                    </div>
 
-            <div className="bg-white dark:bg-stone-900 rounded-2xl overflow-hidden border border-stone-100 dark:border-stone-800">
-              {/* Header anak */}
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-50 dark:border-stone-800">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full p-[2.5px]"
-                    style={{ background: `linear-gradient(135deg, ${col.top}, #E6B800)` }}>
-                    <div className="w-full h-full rounded-full flex items-center justify-center text-[13px] font-extrabold border-[2.5px] border-white dark:border-stone-900"
-                      style={{ background: col.bg, color: col.text }}>
-                      {initials(activeChild.full_name)}
+                    {/* Enrollments */}
+                    <div className="px-4 py-3 space-y-3">
+                      {child.enrollments.length === 0 ? (
+                        <p className="text-[11px] text-stone-400 py-1">Belum ada kelas aktif</p>
+                      ) : (
+                        child.enrollments.map((enroll: any) => {
+                          const sisa = enroll.total - (enroll.barProgress ?? enroll.progress)
+                          const barPct = Math.min(100, Math.round((enroll.barProgress ?? enroll.progress) / enroll.total * 100))
+                          return (
+                            <div key={enroll.enrollmentId}
+                              className="rounded-xl border border-stone-100 dark:border-stone-800 overflow-hidden">
+                              <div className="flex items-center justify-between px-3 py-2 bg-stone-50 dark:bg-stone-800/50">
+                                <div>
+                                  <p className="text-[12px] font-bold text-stone-700 dark:text-stone-200">{enroll.classLabel}</p>
+                                  <p className="text-[10px] text-stone-400">{enroll.tutorName}</p>
+                                </div>
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900">
+                                  Aktif
+                                </span>
+                              </div>
+
+                              <div className="px-3 py-2.5">
+                                {/* Progress bar */}
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <p className="text-[10px] text-stone-400 dark:text-stone-500">Progress sesi</p>
+                                  <p className="text-[11px] font-extrabold text-stone-700 dark:text-stone-200">
+                                    {enroll.progress}/{enroll.total}
+                                  </p>
+                                </div>
+                                <div className="h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-visible mb-2.5 relative">
+                                  <div className="h-full rounded-full relative transition-all duration-700"
+                                    style={{ width: `${barPct}%`, background: childCol.top }}>
+                                    <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 bg-white dark:bg-stone-900"
+                                      style={{ borderColor: childCol.top, boxShadow: `0 0 0 3px ${childCol.top}33` }} />
+                                  </div>
+                                </div>
+
+                                {/* Info 3 kolom */}
+                                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                                  <div className="rounded-lg py-1.5 px-2 text-center bg-green-50 dark:bg-green-950/30">
+                                    <p className="text-[12px] font-extrabold text-green-700 dark:text-green-400">{child.hadirPct}%</p>
+                                    <p className="text-[8px] text-green-600 dark:text-green-500 font-semibold">Kehadiran</p>
+                                  </div>
+                                  <div className="rounded-lg py-1.5 px-2 text-center bg-indigo-50 dark:bg-indigo-950/30">
+                                    <p className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-400 leading-tight">
+                                      {enroll.nextSession ? fmtDateShort(enroll.nextSession).split(',')[0] : '—'}
+                                    </p>
+                                    <p className="text-[8px] text-indigo-500 font-semibold">Berikutnya</p>
+                                  </div>
+                                  <div className="rounded-lg py-1.5 px-2 text-center"
+                                    style={{ background: sisa <= 1 ? '#FCEBEB' : '#FFF9E6' }}>
+                                    <p className="text-[12px] font-extrabold"
+                                      style={{ color: sisa <= 1 ? '#A32D2D' : '#854F0B' }}>{sisa}</p>
+                                    <p className="text-[8px] font-semibold"
+                                      style={{ color: sisa <= 1 ? '#A32D2D' : '#854F0B' }}>Sisa sesi</p>
+                                  </div>
+                                </div>
+
+                                {/* Jadwal berikutnya */}
+                                {enroll.nextSession && (
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      <CalendarDays size={10} className="text-stone-400" />
+                                      <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                                        {fmtDate(enroll.nextSession)}, {fmtTime(enroll.nextSession)}
+                                      </p>
+                                    </div>
+                                    {enroll.zoomLink && (
+                                      <a href={enroll.zoomLink} target="_blank" rel="noopener noreferrer"
+                                        className="text-[10px] text-blue-500 flex items-center gap-0.5 hover:underline">
+                                        Zoom <ExternalLink size={9} />
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Banner sisa sesi */}
+                              {sisa <= 2 && (() => {
+                                const waMsg = encodeURIComponent(
+                                  `Halo, saya ingin memperpanjang paket belajar untuk ${child.full_name} (${enroll.classLabel}). Sisa sesi tinggal ${sisa}. Mohon informasi untuk periode berikutnya. Terima kasih.`
+                                )
+                                const waUrl = adminPhone
+                                  ? `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${waMsg}`
+                                  : null
+                                return (
+                                  <div className="mx-3 mb-3 rounded-xl flex items-center gap-3 px-3 py-2.5"
+                                    style={{
+                                      background: sisa === 0 ? '#FCEBEB' : '#FFF9E6',
+                                      border: `0.5px solid ${sisa === 0 ? '#F7C1C1' : '#FAC775'}`,
+                                    }}>
+                                    <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm"
+                                      style={{ background: sisa === 0 ? '#F7C1C1' : '#FAC775' }}>⚠️</div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] font-bold truncate"
+                                        style={{ color: sisa === 0 ? '#791F1F' : '#633806' }}>
+                                        {sisa === 0 ? `${enroll.classLabel} · Sesi habis!` : `${enroll.classLabel} · Sisa ${sisa} sesi`}
+                                      </p>
+                                      <p className="text-[10px]" style={{ color: sisa === 0 ? '#A32D2D' : '#854F0B' }}>
+                                        {sisa === 0 ? 'Perpanjang untuk lanjut belajar' : 'Segera perpanjang paket'}
+                                      </p>
+                                    </div>
+                                    {waUrl ? (
+                                      <a href={waUrl} target="_blank" rel="noopener noreferrer"
+                                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white active:scale-95 transition-transform"
+                                        style={{ background: '#25D366' }}>
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                                          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.553 4.122 1.524 5.854L0 24l6.337-1.501A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.373l-.36-.213-3.761.891.946-3.657-.234-.376A9.818 9.818 0 012.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/>
+                                        </svg>
+                                        Perpanjang
+                                      </a>
+                                    ) : (
+                                      <span className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold"
+                                        style={{ background: '#FAC775', color: '#633806' }}>
+                                        Hubungi Admin
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )
+                        })
+                      )}
                     </div>
                   </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-stone-900 animate-pulse" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-extrabold text-stone-800 dark:text-stone-100 truncate">
-                    {activeChild.full_name}
-                  </p>
-                  <p className="text-[10px] text-stone-400 dark:text-stone-500">
-                    {activeChild.grade ?? '—'}{activeChild.school ? ` · ${activeChild.school}` : ''}
-                  </p>
-                </div>
-                {activeChild.hadirPct > 0 && (
-                  <div className="text-right flex-shrink-0">
-                    <p className={`text-[18px] font-extrabold ${
-                      activeChild.hadirPct >= 80 ? 'text-green-600' :
-                      activeChild.hadirPct >= 60 ? 'text-amber-600' : 'text-red-500'
-                    }`}>
-                      {activeChild.hadirPct}%
-                    </p>
-                    <p className="text-[9px] text-stone-400">Kehadiran</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Enrollments */}
-              <div className="px-4 py-3 space-y-3">
-                {activeChild.enrollments.length === 0 ? (
-                  <p className="text-[11px] text-stone-400 py-2">Belum ada kelas aktif</p>
-                ) : (
-                  activeChild.enrollments.map((enroll: any) => {
-                    const sisa = enroll.total - enroll.progress
-                    const barPct = Math.min(100, Math.round((enroll.barProgress ?? enroll.progress) / enroll.total * 100))
-                    return (
-                      <div key={enroll.enrollmentId}
-                        className="rounded-xl border border-stone-100 dark:border-stone-800 overflow-hidden">
-                        <div className="flex items-center justify-between px-3 py-2 bg-stone-50 dark:bg-stone-800/50">
-                          <div>
-                            <p className="text-[12px] font-bold text-stone-700 dark:text-stone-200">{enroll.classLabel}</p>
-                            <p className="text-[10px] text-stone-400">{enroll.tutorName}</p>
-                          </div>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900">
-                            Aktif
-                          </span>
-                        </div>
-
-                        <div className="px-3 py-2.5">
-                          {/* Progress */}
-                          <div className="flex items-center justify-between mb-1.5">
-                            <p className="text-[10px] text-stone-400 dark:text-stone-500">Progress sesi</p>
-                            <p className="text-[11px] font-extrabold text-stone-700 dark:text-stone-200">
-                              {enroll.progress}/{enroll.total}
-                            </p>
-                          </div>
-                          <div className="h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-visible mb-2.5 relative">
-                            <div className="h-full rounded-full relative transition-all duration-700"
-                              style={{ width: `${barPct}%`, background: col.top }}>
-                              <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 bg-white dark:bg-stone-900"
-                                style={{ borderColor: col.top, boxShadow: `0 0 0 3px ${col.top}33` }} />
-                            </div>
-                          </div>
-
-                          {/* Info 3 kolom */}
-                          <div className="grid grid-cols-3 gap-1.5 mb-2">
-                            <div className="rounded-lg py-1.5 px-2 text-center bg-green-50 dark:bg-green-950/30">
-                              <p className="text-[12px] font-extrabold text-green-700 dark:text-green-400">{activeChild.hadirPct}%</p>
-                              <p className="text-[8px] text-green-600 dark:text-green-500 font-semibold">Kehadiran</p>
-                            </div>
-                            <div className="rounded-lg py-1.5 px-2 text-center bg-indigo-50 dark:bg-indigo-950/30">
-                              <p className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-400 leading-tight">
-                                {enroll.nextSession ? fmtDateShort(enroll.nextSession).split(',')[0] : '—'}
-                              </p>
-                              <p className="text-[8px] text-indigo-500 font-semibold">Berikutnya</p>
-                            </div>
-                            <div className="rounded-lg py-1.5 px-2 text-center"
-                              style={{ background: sisa <= 1 ? '#FCEBEB' : '#FFF9E6' }}>
-                              <p className="text-[12px] font-extrabold"
-                                style={{ color: sisa <= 1 ? '#A32D2D' : '#854F0B' }}>{sisa}</p>
-                              <p className="text-[8px] font-semibold"
-                                style={{ color: sisa <= 1 ? '#A32D2D' : '#854F0B' }}>Sisa sesi</p>
-                            </div>
-                          </div>
-
-                          {/* Jadwal berikutnya */}
-                          {enroll.nextSession && (
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <CalendarDays size={10} className="text-stone-400" />
-                                <p className="text-[10px] text-stone-500 dark:text-stone-400">
-                                  {fmtDate(enroll.nextSession)}, {fmtTime(enroll.nextSession)}
-                                </p>
-                              </div>
-                              {enroll.zoomLink && (
-                                <a href={enroll.zoomLink} target="_blank" rel="noopener noreferrer"
-                                  className="text-[10px] text-blue-500 flex items-center gap-0.5 hover:underline">
-                                  Zoom <ExternalLink size={9} />
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Banner sisa sesi */}
-                        {sisa <= 2 && (() => {
-                          const waMsg = encodeURIComponent(
-                            `Halo, saya ingin memperpanjang paket belajar untuk ${activeChild.full_name} (${enroll.classLabel}). Sisa sesi tinggal ${sisa}. Mohon informasi untuk periode berikutnya. Terima kasih.`
-                          )
-                          const waUrl = adminPhone
-                            ? `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${waMsg}`
-                            : null
-                          return (
-                            <div className="mx-3 mb-3 rounded-xl flex items-center gap-3 px-3 py-2.5"
-                              style={{
-                                background: sisa === 0 ? '#FCEBEB' : '#FFF9E6',
-                                border: `0.5px solid ${sisa === 0 ? '#F7C1C1' : '#FAC775'}`,
-                              }}>
-                              <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm"
-                                style={{ background: sisa === 0 ? '#F7C1C1' : '#FAC775' }}>
-                                ⚠️
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-bold truncate"
-                                  style={{ color: sisa === 0 ? '#791F1F' : '#633806' }}>
-                                  {sisa === 0
-                                    ? `${enroll.classLabel} · Sesi habis!`
-                                    : `${enroll.classLabel} · Sisa ${sisa} sesi`}
-                                </p>
-                                <p className="text-[10px]"
-                                  style={{ color: sisa === 0 ? '#A32D2D' : '#854F0B' }}>
-                                  {sisa === 0 ? 'Perpanjang untuk lanjut belajar' : 'Segera perpanjang paket'}
-                                </p>
-                              </div>
-                              {waUrl ? (
-                                <a href={waUrl} target="_blank" rel="noopener noreferrer"
-                                  className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white active:scale-95 transition-transform"
-                                  style={{ background: '#25D366' }}>
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
-                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.553 4.122 1.524 5.854L0 24l6.337-1.501A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.373l-.36-.213-3.761.891.946-3.657-.234-.376A9.818 9.818 0 012.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/>
-                                  </svg>
-                                  Perpanjang
-                                </a>
-                              ) : (
-                                <span className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold"
-                                  style={{ background: '#FAC775', color: '#633806' }}>
-                                  Hubungi Admin
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
+                )
+              })}
             </div>
           </div>
         )}
