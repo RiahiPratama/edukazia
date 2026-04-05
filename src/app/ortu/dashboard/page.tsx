@@ -286,7 +286,7 @@ export default async function OrtuDashboardPage() {
     .from('enrollments')
     .select('id, student_id, class_group_id, sessions_total, status')
     .in('student_id', studentIds)
-    .in('status', ['completed', 'inactive', 'expired'])
+    .in('status', ['completed', 'inactive'])
 
   const arsipCGIds = [...new Set((allEnrollmentsForArsip ?? [])
     .map((e: any) => e.class_group_id).filter(Boolean))]
