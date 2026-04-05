@@ -214,9 +214,32 @@ export default async function OrtuDashboardPage() {
     const totalAtt    = studentAttendances.length
     const hadirPct    = totalAtt > 0 ? Math.round((hadirCount / totalAtt) * 100) : 0
 
+    // Sesi hari ini untuk anak ini — flat query, no nested join
+    const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+    const studentCGIds = activeEnrollments.map((e: any) => e.class_group_id)
+    const todaySessions = (upcomingSessions ?? [])
+      .filter((s: any) =>
+        studentCGIds.includes(s.class_group_id) &&
+        new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }) === todayWITStr
+      )
+      .map((s: any) => {
+        const cg    = (classGroups ?? []).find((c: any) => c.id === s.class_group_id)
+        const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
+        return {
+          id:           s.id,
+          scheduled_at: s.scheduled_at,
+          status:       s.status,
+          zoom_link:    s.zoom_link ?? cg?.zoom_link ?? null,
+          classLabel:   cg?.label ?? '—',
+          tutorName:    tutor?.full_name ?? '—',
+          classGroupId: s.class_group_id,
+        }
+      })
+
     return {
       ...student,
       enrollments:   enrollmentsWithProgress,
+      todaySessions,
       hadirCount,
       totalAtt,
       hadirPct,

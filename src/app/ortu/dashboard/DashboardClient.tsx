@@ -1,9 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, ExternalLink, ChevronRight, FileText, Plus } from 'lucide-react'
+import { CalendarDays, ExternalLink, ChevronRight, FileText, Plus, Clock } from 'lucide-react'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
-import TodaySessionCard from '@/components/session/TodaySessionCard'
 
 interface Props {
   profile: { full_name: string; email: string }
@@ -110,10 +109,10 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
 
   // Sesi hari ini dari SEMUA anak
   const allTodaySessions = childrenData.flatMap((child, idx) =>
-    (child.summary?.todaySessions ?? []).map((s: any) => ({
+    (child.todaySessions ?? []).map((s: any) => ({
       ...s,
-      childName: child.full_name,
-      childId: child.id,
+      childName:  child.full_name,
+      childId:    child.id,
       childColor: CHILD_COLORS[idx % CHILD_COLORS.length],
     }))
   ).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
@@ -289,12 +288,69 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {allTodaySessions.length > 0 && (
           <div>
             <p className="text-[12px] font-bold text-stone-700 dark:text-stone-300 mb-2">Sesi Hari Ini</p>
-            <div className="bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 rounded-2xl overflow-hidden divide-y divide-stone-50 dark:divide-stone-800">
-              {allTodaySessions.map((session: any, idx: number) => (
-                <div key={`${session.id}-${idx}`} className="p-3">
-                  <TodaySessionCard session={session} studentId={session.childId} compact showCountdown />
-                </div>
-              ))}
+            <div className="flex flex-col gap-2">
+              {allTodaySessions.map((session: any, idx: number) => {
+                const col = session.childColor
+                const diffMs = new Date(session.scheduled_at).getTime() - Date.now()
+                const diffMins = Math.round(diffMs / 60000)
+                const isLive = diffMs <= 0 && diffMs > -90 * 60000
+                const isDone = diffMs <= -90 * 60000
+                return (
+                  <div key={`today-${session.id}-${idx}`}
+                    className="bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 rounded-2xl overflow-hidden">
+                    {/* Top bar warna anak */}
+                    <div className="flex items-center gap-3 px-4 py-3"
+                      style={{ background: `${col.top}15`, borderBottom: `1px solid ${col.top}25` }}>
+                      {/* Jam */}
+                      <div className="flex-shrink-0 text-center min-w-[44px]">
+                        <p className="text-[14px] font-extrabold" style={{ color: col.top }}>
+                          {fmtTime(session.scheduled_at)}
+                        </p>
+                        <p className="text-[9px] text-stone-400 font-semibold">WIT</p>
+                      </div>
+                      <div className="w-px h-8 bg-stone-200 dark:bg-stone-700 flex-shrink-0" />
+                      {/* Info kelas */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold text-stone-800 dark:text-stone-100 truncate">
+                          {session.classLabel}
+                        </p>
+                        <p className="text-[10px] text-stone-400 truncate">
+                          {session.tutorName} · {session.childName}
+                        </p>
+                      </div>
+                      {/* Status / Zoom */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {isLive && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Live</span>
+                          </div>
+                        )}
+                        {!isLive && !isDone && diffMins <= 180 && (
+                          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900">
+                            <Clock size={10} className="text-amber-600" />
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 tabular-nums">
+                              {diffMins >= 60
+                                ? `${Math.floor(diffMins/60)}j ${diffMins%60}m`
+                                : `${diffMins}m`}
+                            </span>
+                          </div>
+                        )}
+                        {session.zoom_link && (
+                          <a href={session.zoom_link} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white active:scale-95 transition-transform"
+                            style={{ background: '#5C4FE5' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+                              <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                            </svg>
+                            Zoom
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
