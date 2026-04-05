@@ -761,7 +761,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                 {/* Maneki Neko — kucing keberuntungan */}
                 <div className="flex justify-center mb-2 -mt-2">
                   <svg width="110" height="155" viewBox="0 0 180 260" xmlns="http://www.w3.org/2000/svg" style={{ overflow: 'visible' }}>
-                    <style>{`
+                    <style dangerouslySetInnerHTML={{ __html: `
                       @keyframes neko-wave { 0%,100%{transform:rotate(-5deg)} 25%,75%{transform:rotate(-40deg)} }
                       @keyframes neko-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
                       @keyframes neko-blink { 0%,90%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.05)} }
@@ -773,7 +773,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                       .nk-sp1{animation:neko-sparkle 1.5s ease-in-out infinite 0s}
                       .nk-sp2{animation:neko-sparkle 1.5s ease-in-out infinite 0.5s}
                       .nk-sp3{animation:neko-sparkle 1.5s ease-in-out infinite 1s}
-                    `}</style>
+                    `}} />
                     <g className="nk-sp1"><line x1="130" y1="72" x2="142" y2="60" stroke="#E6B800" strokeWidth="2" strokeLinecap="round"/><line x1="144" y1="78" x2="158" y2="72" stroke="#E6B800" strokeWidth="2" strokeLinecap="round"/><line x1="136" y1="60" x2="136" y2="48" stroke="#E6B800" strokeWidth="2" strokeLinecap="round"/></g>
                     <g className="nk-sp2"><circle cx="152" cy="62" r="3" fill="#E6B800"/></g>
                     <g className="nk-sp3"><circle cx="125" cy="55" r="2" fill="#5C4FE5"/><circle cx="160" cy="80" r="2" fill="#5C4FE5"/></g>
