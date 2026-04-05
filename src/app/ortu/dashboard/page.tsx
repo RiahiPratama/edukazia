@@ -103,7 +103,7 @@ export default async function OrtuDashboardPage() {
         .order('scheduled_at')
     : { data: [] }
 
-  // Ambil SEMUA sesi completed untuk kalkulasi progress (tanpa batas bulan)
+  // Ambil semua sesi completed — filter per enrollment dilakukan di JS by enrolled_at
   const startMonth = new Date(nowWIT.getFullYear(), nowWIT.getMonth(), 1)
   const allSessionIds_month = classGroupIds.length > 0
     ? (await supabase
@@ -178,15 +178,16 @@ export default async function OrtuDashboardPage() {
         ?? (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id && s.status === 'rescheduled')
 
       return {
-        enrollmentId:  e.id,
-        classGroupId:  e.class_group_id,
-        classLabel:    cg?.label ?? '—',
-        tutorName:     tutor?.full_name ?? '—',
+        enrollmentId:     e.id,
+        classGroupId:     e.class_group_id,
+        classLabel:       cg?.label ?? '—',
+        tutorName:        tutor?.full_name ?? '—',
         progress,
+        hadirCompleted:   hadirCount, // sesi completed + hadir saja (untuk progress bar visual)
         total,
-        nextSession:   nextSesi?.scheduled_at ?? null,
-        nextStatus:    nextSesi?.status ?? null,
-        zoomLink:      nextSesi?.zoom_link ?? cg?.zoom_link ?? null,
+        nextSession:      nextSesi?.scheduled_at ?? null,
+        nextStatus:       nextSesi?.status ?? null,
+        zoomLink:         nextSesi?.zoom_link ?? cg?.zoom_link ?? null,
       }
     })
 
