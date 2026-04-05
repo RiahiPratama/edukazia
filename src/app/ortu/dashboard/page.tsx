@@ -172,16 +172,20 @@ export default async function OrtuDashboardPage() {
         e.sessions_total ?? 8
       )
 
-      // Progress bar visual = kurangi 1 kalau ada sesi scheduled hari ini
+      // Progress bar visual = sesi yang benar-benar terlaksana
+      // (offset - 1) = sesi lama yang sudah terjadi sebelum enrollment ini
+      // + hadirCount = sesi di enrollment ini yang sudah completed + hadir
+      // Kalau ada scheduled hari ini → cap di total-1
       const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
       const hasScheduledToday = (upcomingSessions ?? []).some((s: any) =>
         s.class_group_id === e.class_group_id &&
         new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }) === todayWITStr &&
         s.status === 'scheduled'
       )
+      const offsetDone = Math.max((e.session_start_offset ?? 1) - 1, 0)
       const barProgress = hasScheduledToday
-        ? Math.max(progress - 1, 0)
-        : progress
+        ? Math.min(offsetDone + hadirCount, (e.sessions_total ?? 8) - 1)
+        : Math.min(offsetDone + hadirCount, e.sessions_total ?? 8)
       const total    = e.sessions_total ?? 8
 
       // Prefer scheduled, fallback to rescheduled
