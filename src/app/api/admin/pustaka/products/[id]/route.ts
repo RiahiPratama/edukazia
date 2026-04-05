@@ -24,6 +24,34 @@ async function guardAdmin(supabase: ReturnType<typeof createServerClient>) {
   return user
 }
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const supabase = await getAdminSupabase()
+    const user = await guardAdmin(supabase)
+    if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    const { data: product, error } = await supabase
+      .from('digital_products')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error || !product) {
+      return NextResponse.json({ error: 'Produk tidak ditemukan' }, { status: 404 })
+    }
+
+    return NextResponse.json({ product })
+
+  } catch (err: unknown) {
+    console.error('[API /admin/pustaka/products/[id] GET]', err)
+    return NextResponse.json({ error: 'Gagal memuat produk' }, { status: 500 })
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
