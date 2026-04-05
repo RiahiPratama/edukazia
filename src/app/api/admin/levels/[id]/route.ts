@@ -19,6 +19,8 @@ export async function PATCH(
         target_age:  body.target_age ?? 'all',
         sort_order:  body.sort_order ?? 0,
         is_active:   body.is_active ?? true,
+        code:        body.code,
+        topic_name:  body.topic_name,
       })
       .eq('id', id)
       .select()
