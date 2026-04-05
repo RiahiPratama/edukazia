@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, ExternalLink, ChevronRight, FileText, Plus, Clock } from 'lucide-react'
+import { CalendarDays, ExternalLink, ChevronRight, FileText, Clock } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
 
@@ -237,12 +237,6 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
               )
             })}
 
-            {/* Tambah */}
-            <button className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl opacity-50 hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(255,255,255,0.5)', border: '1.5px dashed #d1d5db' }}>
-              <Plus size={13} color="#9CA3AF" />
-              <span style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Tambah</span>
-            </button>
           </div>
         </div>
       )}
@@ -340,9 +334,9 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                   <a href={enroll.zoomLink} target="_blank" rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full font-extrabold text-[14px] active:scale-95 transition-transform"
                     style={{
-                      background: isLive ? '#22c55e' : '#E6B800',
-                      color: isLive ? 'white' : '#1A0A00',
-                      boxShadow: isLive ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 28px rgba(230,184,0,0.35)',
+                      background: isLive ? '#22c55e' : '#2D8CFF',
+                      color: 'white',
+                      boxShadow: isLive ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 28px rgba(45,140,255,0.35)',
                     }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>

@@ -281,30 +281,29 @@ export default async function OrtuDashboardPage() {
   const allTotal = (attendances ?? []).length
   const avgKehadiran = allTotal > 0 ? Math.round((allHadir / allTotal) * 100) : 0
 
-  // Ambil enrollments ARSIP (inactive) untuk banner perpanjang
-  const { data: archivedEnrollments } = await supabase
-    .from('enrollments')
-    .select('id, student_id, class_group_id, sessions_total')
-    .in('student_id', studentIds)
-    .eq('status', 'inactive')
-    .order('id', { ascending: false })
-
-  const archivedCGIds = [...new Set((archivedEnrollments ?? [])
+  // Ambil SEMUA class_groups termasuk yang inactive (arsip)
+  // Arsip = class_groups.status = 'inactive'
+  const allEnrollmentCGIds = [...new Set((enrollments ?? [])
     .map((e: any) => e.class_group_id).filter(Boolean))]
 
-  const { data: archivedClassGroups } = archivedCGIds.length > 0
+  const { data: allClassGroupsForArsip } = allEnrollmentCGIds.length > 0
     ? await supabase
         .from('class_groups')
-        .select('id, label, tutor_id')
-        .in('id', archivedCGIds)
+        .select('id, label, status, tutor_id')
+        .in('id', allEnrollmentCGIds)
+        .eq('status', 'inactive')
     : { data: [] }
 
   // Susun data arsip per anak
   const archivedData = students.map(student => {
-    const studentArchived = (archivedEnrollments ?? [])
-      .filter((e: any) => e.student_id === student.id)
+    const studentArchived = (enrollments ?? [])
+      .filter((e: any) => {
+        if (e.student_id !== student.id) return false
+        const cg = (allClassGroupsForArsip ?? []).find((c: any) => c.id === e.class_group_id)
+        return !!cg // hanya yang classgroup-nya inactive
+      })
       .map((e: any) => {
-        const cg    = (archivedClassGroups ?? []).find((c: any) => c.id === e.class_group_id)
+        const cg    = (allClassGroupsForArsip ?? []).find((c: any) => c.id === e.class_group_id)
         const tutor = (tutors ?? []).find((t: any) => t.id === cg?.tutor_id)
         return {
           enrollmentId: e.id,
