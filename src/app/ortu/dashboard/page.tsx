@@ -166,15 +166,16 @@ export default async function OrtuDashboardPage() {
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
 
-      // Progress angka = offset + hadir, cap di sessions_total
-      const progress = Math.min(
-        (e.session_start_offset ?? 1) + hadirCount,
-        e.sessions_total ?? 8
-      )
+      // ── Keterangan angka teks ──
+      // Siswa baru (offset=0): trial tidak dihitung → teks = hadirCount
+      // Siswa lama (offset>=1): teks = offset + hadirCount
+      const progress = e.session_start_offset === 0
+        ? Math.min(hadirCount, e.sessions_total ?? 8)
+        : Math.min((e.session_start_offset ?? 1) + hadirCount, e.sessions_total ?? 8)
 
-      // Progress bar visual = sesi yang benar-benar terlaksana
-      // (offset - 1) = sesi lama yang sudah terjadi sebelum enrollment ini
-      // + hadirCount = sesi di enrollment ini yang sudah completed + hadir
+      // ── Bar visual ──
+      // Siswa baru (offset=0): bar = max(hadirCount - 1, 0) → trial tidak naikan bar
+      // Siswa lama (offset>=1): bar = (offset-1) + hadirCount
       // Kalau ada scheduled hari ini → cap di total-1
       const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
       const hasScheduledToday = (upcomingSessions ?? []).some((s: any) =>
@@ -182,10 +183,12 @@ export default async function OrtuDashboardPage() {
         new Date(s.scheduled_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' }) === todayWITStr &&
         s.status === 'scheduled'
       )
-      const offsetDone = Math.max((e.session_start_offset ?? 1) - 1, 0)
+      const rawBar = e.session_start_offset === 0
+        ? Math.max(hadirCount - 1, 0)
+        : Math.max((e.session_start_offset - 1) + hadirCount, 0)
       const barProgress = hasScheduledToday
-        ? Math.min(offsetDone + hadirCount, (e.sessions_total ?? 8) - 1)
-        : Math.min(offsetDone + hadirCount, e.sessions_total ?? 8)
+        ? Math.min(rawBar, (e.sessions_total ?? 8) - 1)
+        : Math.min(rawBar, e.sessions_total ?? 8)
       const total    = e.sessions_total ?? 8
 
       // Prefer scheduled, fallback to rescheduled
