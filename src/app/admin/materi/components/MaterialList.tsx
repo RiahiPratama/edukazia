@@ -320,6 +320,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         chapterIcon: string;
         chapterOrder: number;
         levelName: string;
+        levelSortOrder: number;
         units: {
           [unitId: string]: {
             unitId: string;
@@ -351,6 +352,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           chapterIcon: material.chapter_icon || 'Library',
           chapterOrder: material.chapter_order || 0,
           levelName: material.level_name || '',
+          levelSortOrder: material.level_sort_order || 0,
           units: {}
         };
       }
@@ -789,7 +791,10 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       {/* Material List Grouped by Chapter → Unit → Lesson */}
       <div className="space-y-4">
         {Object.values(chapterGroups)
-          .sort((a, b) => (a.chapterOrder || 0) - (b.chapterOrder || 0))
+          .sort((a, b) => {
+            if (a.levelSortOrder !== b.levelSortOrder) return a.levelSortOrder - b.levelSortOrder
+            return (a.chapterOrder || 0) - (b.chapterOrder || 0)
+          })
           .map((chapterGroup) => {
           const ChapterIcon = getIconComponent(chapterGroup.chapterIcon);
           const isEditingChapter = editingChapterId === chapterGroup.chapterId;
