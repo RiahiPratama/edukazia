@@ -296,7 +296,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {/* ── SESI HARI INI — hanya tampil kalau tidak ada smart card ── */}
         {activeSessions.length === 0 && allTodaySessions.length > 0 && (
           <div>
-            <p className="text-[12px] font-bold" style={{ color: "var(--ortu-text)" }} mb-2">Jadwal Hari Ini</p>
+            <p className="text-[12px] font-bold mb-2" style={{ color: 'var(--ortu-text)' }}>Jadwal Hari Ini</p>
             <div className="flex flex-col gap-2">
               {allTodaySessions.map((session: any, idx: number) => {
                 const col = session.childColor
@@ -455,7 +455,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {/* ── RINGKASAN PER ANAK ── */}
         {childrenData.length > 0 && (
           <div>
-            <p className="text-[12px] font-bold" style={{ color: "var(--ortu-text)" }} mb-2">Ringkasan per Anak</p>
+            <p className="text-[12px] font-bold mb-2" style={{ color: 'var(--ortu-text)' }}>Ringkasan per Anak</p>
             <div className="flex flex-col gap-3">
               {childrenData.map((child, idx) => {
                 const childCol = CHILD_COLORS[idx % CHILD_COLORS.length]
@@ -633,7 +633,7 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         {activityFeed.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[12px] font-bold" style={{ color: "var(--ortu-text)" }}">Aktivitas Terbaru</p>
+              <p className="text-[12px] font-bold" style={{ color: 'var(--ortu-text)' }}>Aktivitas Terbaru</p>
               <Link href="/ortu/laporan"
                 className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 hover:underline">
                 Lihat semua <ChevronRight size={11} />
