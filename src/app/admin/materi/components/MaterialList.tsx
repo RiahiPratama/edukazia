@@ -319,6 +319,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         chapterTitle: string;
         chapterIcon: string;
         chapterOrder: number;
+        levelName: string;
         units: {
           [unitId: string]: {
             unitId: string;
@@ -349,6 +350,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           chapterTitle: material.chapter_title || 'Chapter Tidak Diketahui',
           chapterIcon: material.chapter_icon || 'Library',
           chapterOrder: material.chapter_order || 0,
+          levelName: material.level_name || '',
           units: {}
         };
       }
@@ -800,7 +802,12 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                   <button onClick={() => toggleChapter(chapterGroup.chapterId)} className="flex items-center gap-3">
                     {expandedChapters.has(chapterGroup.chapterId) ? <ChevronDown className="w-6 h-6 text-[#5C4FE5]" /> : <ChevronRight className="w-6 h-6 text-[#5C4FE5]" />}
                     <ChapterIcon className="w-6 h-6 text-[#5C4FE5]" />
-                    <span className="text-xl font-bold text-[#5C4FE5]">{chapterGroup.chapterTitle}</span>
+                    <div className="flex flex-col items-start">
+                      {chapterGroup.levelName && (
+                        <span className="text-xs font-semibold text-[#7B78A8] leading-none mb-0.5">{chapterGroup.levelName}</span>
+                      )}
+                      <span className="text-xl font-bold text-[#5C4FE5]">{chapterGroup.chapterTitle}</span>
+                    </div>
                   </button>
                   <div className="flex items-center gap-3">
                     <button onClick={() => startEditChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, chapterGroup.chapterIcon)} className="p-2 text-gray-600 hover:bg-white rounded-lg transition-colors" title="Edit chapter">
