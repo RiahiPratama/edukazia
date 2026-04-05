@@ -101,13 +101,15 @@ export default async function OrtuDashboardPage() {
   const plus7  = new Date(nowWIT); plus7.setDate(plus7.getDate() + 7)
   const toUTC  = (d: Date) => new Date(d.getTime() - 9 * 60 * 60 * 1000).toISOString()
 
+  // Ambil sessions upcoming + yang mungkin sedang berlangsung (mundur 90 menit)
+  const minus90 = new Date(nowWIT.getTime() - 90 * 60 * 1000)
   const { data: upcomingSessions } = classGroupIds.length > 0
     ? await supabase
         .from('sessions')
         .select('id, class_group_id, scheduled_at, status, zoom_link')
         .in('class_group_id', classGroupIds)
         .in('status', ['scheduled', 'rescheduled'])
-        .gte('scheduled_at', toUTC(nowWIT))
+        .gte('scheduled_at', toUTC(minus90))
         .lte('scheduled_at', toUTC(plus7))
         .order('scheduled_at')
     : { data: [] }
