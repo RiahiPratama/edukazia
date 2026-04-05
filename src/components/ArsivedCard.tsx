@@ -108,6 +108,19 @@ export default function ArsivedCard({ archivedData, adminPhone }: Props) {
               {/* Neko — absolute, kepala menimpa ke atas */}
               <div className="absolute z-10" style={{ right: 8, bottom: 48, pointerEvents: 'none' }}>
                 <svg width="140" height="210" viewBox="0 0 180 260" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', overflow: 'visible' }}>
+                  {/* Sparkles kuning & ungu */}
+                  <g style={{ animation: 'neko-sparkle 1.5s ease-in-out infinite 0s' }}>
+                    <line x1="130" y1="72" x2="142" y2="60" stroke="#E6B800" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="144" y1="78" x2="158" y2="72" stroke="#E6B800" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="136" y1="60" x2="136" y2="48" stroke="#E6B800" strokeWidth="2" strokeLinecap="round"/>
+                  </g>
+                  <g style={{ animation: 'neko-sparkle 1.5s ease-in-out infinite 0.5s' }}>
+                    <circle cx="152" cy="62" r="3" fill="#E6B800"/>
+                  </g>
+                  <g style={{ animation: 'neko-sparkle 1.5s ease-in-out infinite 1s' }}>
+                    <circle cx="125" cy="55" r="2" fill="#5C4FE5"/>
+                    <circle cx="160" cy="80" r="2" fill="#5C4FE5"/>
+                  </g>
                   <g style={{ animation: 'neko-float 3s ease-in-out infinite' }}>
                     <path d="M 58 210 Q 28 230 36 200 Q 44 172 62 185" fill="none" stroke="#F5C4B3" strokeWidth="10" strokeLinecap="round"/>
                     <path d="M 58 210 Q 28 230 36 200 Q 44 172 62 185" fill="none" stroke="white" strokeWidth="5" strokeLinecap="round"/>
