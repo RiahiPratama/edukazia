@@ -724,7 +724,9 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
         )}
 
         {/* ── KELAS ARSIP ── */}
-        <ArsivedCard archivedData={archivedData} adminPhone={adminPhone} />
+        <div className="mt-6">
+          <ArsivedCard archivedData={archivedData} adminPhone={adminPhone} />
+        </div>
 
       </div>
 
