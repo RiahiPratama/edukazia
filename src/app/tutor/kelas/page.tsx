@@ -124,7 +124,7 @@ export default function TutorKelasPage() {
         .from('attendances')
         .select('session_id, student_id')
         .in('session_id', completedSessionIds)
-        .eq('status', 'hadir')
+        // Tidak filter status — semua absensi = sesi berlangsung
 
       // Hitung per enrollment (filter by enrolled_at)
       ;(enrollments ?? []).forEach((e: any) => {

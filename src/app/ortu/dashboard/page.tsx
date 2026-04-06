@@ -169,7 +169,7 @@ export default async function OrtuDashboardPage() {
         d.class_type_id === cg?.class_type_id && d.course_id === cg?.course_id
       )
       const durationMinutes = dur?.duration_minutes ?? 60
-      // FIX: hitung hadir hanya dari sesi SETELAH enrolled_at
+      // FIX: hitung sesi COMPLETED setelah enrolled_at (apapun status absensi)
       const enrolledAt = e.enrolled_at ? new Date(e.enrolled_at) : new Date(0)
       const sessIdsForCG = allSessionIds_month
         .filter((s: any) =>
@@ -177,21 +177,25 @@ export default async function OrtuDashboardPage() {
           new Date(s.scheduled_at ?? 0) >= enrolledAt
         )
         .map((s: any) => s.id)
+
+      // completedCount = jumlah sesi completed (ada absensi = sesi berlangsung)
+      const completedCount = (attendances ?? []).filter(
+        (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id)
+      ).length
+
+      // hadirCount tetap untuk % kehadiran saja
       const hadirCount = (attendances ?? []).filter(
         (a: any) => a.student_id === student.id && sessIdsForCG.includes(a.session_id) && a.status === 'hadir'
       ).length
 
       // ── Keterangan angka teks ──
-      // Siswa baru (offset=0): trial tidak dihitung → teks = hadirCount
-      // Siswa lama (offset>=1): teks = offset + hadirCount
+      // Siswa baru (offset=0): teks = completedCount
+      // Siswa lama (offset>=1): teks = offset + completedCount
       const progress = e.session_start_offset === 0
-        ? Math.min(hadirCount, e.sessions_total ?? 8)
-        : Math.min((e.session_start_offset ?? 1) + hadirCount, e.sessions_total ?? 8)
+        ? Math.min(completedCount, e.sessions_total ?? 8)
+        : Math.min((e.session_start_offset ?? 1) + completedCount, e.sessions_total ?? 8)
 
       // ── Bar visual ──
-      // Siswa baru (offset=0): bar = max(hadirCount - 1, 0) → trial tidak naikan bar
-      // Siswa lama (offset>=1): bar = (offset-1) + hadirCount
-      // Kalau ada scheduled hari ini → cap di total-1
       const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
       const hasScheduledToday = (upcomingSessions ?? []).some((s: any) =>
         s.class_group_id === e.class_group_id &&
@@ -199,12 +203,12 @@ export default async function OrtuDashboardPage() {
         s.status === 'scheduled'
       )
       const rawBar = e.session_start_offset === 0
-        ? Math.max(hadirCount - 1, 0)
-        : Math.max((e.session_start_offset - 1) + hadirCount, 0)
+        ? Math.max(completedCount - 1, 0)
+        : Math.max((e.session_start_offset - 1) + completedCount, 0)
       const barProgress = hasScheduledToday
         ? Math.min(rawBar, (e.sessions_total ?? 8) - 1)
         : Math.min(rawBar, e.sessions_total ?? 8)
-      const total    = e.sessions_total ?? 8
+      const total = e.sessions_total ?? 8
 
       // Prefer scheduled, fallback to rescheduled
       const nextSesi = (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id && s.status === 'scheduled')

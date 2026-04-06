@@ -290,7 +290,7 @@ export default function KelasDetailPage() {
             .select('student_id')
             .in('session_id', relevantSessionIds)
             .eq('student_id', e.student_id)
-            .eq('status', 'hadir')
+          // Hitung semua sesi yang ada absensinya (apapun statusnya = sesi berlangsung)
           attendedMap[`${e.id}`] = (att ?? []).length
         } else {
           attendedMap[`${e.id}`] = 0
@@ -491,9 +491,9 @@ export default function KelasDetailPage() {
     if (!detail) return
     const initial: Record<string, string> = {}
     detail.attendances.forEach(a => { initial[a.student_id] = a.status })
-    // Kalau ada siswa di enrollment tapi belum ada absensi, default alpha
+    // Kalau ada siswa di enrollment tapi belum ada absensi, default tidak_hadir
     enrollments.forEach(e => {
-      if (!initial[e.student_id]) initial[e.student_id] = 'alpha'
+      if (!initial[e.student_id]) initial[e.student_id] = 'tidak_hadir'
     })
     setEditAbsensiData(initial)
     setEditAbsensiSessionId(sessionId)
@@ -1387,13 +1387,11 @@ export default function KelasDetailPage() {
                     {e.student_name}
                   </span>
                   <select
-                    value={editAbsensiData[e.student_id] ?? 'alpha'}
+                    value={editAbsensiData[e.student_id] ?? 'tidak_hadir'}
                     onChange={ev => setEditAbsensiData(prev => ({ ...prev, [e.student_id]: ev.target.value }))}
                     className="text-[12px] font-semibold px-2 py-1.5 rounded-lg border border-[#E5E3FF] bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5]">
                     <option value="hadir">✓ Hadir</option>
-                    <option value="izin">~ Izin</option>
-                    <option value="sakit">+ Sakit</option>
-                    <option value="alpha">✗ Alpha</option>
+                    <option value="tidak_hadir">✗ Tidak Hadir</option>
                   </select>
                 </div>
               ))}

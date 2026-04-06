@@ -327,11 +327,12 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
               s.class_group_id === e.class_group_id &&
               new Date(s.scheduled_at) >= enrolledAt
             )
-            const hadirInCG  = cgCompleted.filter((s: any) =>
-              (attendances ?? []).find((a: any) => a.session_id === s.id && a.status === 'hadir')
+            // completedCount = semua sesi completed (apapun absensi)
+            const completedInCG = cgCompleted.filter((s: any) =>
+              (attendances ?? []).find((a: any) => a.session_id === s.id)
             ).length
             const progress = Math.min(
-              (e.session_start_offset ?? 1) + hadirInCG,
+              (e.session_start_offset ?? 1) + completedInCG,
               e.sessions_total ?? 8
             )
             const total    = e.sessions_total ?? 8
