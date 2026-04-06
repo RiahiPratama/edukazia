@@ -522,10 +522,8 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
                         <p className="text-[11px] text-stone-400 py-1">Belum ada kelas aktif</p>
                       ) : (
                         child.enrollments.map((enroll: any) => {
-                          // sisa = sesi scheduled yang belum terlaksana
-                          const sisa = enroll.pendingCount ?? (enroll.total - enroll.progress)
-                          // bar = sesi yang sudah terlaksana (hadir + tidak hadir)
-                          const barPct = Math.min(100, Math.round((enroll.total - sisa) / enroll.total * 100))
+                          const sisa = enroll.total - enroll.progress + 1
+                          const barPct = Math.min(100, Math.round((enroll.progress - 1) / enroll.total * 100))
                           return (
                             <div key={enroll.enrollmentId}
                               className="rounded-xl overflow-hidden"
