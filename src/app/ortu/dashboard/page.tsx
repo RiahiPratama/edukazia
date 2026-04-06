@@ -99,10 +99,10 @@ export default async function OrtuDashboardPage() {
   const allEnrollmentsForArsip = arsipEnrollResult.data ?? []
 
   // Ambil durations + tutors + attendances + reports + arsip classgroups paralel
-  const classTypeIds = [...new Set(classGroups.map((cg: any) => cg.class_type_id).filter(Boolean))]
-  const tutorIds     = [...new Set(classGroups.map((cg: any) => cg.tutor_id).filter(Boolean))]
-  const allCompletedSessions = allCompletedSessions.map((s: any) => s.id)
-  const arsipCGIds   = [...new Set(allEnrollmentsForArsip.map((e: any) => e.class_group_id).filter(Boolean))]
+  const classTypeIds  = [...new Set(classGroups.map((cg: any) => cg.class_type_id).filter(Boolean))]
+  const tutorIds      = [...new Set(classGroups.map((cg: any) => cg.tutor_id).filter(Boolean))]
+  const allSessionIds = allCompletedSessions.map((s: any) => s.id)
+  const arsipCGIds    = [...new Set(allEnrollmentsForArsip.map((e: any) => e.class_group_id).filter(Boolean))]
 
   const [durationsResult, tutorsResult, attendancesResult, recentReportsResult, arsipCGResult] = await Promise.all([
     classTypeIds.length > 0
@@ -111,8 +111,8 @@ export default async function OrtuDashboardPage() {
     tutorIds.length > 0
       ? supabase.from('profiles').select('id, full_name').in('id', tutorIds)
       : Promise.resolve({ data: [] }),
-    allCompletedSessions.length > 0
-      ? supabase.from('attendances').select('session_id, student_id, status').in('session_id', allCompletedSessions).in('student_id', studentIds)
+    allSessionIds.length > 0
+      ? supabase.from('attendances').select('session_id, student_id, status').in('session_id', allSessionIds).in('student_id', studentIds)
       : Promise.resolve({ data: [] }),
     allCompletedSessions.length > 0
       ? supabase.from('session_reports').select('session_id, student_id, materi, perkembangan, saran_ortu, recording_url, created_at')
