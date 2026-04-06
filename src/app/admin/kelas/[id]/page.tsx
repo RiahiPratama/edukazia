@@ -908,7 +908,7 @@ export default function KelasDetailPage() {
                               <div className="flex items-center justify-between mb-2">
                                 <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Absensi</p>
                                 <button
-                                  onClick={() => openEditAbsensi(session.id)}
+                                  onClick={() => openEditAbsensi(expandedSessionId!)}
                                   className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors">
                                   <Pencil size={9}/> Edit
                                 </button>
