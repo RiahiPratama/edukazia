@@ -159,6 +159,12 @@ export default function KelasDetailPage() {
   const [eErr,        setEErr]        = useState('')
   const [eOk,         setEOk]         = useState(false)
 
+  // Edit absensi
+  const [editAbsensiSessionId, setEditAbsensiSessionId] = useState<string | null>(null)
+  const [editAbsensiData,      setEditAbsensiData]      = useState<Record<string, string>>({})
+  const [absensiSaving,        setAbsensiSaving]        = useState(false)
+  const [absensiErr,           setAbsensiErr]           = useState('')
+
   useEffect(() => { fetchAll() }, [kelasId])
   useEffect(() => { if (kelasId) fetchLevels() }, [kelasId])
   useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
@@ -439,50 +445,35 @@ export default function KelasDetailPage() {
   }
 
   async function toggleSessionDetail(sessionId: string) {
-    // Toggle expand/collapse
     if (expandedSessionId === sessionId) {
       setExpandedSessionId(null)
       return
     }
     setExpandedSessionId(sessionId)
-
-    // Kalau sudah di-fetch sebelumnya, tidak perlu fetch lagi
     if (sessionDetails[sessionId]) return
-
-    // Set loading state
     setSessionDetails(prev => ({ ...prev, [sessionId]: { attendances: [], reports: [], loading: true } }))
-
-    // Fetch attendances untuk sesi ini
     const { data: attData } = await supabase
       .from('attendances')
       .select('student_id, status, notes')
       .eq('session_id', sessionId)
-
-    // Fetch session_reports untuk sesi ini
     const { data: repData } = await supabase
       .from('session_reports')
       .select('student_id, materi, perkembangan, saran_siswa, saran_ortu, recording_url')
       .eq('session_id', sessionId)
-
-    // Ambil nama siswa dari enrollments yang sudah di-load
     const studentIdSet = new Set([
       ...(attData ?? []).map((a: any) => a.student_id),
       ...(repData ?? []).map((r: any) => r.student_id),
     ])
-
-    // Build name map dari enrollments state
     const nameMap: Record<string, string> = {}
     enrollments.forEach(e => {
       if (studentIdSet.has(e.student_id)) nameMap[e.student_id] = e.student_name
     })
-
     const attendances: SessionAttendance[] = (attData ?? []).map((a: any) => ({
       student_id:   a.student_id,
       student_name: nameMap[a.student_id] ?? 'Siswa',
       status:       a.status,
       notes:        a.notes,
     }))
-
     const reports: SessionReport[] = (repData ?? []).map((r: any) => ({
       student_id:    r.student_id,
       student_name:  nameMap[r.student_id] ?? 'Siswa',
@@ -492,8 +483,67 @@ export default function KelasDetailPage() {
       saran_ortu:    r.saran_ortu,
       recording_url: r.recording_url,
     }))
-
     setSessionDetails(prev => ({ ...prev, [sessionId]: { attendances, reports, loading: false } }))
+  }
+
+  function openEditAbsensi(sessionId: string) {
+    const detail = sessionDetails[sessionId]
+    if (!detail) return
+    const initial: Record<string, string> = {}
+    detail.attendances.forEach(a => { initial[a.student_id] = a.status })
+    // Kalau ada siswa di enrollment tapi belum ada absensi, default alpha
+    enrollments.forEach(e => {
+      if (!initial[e.student_id]) initial[e.student_id] = 'alpha'
+    })
+    setEditAbsensiData(initial)
+    setEditAbsensiSessionId(sessionId)
+    setAbsensiErr('')
+  }
+
+  async function saveAbsensi() {
+    if (!editAbsensiSessionId) return
+    setAbsensiSaving(true)
+    setAbsensiErr('')
+    try {
+      // Upsert satu per satu per siswa
+      for (const [studentId, status] of Object.entries(editAbsensiData)) {
+        const { error } = await supabase
+          .from('attendances')
+          .upsert({
+            session_id: editAbsensiSessionId,
+            student_id: studentId,
+            status,
+          }, { onConflict: 'session_id,student_id' })
+        if (error) throw error
+      }
+      // Refresh session detail
+      setSessionDetails(prev => {
+        const old = prev[editAbsensiSessionId]
+        if (!old) return prev
+        const updated = old.attendances.map(a => ({
+          ...a,
+          status: editAbsensiData[a.student_id] ?? a.status,
+        }))
+        // Tambah siswa baru yang belum ada absensi
+        const existingIds = new Set(old.attendances.map(a => a.student_id))
+        enrollments.forEach(e => {
+          if (!existingIds.has(e.student_id) && editAbsensiData[e.student_id]) {
+            updated.push({
+              student_id:   e.student_id,
+              student_name: e.student_name,
+              status:       editAbsensiData[e.student_id],
+              notes:        null,
+            })
+          }
+        })
+        return { ...prev, [editAbsensiSessionId]: { ...old, attendances: updated } }
+      })
+      setEditAbsensiSessionId(null)
+    } catch (err: any) {
+      setAbsensiErr(err.message ?? 'Gagal menyimpan absensi')
+    } finally {
+      setAbsensiSaving(false)
+    }
   }
 
   async function konfirmasiPembayaran(paymentId: string) {
@@ -855,7 +905,14 @@ export default function KelasDetailPage() {
 
                             {/* ABSENSI */}
                             <div>
-                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-2">Absensi</p>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Absensi</p>
+                                <button
+                                  onClick={() => openEditAbsensi(session.id)}
+                                  className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors">
+                                  <Pencil size={9}/> Edit
+                                </button>
+                              </div>
                               {detail.attendances.length === 0 ? (
                                 <p className="text-xs text-[#7B78A8] italic">Belum ada data absensi</p>
                               ) : (
@@ -1300,6 +1357,68 @@ export default function KelasDetailPage() {
           onClose={() => setShowPerpanjang(false)}
           onSuccess={() => { setShowPerpanjang(false); fetchAll() }}
         />
+      )}
+      {/* ── MODAL EDIT ABSENSI ── */}
+      {editAbsensiSessionId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF]">
+              <div>
+                <p className="text-[14px] font-extrabold text-[#1A1640]">Edit Absensi</p>
+                <p className="text-[11px] text-[#7B78A8] mt-0.5">
+                  {sessions.find(s => s.id === editAbsensiSessionId)
+                    ? new Date(sessions.find(s => s.id === editAbsensiSessionId)!.scheduled_at)
+                        .toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jayapura' })
+                    : ''}
+                </p>
+              </div>
+              <button onClick={() => setEditAbsensiSessionId(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F7F6FF] transition-colors">
+                <X size={16} className="text-[#7B78A8]"/>
+              </button>
+            </div>
+
+            {/* List siswa */}
+            <div className="px-5 py-4 space-y-3 max-h-72 overflow-y-auto">
+              {enrollments.map(e => (
+                <div key={e.student_id} className="flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-semibold text-[#1A1640] flex-1 truncate">
+                    {e.student_name}
+                  </span>
+                  <select
+                    value={editAbsensiData[e.student_id] ?? 'alpha'}
+                    onChange={ev => setEditAbsensiData(prev => ({ ...prev, [e.student_id]: ev.target.value }))}
+                    className="text-[12px] font-semibold px-2 py-1.5 rounded-lg border border-[#E5E3FF] bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5]">
+                    <option value="hadir">✓ Hadir</option>
+                    <option value="izin">~ Izin</option>
+                    <option value="sakit">+ Sakit</option>
+                    <option value="alpha">✗ Alpha</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            {/* Error */}
+            {absensiErr && (
+              <p className="px-5 text-[11px] text-red-500 font-semibold">{absensiErr}</p>
+            )}
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-[#E5E3FF] flex gap-2">
+              <button onClick={() => setEditAbsensiSessionId(null)}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-[#7B78A8] bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors">
+                Batal
+              </button>
+              <button onClick={saveAbsensi} disabled={absensiSaving}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white bg-[#5C4FE5] hover:bg-[#4338CA] disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                {absensiSaving ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"/> Menyimpan...</>
+                ) : 'Simpan Absensi'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
