@@ -76,7 +76,7 @@ export default async function LaporanPage() {
   // Step 3: Ambil laporan (flat)
   const { data: laporan } = await supabase
     .from('session_reports')
-    .select('id, materi, perkembangan, saran_siswa, saran_ortu, created_at, session_id')
+    .select('id, materi, perkembangan, saran_siswa, created_at, session_id')
     .eq('student_id', activeChild.id)
     .order('created_at', { ascending: false })
 

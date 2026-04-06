@@ -188,7 +188,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
   const { data: reports } = completedIds.length > 0
     ? await supabase
         .from('session_reports')
-        .select('session_id, materi, perkembangan, saran_ortu, recording_url')
+        .select('session_id, materi, perkembangan, recording_url')
         .eq('student_id', studentId)
         .in('session_id', completedIds)
     : { data: [] }
@@ -481,13 +481,13 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
                         <span className="font-semibold text-stone-600">Materi: </span>{rep.materi}
                       </p>
                     )}
-                    {rep.saran_ortu && (
+                    {rep.perkembangan && (
                       <div className="px-2.5 py-2 rounded-lg mt-1.5"
-                        style={{ background: '#EEEDFE60', borderLeft: '2px solid #5C4FE5' }}>
-                        <p className="text-[9px] font-bold text-[#3C3489] uppercase tracking-wider mb-1">
-                          Catatan untuk Orang Tua
+                        style={{ background: '#EAF3DE60', borderLeft: '2px solid #639922' }}>
+                        <p className="text-[9px] font-bold text-[#27500A] uppercase tracking-wider mb-1">
+                          Perkembangan
                         </p>
-                        <p className="text-[11px] text-[#3C3489]">{rep.saran_ortu}</p>
+                        <p className="text-[11px] text-[#27500A]">{rep.perkembangan}</p>
                       </div>
                     )}
                   </div>
