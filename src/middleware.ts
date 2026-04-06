@@ -34,7 +34,10 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // ✅ OPTIMIZATION: getSession() baca cookie lokal — TIDAK ada network call ke Supabase
+  // getUser() = network call setiap request → boros CPU 66%
+  const { data: { session: authSession } } = await supabase.auth.getSession()
+  const user = authSession?.user ?? null
   const pathname = request.nextUrl.pathname
 
   // ── Redirects root portal ──
@@ -192,6 +195,12 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // ✅ Hanya jalankan middleware untuk route yang butuh auth check
+    // Static files, images, fonts, api routes → SKIP middleware
+    '/login',
+    '/admin/:path*',
+    '/tutor/:path*',
+    '/siswa/:path*',
+    '/ortu/:path*',
   ],
 }
