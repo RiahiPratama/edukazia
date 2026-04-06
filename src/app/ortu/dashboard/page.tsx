@@ -214,6 +214,11 @@ export default async function OrtuDashboardPage() {
       const nextSesi = (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id && s.status === 'scheduled')
         ?? (upcomingSessions ?? []).find((s: any) => s.class_group_id === e.class_group_id && s.status === 'rescheduled')
 
+      // Hitung sesi scheduled yang masih antrian
+      const pendingCount = (upcomingSessions ?? []).filter(
+        (s: any) => s.class_group_id === e.class_group_id
+      ).length
+
       return {
         enrollmentId:     e.id,
         classGroupId:     e.class_group_id,
@@ -222,6 +227,7 @@ export default async function OrtuDashboardPage() {
         durationMinutes,
         progress,
         barProgress,
+        pendingCount,
         total,
         nextSession:      nextSesi?.scheduled_at ?? null,
         nextStatus:       nextSesi?.status ?? null,
