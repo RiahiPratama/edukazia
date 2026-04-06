@@ -664,7 +664,10 @@ export default function OrtuDashboardClient({ profile, childrenData, activityFee
             </div>
 
             {/* Stacked cards */}
-            <div className="relative" style={{ paddingBottom: Math.min(activityFeed.length - 1, 2) * 10 + 'px' }}>
+            <div className="relative" style={{
+              height: `${80 + Math.min(activityFeed.slice(0,3).length - 1, 2) * 14}px`,
+              marginBottom: `${Math.min(activityFeed.slice(0,3).length - 1, 2) * 10}px`,
+            }}>
               {activityFeed.slice(0, 3).map((item, idx) => {
                 const childIdx = childrenData.findIndex(c => c.id === item.studentId)
                 const itemCol = CHILD_COLORS[childIdx >= 0 ? childIdx % CHILD_COLORS.length : 0]
