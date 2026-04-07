@@ -551,6 +551,16 @@ export default function TutorAbsensiPage() {
       }),
     }).catch(() => {})
 
+    // Cek sisa paket & kirim WA perpanjangan ke ortu — fire and forget
+    fetch('/api/wa/notify-paket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        class_group_id: selectedSesi.class_groups.id,
+        student_ids:    siswaList.map(s => s.studentId),
+      }),
+    }).catch(() => {})
+
     setSavedSesiIds(prev => new Set([...prev, selectedSesi.id]))
     setSuccess('Absensi berhasil disimpan! Notifikasi dikirim ke orang tua.')
     setSaving(false)
