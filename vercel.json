@@ -11,5 +11,11 @@
       "destination": "/login",
       "permanent": false
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/reminder-absensi",
+      "schedule": "*/5 * * * *"
+    }
   ]
 }
