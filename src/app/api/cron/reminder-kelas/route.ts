@@ -4,8 +4,9 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
 
 /**
  * Cron: Reminder 10 menit sebelum kelas mulai
- * Kirim WA ke ortu/wali siswa
- * Trigger: cron-job.org setiap 5 menit
+ * Kirim WA ke ortu + siswa
+ * Diri Sendiri (parent_profile_id = profile_id) → 1 pesan versi siswa saja
+ * Anti-duplikat via notification_logs
  */
 
 function fmtTime(iso: string) {
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
   // 1. Ambil sesi scheduled hari ini
   const { data: sessions } = await supabase
     .from('sessions')
-    .select('id, scheduled_at, class_group_id, zoom_link')
+    .select('id, scheduled_at, class_group_id')
     .eq('status', 'scheduled')
     .gte('scheduled_at', startUtc)
     .lte('scheduled_at', endUtc)
@@ -60,7 +61,7 @@ export async function GET(req: Request) {
   const cgIds = [...new Set(targetSessions.map(s => s.class_group_id))]
 
   const [{ data: classGroups }, { data: enrollments }] = await Promise.all([
-    supabase.from('class_groups').select('id, label, zoom_link, course_id, class_type_id').in('id', cgIds),
+    supabase.from('class_groups').select('id, label, course_id, class_type_id').in('id', cgIds),
     supabase.from('enrollments').select('student_id, class_group_id').in('class_group_id', cgIds).eq('status', 'active'),
   ])
 
@@ -79,6 +80,7 @@ export async function GET(req: Request) {
   const courseMap = Object.fromEntries((courses ?? []).map(c => [c.id, c.name]))
   const ctMap = Object.fromEntries((classTypes ?? []).map(c => [c.id, c.name]))
 
+  // 4. Ambil data siswa + ortu
   const studentIds = [...new Set(enrollments.map(e => e.student_id))]
 
   const { data: students } = await supabase
@@ -93,72 +95,93 @@ export async function GET(req: Request) {
 
   const profMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
 
-  // 4. Cek notifikasi yang sudah dikirim (hindari duplikat)
+  // 5. Anti-duplikat
   const sessionIds = targetSessions.map(s => s.id)
   const { data: existingLogs } = await supabase
     .from('notification_logs')
-    .select('session_id, student_id')
-    .eq('type', 'wa_reminder_kelas')
+    .select('session_id, student_id, type')
+    .in('type', ['wa_reminder_kelas', 'wa_reminder_kelas_siswa'])
     .in('session_id', sessionIds)
 
-  const sentSet = new Set((existingLogs ?? []).map(l => `${l.session_id}-${l.student_id}`))
+  const sentSet = new Set((existingLogs ?? []).map(l => `${l.type}-${l.session_id}-${l.student_id}`))
 
-  // 5. Kirim WA
-  const results: { student: string; status: boolean }[] = []
+  // 6. Kirim WA
+  const results: { target: string; type: string; status: boolean }[] = []
 
   for (const sesi of targetSessions) {
     const cg = (classGroups ?? []).find(c => c.id === sesi.class_group_id)
-    const zoomLink = sesi.zoom_link ?? cg?.zoom_link ?? null
-    const courseName = courseMap[cg?.course_id] ?? ''
-    const classTypeName = ctMap[cg?.class_type_id] ?? ''
+    if (!cg) continue
+
+    const courseName = courseMap[cg.course_id] ?? ''
+    const classTypeName = ctMap[cg.class_type_id] ?? ''
     const kursusLabel = [courseName, classTypeName].filter(Boolean).join(' · ')
     const waktu = fmtTime(sesi.scheduled_at)
 
     const sesiEnrollments = (enrollments ?? []).filter(e => e.class_group_id === sesi.class_group_id)
 
     for (const enr of sesiEnrollments) {
-      const key = `${sesi.id}-${enr.student_id}`
-      if (sentSet.has(key)) continue
-
       const student = (students ?? []).find(s => s.id === enr.student_id)
       if (!student) continue
 
-      const studentProf = profMap[student.profile_id]
-      const studentName = (studentProf as any)?.full_name ?? 'Siswa'
+      const studentProf = profMap[student.profile_id] as any
+      const studentName = studentProf?.full_name ?? 'Siswa'
 
       const parentId = student.parent_profile_id ?? student.profile_id
-      const parentProf = profMap[parentId]
-      const parentPhone = (parentProf as any)?.phone || student.relation_phone
-      if (!parentPhone) continue
+      const parentProf = profMap[parentId] as any
+      const parentPhone = parentProf?.phone || student.relation_phone
 
-      const firstName = ((parentProf as any)?.full_name ?? '').split(' ')[0] || 'Ayah/Bunda'
+      const isDiriSendiri = student.parent_profile_id === student.profile_id
 
-      let message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${firstName}. 👋\n\nKelas *${studentName}* untuk kursus\n*(${kursusLabel})* akan dimulai\n*10 menit lagi!*\n\n🕐 Jadwal Zoom: ${waktu} WIT\n👩‍💻 Pastikan *${studentName}* sudah standby\n   di Zoom 3 menit sebelum kelas ya!`
+      // ── Pesan ke ORTU (skip kalau Diri Sendiri) ──
+      if (!isDiriSendiri && parentPhone) {
+        const keyOrtu = `wa_reminder_kelas-${sesi.id}-${enr.student_id}`
+        if (!sentSet.has(keyOrtu)) {
+          const firstName = (parentProf?.full_name ?? '').split(' ')[0] || 'Ayah/Bunda'
 
-      if (zoomLink) {
-        message += `\n🔗 Zoom: ${zoomLink}`
+          const message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${firstName}. 👋\n\nKelas *${studentName}* untuk kursus\n*(${kursusLabel})* akan dimulai\n*10 menit lagi!*\n\n🕐 Jadwal: ${waktu} WIT\n💻 Pastikan *${studentName}* sudah standby\n   di Zoom 3 menit sebelum kelas ya!\n\n🍪 Jangan lupa siapkan cemilan atau air mineral\n   biar ${studentName} makin semangat belajar!\n\nTerima kasih! 🙏`
+
+          const res = await sendWhatsApp({ target: formatPhoneID(parentPhone), message })
+          results.push({ target: firstName, type: 'ortu', status: res.status })
+
+          try {
+            await supabase.from('notification_logs').insert({
+              type:       'wa_reminder_kelas',
+              target:     formatPhoneID(parentPhone),
+              session_id: sesi.id,
+              student_id: enr.student_id,
+              payload:    { parentName: firstName, studentName, kelasLabel: cg.label, kursusLabel },
+              status:     res.status ? 'sent' : 'failed',
+              response:   res.detail ?? null,
+            })
+          } catch (_) {}
+        }
       }
 
-      message += `\n\n🍪 Jangan lupa siapkan cemilan atau air mineral\n   biar ${studentName} makin semangat belajar!\n\nTerima kasih! 🙏`
+      // ── Pesan ke SISWA (kalau punya nomor HP sendiri) ──
+      const siswaPhone = studentProf?.phone
+      if (siswaPhone) {
+        // Kalau Diri Sendiri, nomor sama dengan ortu — pastikan gak skip
+        // Kalau bukan Diri Sendiri, cek nomor siswa beda dari ortu
+        const keySiswa = `wa_reminder_kelas_siswa-${sesi.id}-${enr.student_id}`
+        if (!sentSet.has(keySiswa)) {
+          const message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${studentName}. 👋\n\nKelas kamu untuk kursus\n*(${kursusLabel})* akan dimulai\n*10 menit lagi!*\n\n🕐 Jadwal: ${waktu} WIT\n💻 Pastikan sudah standby di Zoom\n   3 menit sebelum kelas ya!\n\nSemangat belajarnya! 💪🚀`
 
-      const res = await sendWhatsApp({
-        target: formatPhoneID(parentPhone),
-        message,
-      })
+          const res = await sendWhatsApp({ target: formatPhoneID(siswaPhone), message })
+          results.push({ target: studentName, type: isDiriSendiri ? 'diri_sendiri' : 'siswa', status: res.status })
 
-      results.push({ student: studentName, status: res.status })
-
-      try {
-        await supabase.from('notification_logs').insert({
-          type:       'wa_reminder_kelas',
-          target:     formatPhoneID(parentPhone),
-          session_id: sesi.id,
-          student_id: enr.student_id,
-          payload:    { parentName: firstName, studentName, kelasLabel: cg?.label, kursusLabel },
-          status:     res.status ? 'sent' : 'failed',
-          response:   res.detail ?? null,
-        })
-      } catch (_) {}
+          try {
+            await supabase.from('notification_logs').insert({
+              type:       'wa_reminder_kelas_siswa',
+              target:     formatPhoneID(siswaPhone),
+              session_id: sesi.id,
+              student_id: enr.student_id,
+              payload:    { studentName, kelasLabel: cg.label, kursusLabel },
+              status:     res.status ? 'sent' : 'failed',
+              response:   res.detail ?? null,
+            })
+          } catch (_) {}
+        }
+      }
     }
   }
 
