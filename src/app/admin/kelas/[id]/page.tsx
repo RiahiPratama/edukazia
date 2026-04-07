@@ -405,8 +405,6 @@ export default function KelasDetailPage() {
       setSavingProgress(false)
     })
   }
-    setSavingProgress(false)
-  }
 
   async function saveStudentProgress(studentId: string, unitPos: number) {
     setSavingProgress(true)
