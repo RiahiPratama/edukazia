@@ -4,7 +4,7 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
 
 /**
  * Cron: Reminder absensi ke tutor
- * Jalan tiap 5 menit via Vercel Cron
+ * Jalan tiap 5 menit via external cron (cron-job.org)
  * 
  * Logic:
  * 1. Ambil semua sesi hari ini yang status = 'scheduled'
@@ -119,9 +119,9 @@ export async function GET(req: Request) {
     const endMs       = scheduledMs + durasi * 60 * 1000
     const reminderMs  = endMs - 10 * 60 * 1000  // 10 menit sebelum selesai
 
-    // Window: reminder time ± 3 menit (supaya cron 5 menit pasti nangkep sekali)
+    // Window: reminder time ± 8 menit (supaya cron 15 menit pasti nangkep sekali)
     const diffFromReminder = nowMs - reminderMs
-    if (diffFromReminder >= -180_000 && diffFromReminder <= 180_000) {
+    if (diffFromReminder >= -480_000 && diffFromReminder <= 480_000) {
       // Dalam window reminder!
       const profileId  = tutorMap[cg.tutor_id]
       const tutorProf  = profMap[profileId]
@@ -158,15 +158,17 @@ export async function GET(req: Request) {
       status:    res.status,
     })
 
-    // Log ke DB (opsional — bisa untuk tracking)
-    await supabase.from('notification_logs').insert({
-      type:       'wa_reminder_absensi',
-      target:     formatPhoneID(r.tutorPhone),
-      session_id: r.sessionId,
-      payload:    { tutorName: r.tutorName, kelasLabel: r.kelasLabel },
-      status:     res.status ? 'sent' : 'failed',
-      response:   res.detail ?? null,
-    }).catch(() => {}) // fire-and-forget, jangan block kalau table belum ada
+    // Log ke DB — fire-and-forget
+    try {
+      await supabase.from('notification_logs').insert({
+        type:       'wa_reminder_absensi',
+        target:     formatPhoneID(r.tutorPhone),
+        session_id: r.sessionId,
+        payload:    { tutorName: r.tutorName, kelasLabel: r.kelasLabel },
+        status:     res.status ? 'sent' : 'failed',
+        response:   res.detail ?? null,
+      })
+    } catch (_) {}
   }
 
   return NextResponse.json({
