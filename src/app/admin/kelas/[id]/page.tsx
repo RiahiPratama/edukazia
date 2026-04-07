@@ -133,7 +133,7 @@ export default function KelasDetailPage() {
   const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number}[]>([])
   const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
-  const [lessons,          setLessons]          = useState<{id: string; title: string; position: number; unit_id: string}[]>([])
+  const [lessons,          setLessons]          = useState<{id: string; lesson_name: string; position: number; unit_id: string}[]>([])
   const [openUnits,        setOpenUnits]        = useState<Set<string>>(new Set())
   const [classCurrentLesson, setClassCurrentLesson] = useState<number>(1)
   const [studentLessonProgress, setStudentLessonProgress] = useState<Record<string, number>>({})
@@ -201,7 +201,7 @@ export default function KelasDetailPage() {
       if (unitIds.length > 0) {
         const { data: ls } = await supabase
           .from('lessons')
-          .select('id, title, position, unit_id')
+          .select('id, lesson_name, position, unit_id')
           .in('unit_id', unitIds)
           .order('position')
         setLessons(ls ?? [])
@@ -1179,7 +1179,7 @@ export default function KelasDetailPage() {
                                 lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'}`}>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs">{lessonDone ? '✅' : lessonActive ? '▶️' : '🔒'}</span>
-                                  <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.title}</span>
+                                  <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.lesson_name}</span>
                                 </div>
                                 {lessonActive && (
                                   <button
@@ -1308,7 +1308,7 @@ export default function KelasDetailPage() {
                                           lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'}`}>
                                           <div className="flex items-center gap-2">
                                             <span className="text-xs">{lessonDone ? '✅' : lessonActive ? '▶️' : '🔒'}</span>
-                                            <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.title}</span>
+                                            <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.lesson_name}</span>
                                           </div>
                                           {lessonActive && (
                                             <button
