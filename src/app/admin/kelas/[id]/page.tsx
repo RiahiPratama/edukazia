@@ -130,7 +130,7 @@ export default function KelasDetailPage() {
   const [classCurrentUnit, setClassCurrentUnit] = useState<number>(1)
   const [studentProgress,  setStudentProgress]  = useState<Record<string, number>>({})
   const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number; chapter_id: string | null; level_id: string}[]>([])
-  const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number}[]>([])
+  const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number; level_id: string}[]>([])
   const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
   const [lessons,          setLessons]          = useState<{id: string; lesson_name: string; position: number; unit_id: string}[]>([])
@@ -213,12 +213,18 @@ export default function KelasDetailPage() {
       if (chapterIds.length > 0) {
         const { data: ch } = await supabase
           .from('chapters')
-          .select('id, chapter_title, order_number')
+          .select('id, chapter_title, order_number, level_id')
           .in('id', chapterIds)
-          .order('order_number')
-        setChapters(ch ?? [])
-        setOpenChapters(new Set((ch ?? []).map(c => c.id)))
-        ch?.forEach((c: any) => { chapterOrderMap[c.id] = c.order_number ?? 0 })
+        // Sort chapters by level sort_order first, then order_number
+        const sortedCh = (ch ?? []).sort((a: any, b: any) => {
+          const la = levelOrderMap[a.level_id] ?? 0
+          const lb = levelOrderMap[b.level_id] ?? 0
+          if (la !== lb) return la - lb
+          return (a.order_number ?? 0) - (b.order_number ?? 0)
+        })
+        setChapters(sortedCh)
+        setOpenChapters(new Set(sortedCh.map((c: any) => c.id)))
+        sortedCh.forEach((c: any) => { chapterOrderMap[c.id] = (levelOrderMap[c.level_id] ?? 0) * 1000 + (c.order_number ?? 0) })
       }
 
       // Sort units by: level sort_order → chapter order_number → unit position
