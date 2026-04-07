@@ -300,6 +300,34 @@ export default function KelasDetailPage() {
     setSavingProgress(false)
   }
 
+  async function unlockAllStudentLessons(studentId: string) {
+    setSavingProgress(true)
+    const currentUnit = studentProgress[studentId] ?? 1
+    const newUnitPos = Math.min(currentUnit + 1, units.length)
+    await supabase.from('student_unit_progress')
+      .upsert({
+        student_id: studentId,
+        class_group_id: kelasId,
+        current_unit_position: newUnitPos,
+        current_lesson_position: 1,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'student_id,class_group_id' })
+    setStudentProgress(prev => ({ ...prev, [studentId]: newUnitPos }))
+    setStudentLessonProgress(prev => ({ ...prev, [studentId]: 1 }))
+    setSavingProgress(false)
+  }
+
+  async function unlockAllClassLessons() {
+    setSavingProgress(true)
+    const newUnit = Math.min(classCurrentUnit + 1, units.length)
+    await supabase.from('class_groups')
+      .update({ current_unit_position: newUnit, current_lesson_position: 1 })
+      .eq('id', kelasId)
+    setClassCurrentUnit(newUnit)
+    setClassCurrentLesson(1)
+    setSavingProgress(false)
+  }
+
   async function saveStudentProgress(studentId: string, unitPos: number) {
     setSavingProgress(true)
     await supabase.from('student_unit_progress')
@@ -1165,6 +1193,14 @@ export default function KelasDetailPage() {
                               Naik Unit →
                             </button>
                           )}
+                          {isActive && hasLessons && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); unlockAllStudentLessons(enr.student_id) }}
+                              disabled={savingProgress || currentPos >= units.length}
+                              className="text-[10px] px-2.5 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-40 font-semibold">
+                              Selesaikan Unit ✓
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -1296,6 +1332,14 @@ export default function KelasDetailPage() {
                                     {hasLessons && <span className="text-[10px] text-[#7B78A8]">({unitLessons.length} lesson)</span>}
                                   </div>
                                   {isActive && !hasLessons && <span className="text-xs font-bold text-[#5C4FE5] bg-purple-100 px-2 py-0.5 rounded-full">Aktif</span>}
+                                  {isActive && hasLessons && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); unlockAllClassLessons() }}
+                                      disabled={savingProgress || classCurrentUnit >= units.length}
+                                      className="text-[10px] px-2.5 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-40 font-semibold">
+                                      Selesaikan Unit ✓
+                                    </button>
+                                  )}
                                 </div>
 
                                 {isUnitOpen && hasLessons && (
