@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, FolderOpen, Globe, LogOut, Menu, Globe2,
-  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText, Library, Wallet
+  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText, Library, Wallet, Bell
 } from 'lucide-react'
 
 // Nav structure dengan sub-menu
@@ -38,8 +38,9 @@ const navGroups = [
     { href: '/admin/keuangan/pengeluaran', label: 'Pengeluaran',  icon: TrendingDown },
   ]},
   { group: 'Sistem', items: [
-    { href: '/admin/materi',  label: 'Bank Materi',    icon: FolderOpen },
-    { href: '/admin/konten',  label: 'Konten Landing', icon: Globe },
+    { href: '/admin/notifikasi', label: 'Notifikasi WA', icon: Bell },
+    { href: '/admin/materi',     label: 'Bank Materi',   icon: FolderOpen },
+    { href: '/admin/konten',     label: 'Konten Landing', icon: Globe },
   ]},
 ]
 
