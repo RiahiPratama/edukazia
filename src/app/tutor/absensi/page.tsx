@@ -231,6 +231,8 @@ function ModalLaporan({
 
     setSaving(false)
     if (error) { setMsg({ type: 'err', text: error.message }); return }
+    // Kirim WA ke ortu — fire and forget
+    fetch('/api/wa/notify-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sesi.id, student_id: selectedSiswa, materi: form.materi }) }).catch(() => {})
     onSaved()
     onClose()
     router.push('/tutor/dashboard')

@@ -382,6 +382,8 @@ export default function TutorLaporanPage() {
       setSaveSuccess(key)
       setTimeout(() => setSaveSuccess(null), 3000)
       setEditingKey(null)
+      // Kirim WA ke ortu — fire and forget
+      fetch('/api/wa/notify-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, student_id: studentId, materi: editForm.materi }) }).catch(() => {})
     }
     setSavingKey(null)
   }
@@ -429,6 +431,8 @@ export default function TutorLaporanPage() {
       ? { ...t, materi: modalForm.materi, perkembangan: modalForm.perkembangan, saranOrtu: modalForm.saranOrtu, recordingUrl: modalForm.recordingUrl }
       : t
     ))
+    // Kirim WA ke ortu — fire and forget
+    fetch('/api/wa/notify-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: modalLaporan.sessionId, student_id: modalLaporan.studentId, materi: modalForm.materi }) }).catch(() => {})
     setModalLaporan(null)
   }
 
