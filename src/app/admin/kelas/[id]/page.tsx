@@ -707,7 +707,7 @@ export default function KelasDetailPage() {
                           enr.session_start_offset + (enr.attended_count ?? 0),
                           enr.sessions_total
                         )
-                        const pct = Math.min((current / enr.sessions_total) * 100, 100)
+                        const pct = Math.min(((enr.attended_count ?? 0) / enr.sessions_total) * 100, 100)
                         const isActive  = enr.status === 'active'
                         const isRenewed = enr.status === 'renewed'
                         const barColor  = isRenewed ? 'bg-[#C4BFFF]' : 'bg-[#5C4FE5]'
@@ -761,7 +761,7 @@ export default function KelasDetailPage() {
                         enr.session_start_offset + (enr.attended_count ?? 0),
                         enr.sessions_total
                       )
-                      const pct     = Math.min((current / enr.sessions_total) * 100, 100)
+                      const pct     = Math.min(((enr.attended_count ?? 0) / enr.sessions_total) * 100, 100)
                       const isActive = enr.status === 'active'
                       const st = isActive ? { label: 'Aktif', cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
                                : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
