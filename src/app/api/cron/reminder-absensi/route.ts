@@ -4,16 +4,10 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
 
 /**
  * Cron: Reminder absensi ke tutor
- * Jalan tiap 5 menit via external cron (cron-job.org)
- * 
- * Logic:
- * 1. Ambil semua sesi hari ini yang status = 'scheduled'
- * 2. Hitung end_time = scheduled_at + durasi
- * 3. Kalau sekarang ~10 menit sebelum end_time → kirim WA ke tutor
- * 4. Skip kalau sudah ada attendance record (tutor sudah isi)
+ * Jalan tiap 5-10 menit via external cron (cron-job.org)
+ * Anti-duplikat: cek notification_logs sebelum kirim
  */
 
-// Durasi per tipe kelas (menit)
 function getDurasi(classTypeName: string, courseName: string): number {
   const type   = (classTypeName ?? '').toLowerCase()
   const course = (courseName ?? '').toLowerCase()
@@ -22,7 +16,6 @@ function getDurasi(classTypeName: string, courseName: string): number {
 }
 
 export async function GET(req: Request) {
-  // Verifikasi cron secret
   const authHeader = req.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -34,13 +27,10 @@ export async function GET(req: Request) {
   )
 
   const now = new Date()
-
-  // ── Ambil tanggal hari ini WIT ──
   const todayWIT = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const startUtc = new Date(todayWIT + 'T00:00:00+09:00').toISOString()
   const endUtc   = new Date(todayWIT + 'T23:59:59+09:00').toISOString()
 
-  // ── 1. Ambil sesi scheduled hari ini ──
   const { data: sessions, error: sessErr } = await supabase
     .from('sessions')
     .select('id, scheduled_at, class_group_id')
@@ -52,7 +42,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ sent: 0, message: 'No scheduled sessions today' })
   }
 
-  // ── 2. Ambil class_groups info ──
   const cgIds = [...new Set(sessions.map(s => s.class_group_id))]
 
   const { data: classGroups } = await supabase
@@ -64,7 +53,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ sent: 0, message: 'No class groups found' })
   }
 
-  // Ambil courses & class_types
   const courseIds = [...new Set(classGroups.map(cg => cg.course_id))]
   const ctIds     = [...new Set(classGroups.map(cg => cg.class_type_id))]
   const tutorIds  = [...new Set(classGroups.map(cg => cg.tutor_id))]
@@ -79,19 +67,16 @@ export async function GET(req: Request) {
     supabase.from('tutors').select('id, profile_id').in('id', tutorIds),
   ])
 
-  // Ambil profiles tutor (untuk nama + nomor HP)
   const profileIds = (tutors ?? []).map(t => t.profile_id).filter(Boolean)
   const { data: profiles } = profileIds.length > 0
     ? await supabase.from('profiles').select('id, full_name, phone').in('id', profileIds)
     : { data: [] }
 
-  // Build lookup maps
   const courseMap = Object.fromEntries((courses ?? []).map(c => [c.id, c.name]))
   const ctMap    = Object.fromEntries((classTypes ?? []).map(c => [c.id, c.name]))
   const tutorMap = Object.fromEntries((tutors ?? []).map(t => [t.id, t.profile_id]))
   const profMap  = Object.fromEntries((profiles ?? []).map(p => [p.id, { name: p.full_name, phone: p.phone }]))
 
-  // ── 3. Cek attendance yang sudah ada ──
   const sessionIds = sessions.map(s => s.id)
   const { data: existingAtt } = await supabase
     .from('attendances')
@@ -100,13 +85,21 @@ export async function GET(req: Request) {
 
   const attendedSessionIds = new Set((existingAtt ?? []).map(a => a.session_id))
 
-  // ── 4. Filter sesi yang perlu reminder ──
+  // Anti-duplikat: cek notifikasi yang sudah dikirim hari ini
+  const { data: existingLogs } = await supabase
+    .from('notification_logs')
+    .select('session_id')
+    .eq('type', 'wa_reminder_absensi')
+    .in('session_id', sessionIds)
+
+  const sentSessionIds = new Set((existingLogs ?? []).map(l => l.session_id))
+
   const nowMs = now.getTime()
   const reminders: { sessionId: string; tutorName: string; tutorPhone: string; kelasLabel: string; courseName: string }[] = []
 
   for (const sesi of sessions) {
-    // Skip kalau sudah ada absensi
     if (attendedSessionIds.has(sesi.id)) continue
+    if (sentSessionIds.has(sesi.id)) continue  // sudah pernah dikirim
 
     const cg = classGroups.find(c => c.id === sesi.class_group_id)
     if (!cg) continue
@@ -117,12 +110,10 @@ export async function GET(req: Request) {
 
     const scheduledMs = new Date(sesi.scheduled_at).getTime()
     const endMs       = scheduledMs + durasi * 60 * 1000
-    const reminderMs  = endMs - 10 * 60 * 1000  // 10 menit sebelum selesai
+    const reminderMs  = endMs - 10 * 60 * 1000
 
-    // Window: reminder time ± 8 menit (supaya cron 15 menit pasti nangkep sekali)
     const diffFromReminder = nowMs - reminderMs
     if (diffFromReminder >= -480_000 && diffFromReminder <= 480_000) {
-      // Dalam window reminder!
       const profileId  = tutorMap[cg.tutor_id]
       const tutorProf  = profMap[profileId]
       if (!tutorProf?.phone) continue
@@ -141,7 +132,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ sent: 0, message: 'No reminders needed right now' })
   }
 
-  // ── 5. Kirim WA via Fonnte ──
   const results: { sessionId: string; tutor: string; status: boolean }[] = []
 
   for (const r of reminders) {
@@ -158,7 +148,6 @@ export async function GET(req: Request) {
       status:    res.status,
     })
 
-    // Log ke DB — fire-and-forget
     try {
       await supabase.from('notification_logs').insert({
         type:       'wa_reminder_absensi',
