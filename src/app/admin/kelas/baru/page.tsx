@@ -33,7 +33,7 @@ export default function BuatKelasPage() {
   const [sessionStartOffset, setSessionStartOffset] = useState(0)
 
   const [form, setForm] = useState({
-    label: '', course_id: '', tutor_id: '', class_type_id: '', zoom_link: '', status: 'active', price: '',
+    label: '', course_id: '', tutor_id: '', class_type_id: '', zoom_link: '', status: 'active',
   })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
@@ -149,10 +149,6 @@ export default function BuatKelasPage() {
     const { name, value } = e.target
     setForm(prev => {
       const next = { ...prev, [name]: value }
-      if (name === 'class_type_id' && value) {
-        const ct = classTypes.find(c => c.id === value)
-        if (ct?.base_price) next.price = String(ct.base_price)
-      }
       return next
     })
   }
@@ -178,7 +174,6 @@ export default function BuatKelasPage() {
         zoom_link:        form.zoom_link.trim() || null,
         max_participants: classType?.max_participants ?? 8,
         status:           form.status,
-        price:            form.price ? parseInt(form.price) : null,
       })
       .select('id').single()
 
@@ -295,28 +290,6 @@ export default function BuatKelasPage() {
               )}
             </div>
           )}
-
-          {/* Tarif per siswa */}
-          <div>
-            <label className="block text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-1.5">
-              Tarif per Siswa <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7B78A8] text-sm font-semibold">Rp</span>
-              <input
-                type="number"
-                name="price"
-                value={form.price}
-                onChange={handleChange}
-                placeholder="500000"
-                min={0}
-                className="w-full pl-10 pr-3.5 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] focus:bg-white transition"
-              />
-            </div>
-            <p className="text-xs text-[#7B78A8] mt-1">
-              Auto-diisi dari tarif tipe kelas, bisa diubah sesuai angkatan siswa
-            </p>
-          </div>
 
           {/* Tutor */}
           <div>
