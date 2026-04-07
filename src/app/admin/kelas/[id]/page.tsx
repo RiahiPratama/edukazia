@@ -133,6 +133,10 @@ export default function KelasDetailPage() {
   const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number}[]>([])
   const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
+  const [lessons,          setLessons]          = useState<{id: string; title: string; position: number; unit_id: string}[]>([])
+  const [openUnits,        setOpenUnits]        = useState<Set<string>>(new Set())
+  const [classCurrentLesson, setClassCurrentLesson] = useState<number>(1)
+  const [studentLessonProgress, setStudentLessonProgress] = useState<Record<string, number>>({})
 
   // Session detail expand (absensi + laporan)
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
@@ -165,19 +169,20 @@ export default function KelasDetailPage() {
   const [absensiSaving,        setAbsensiSaving]        = useState(false)
   const [absensiErr,           setAbsensiErr]           = useState('')
 
-  useEffect(() => { fetchAll() }, [kelasId])
-  useEffect(() => { if (kelasId) fetchLevels() }, [kelasId])
-  useEffect(() => { if (kelasId) fetchProgress() }, [kelasId])
+  useEffect(() => { fetchAll() }, [kelasId, activeTab])
+  useEffect(() => { if (kelasId) fetchLevels() }, [kelasId, activeTab])
+  useEffect(() => { if (kelasId) fetchProgress() }, [kelasId, activeTab])
 
   async function fetchProgress() {
     const { data: cg } = await supabase
       .from('class_groups')
-      .select('current_unit_position, class_types(name), class_group_levels(level_id)')
+      .select('current_unit_position, current_lesson_position, class_types(name), class_group_levels(level_id)')
       .eq('id', kelasId)
       .single()
 
     if (!cg) return
     setClassCurrentUnit(cg.current_unit_position ?? 1)
+    setClassCurrentLesson(cg.current_lesson_position ?? 1)
     const typeName = (cg.class_types as any)?.name ?? ''
     setClassType(typeName)
 
@@ -190,6 +195,17 @@ export default function KelasDetailPage() {
         .in('level_id', levelIds)
         .order('position')
       setUnits(u ?? [])
+
+      // Fetch lessons untuk semua unit
+      const unitIds = (u ?? []).map(unit => unit.id)
+      if (unitIds.length > 0) {
+        const { data: ls } = await supabase
+          .from('lessons')
+          .select('id, title, position, unit_id')
+          .in('unit_id', unitIds)
+          .order('position')
+        setLessons(ls ?? [])
+      }
 
       // Fetch chapters untuk grouping
       const chapterIds = [...new Set((u ?? []).map(u => u.chapter_id).filter(Boolean))] as string[]
@@ -208,21 +224,80 @@ export default function KelasDetailPage() {
     if (typeName === 'Privat') {
       const { data: sp } = await supabase
         .from('student_unit_progress')
-        .select('student_id, current_unit_position')
+        .select('student_id, current_unit_position, current_lesson_position')
         .eq('class_group_id', kelasId)
       const map: Record<string, number> = {}
-      sp?.forEach((p: any) => { map[p.student_id] = p.current_unit_position })
+      const lessonMap: Record<string, number> = {}
+      sp?.forEach((p: any) => {
+        map[p.student_id] = p.current_unit_position
+        lessonMap[p.student_id] = p.current_lesson_position ?? 1
+      })
       setStudentProgress(map)
+      setStudentLessonProgress(lessonMap)
     }
   }
 
   async function saveClassProgress() {
     setSavingProgress(true)
     await supabase.from('class_groups')
-      .update({ current_unit_position: classCurrentUnit })
+      .update({ current_unit_position: classCurrentUnit, current_lesson_position: classCurrentLesson })
       .eq('id', kelasId)
     setSavingProgress(false)
     alert('✅ Progress kelas disimpan!')
+  }
+
+  async function advanceStudentLesson(studentId: string, unitId: string, totalLessons: number) {
+    setSavingProgress(true)
+    const currentLesson = studentLessonProgress[studentId] ?? 1
+    const currentUnit = studentProgress[studentId] ?? 1
+
+    if (currentLesson >= totalLessons) {
+      // Semua lesson selesai → naik unit, reset lesson ke 1
+      const newUnitPos = Math.min(currentUnit + 1, units.length)
+      await supabase.from('student_unit_progress')
+        .upsert({
+          student_id: studentId,
+          class_group_id: kelasId,
+          current_unit_position: newUnitPos,
+          current_lesson_position: 1,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'student_id,class_group_id' })
+      setStudentProgress(prev => ({ ...prev, [studentId]: newUnitPos }))
+      setStudentLessonProgress(prev => ({ ...prev, [studentId]: 1 }))
+    } else {
+      // Naik lesson
+      const newLesson = currentLesson + 1
+      await supabase.from('student_unit_progress')
+        .upsert({
+          student_id: studentId,
+          class_group_id: kelasId,
+          current_unit_position: currentUnit,
+          current_lesson_position: newLesson,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'student_id,class_group_id' })
+      setStudentLessonProgress(prev => ({ ...prev, [studentId]: newLesson }))
+    }
+    setSavingProgress(false)
+  }
+
+  async function advanceClassLesson(unitId: string, totalLessons: number) {
+    setSavingProgress(true)
+    if (classCurrentLesson >= totalLessons) {
+      // Semua lesson selesai → naik unit, reset lesson ke 1
+      const newUnit = Math.min(classCurrentUnit + 1, units.length)
+      await supabase.from('class_groups')
+        .update({ current_unit_position: newUnit, current_lesson_position: 1 })
+        .eq('id', kelasId)
+      setClassCurrentUnit(newUnit)
+      setClassCurrentLesson(1)
+    } else {
+      const newLesson = classCurrentLesson + 1
+      await supabase.from('class_groups')
+        .update({ current_lesson_position: newLesson })
+        .eq('id', kelasId)
+      setClassCurrentLesson(newLesson)
+    }
+    setSavingProgress(false)
   }
 
   async function saveStudentProgress(studentId: string, unitPos: number) {
@@ -232,9 +307,11 @@ export default function KelasDetailPage() {
         student_id:            studentId,
         class_group_id:        kelasId,
         current_unit_position: unitPos,
+        current_lesson_position: 1,
         updated_at:            new Date().toISOString(),
       }, { onConflict: 'student_id,class_group_id' })
     setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
+    setStudentLessonProgress(prev => ({ ...prev, [studentId]: 1 }))
     setSavingProgress(false)
   }
 
@@ -1035,8 +1112,8 @@ export default function KelasDetailPage() {
             <div className="space-y-3">
               {enrollments.filter(e => e.status === 'active').map(enr => {
                 const currentPos = studentProgress[enr.student_id] ?? 1
+                const currentLessonPos = studentLessonProgress[enr.student_id] ?? 1
 
-                // Group units by chapter
                 const chapterMap = new Map<string, typeof units>()
                 const noChapterUnits: typeof units = []
                 units.forEach(unit => {
@@ -1048,22 +1125,91 @@ export default function KelasDetailPage() {
                   }
                 })
 
+                const renderUnit = (unit: typeof units[0]) => {
+                  const isDone   = unit.position < currentPos
+                  const isActive = unit.position === currentPos
+                  const isLocked = unit.position > currentPos
+                  const unitLessons = lessons.filter(l => l.unit_id === unit.id)
+                  const isUnitOpen = openUnits.has(`${enr.student_id}_${unit.id}`)
+                  const hasLessons = unitLessons.length > 0
+
+                  return (
+                    <div key={unit.id} className="rounded-lg overflow-hidden">
+                      <div
+                        onClick={() => {
+                          if (hasLessons && (isDone || isActive)) {
+                            const key = `${enr.student_id}_${unit.id}`
+                            setOpenUnits(prev => {
+                              const next = new Set(prev)
+                              next.has(key) ? next.delete(key) : next.add(key)
+                              return next
+                            })
+                          }
+                        }}
+                        className={`flex items-center justify-between px-3 py-2.5 border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'} ${hasLessons && !isLocked ? 'cursor-pointer' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {hasLessons && !isLocked && (
+                            isUnitOpen ? <ChevronDown size={12} className="text-[#5C4FE5]"/> : <ChevronRight size={12} className="text-gray-400"/>
+                          )}
+                          <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
+                          <span className={`text-sm font-medium ${isLocked ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                          {hasLessons && <span className="text-[10px] text-[#7B78A8]">({unitLessons.length} lesson)</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isActive && !hasLessons && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length)) }}
+                              disabled={savingProgress || currentPos >= units.length}
+                              className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
+                              Naik Unit →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Lessons inside unit */}
+                      {isUnitOpen && hasLessons && (
+                        <div className="pl-8 pr-3 py-2 space-y-1 border-x border-b border-[#E5E3FF] bg-white">
+                          {unitLessons.map(lesson => {
+                            const lessonDone   = isDone || (isActive && lesson.position < currentLessonPos)
+                            const lessonActive = isActive && lesson.position === currentLessonPos
+                            return (
+                              <div key={lesson.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                                lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs">{lessonDone ? '✅' : lessonActive ? '▶️' : '🔒'}</span>
+                                  <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.title}</span>
+                                </div>
+                                {lessonActive && (
+                                  <button
+                                    onClick={() => advanceStudentLesson(enr.student_id, unit.id, unitLessons.length)}
+                                    disabled={savingProgress}
+                                    className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
+                                    {currentLessonPos >= unitLessons.length ? 'Naik Unit →' : 'Naik Lesson →'}
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
                 return (
                   <div key={enr.student_id} className="bg-white rounded-xl border border-[#E5E3FF] p-4">
                     <p className="font-bold text-[#1A1640] mb-3">{enr.student_name}</p>
-
-                    <div className="space-y-2">
-                      {/* Units dengan chapter */}
+                    <div className="space-y-1.5">
                       {chapters.map(chapter => {
                         const chapterUnits = chapterMap.get(chapter.id) ?? []
                         if (chapterUnits.length === 0) return null
                         const isChOpen = openChapters.has(chapter.id)
                         const doneCh = chapterUnits.filter(u => u.position < currentPos).length
-                        const totalCh = chapterUnits.length
 
                         return (
                           <div key={chapter.id} className="rounded-xl border border-[#E5E3FF] overflow-hidden">
-                            {/* Chapter header */}
                             <button
                               onClick={() => {
                                 setOpenChapters(prev => {
@@ -1075,64 +1221,16 @@ export default function KelasDetailPage() {
                               className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors text-left"
                             >
                               <div className="flex items-center gap-2">
-                                {isChOpen
-                                  ? <ChevronDown size={14} className="text-[#5C4FE5]" />
-                                  : <ChevronRight size={14} className="text-gray-400" />}
+                                {isChOpen ? <ChevronDown size={14} className="text-[#5C4FE5]"/> : <ChevronRight size={14} className="text-gray-400"/>}
                                 <span className="text-sm font-bold text-[#1A1640]">{chapter.chapter_title}</span>
                               </div>
-                              <span className="text-xs text-[#7B78A8]">{doneCh}/{totalCh} unit selesai</span>
+                              <span className="text-xs text-[#7B78A8]">{doneCh}/{chapterUnits.length} unit selesai</span>
                             </button>
-
-                            {/* Units in chapter */}
-                            {isChOpen && (
-                              <div className="p-2 space-y-1.5">
-                                {chapterUnits.map(unit => {
-                                  const isDone   = unit.position < currentPos
-                                  const isActive = unit.position === currentPos
-                                  return (
-                                    <div key={unit.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'}`}>
-                                      <div className="flex items-center gap-2">
-                                        <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
-                                        <span className={`text-sm font-medium ${unit.position > currentPos ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
-                                      </div>
-                                      {isActive && (
-                                        <button
-                                          onClick={() => saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length))}
-                                          disabled={savingProgress || currentPos >= units.length}
-                                          className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
-                                          Naik Unit →
-                                        </button>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
+                            {isChOpen && <div className="p-2 space-y-1.5">{chapterUnits.map(renderUnit)}</div>}
                           </div>
                         )
                       })}
-
-                      {/* Units tanpa chapter (fallback) */}
-                      {noChapterUnits.map(unit => {
-                        const isDone   = unit.position < currentPos
-                        const isActive = unit.position === currentPos
-                        return (
-                          <div key={unit.id} className={`flex items-center justify-between p-3 rounded-lg border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'}`}>
-                            <div className="flex items-center gap-2">
-                              <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
-                              <span className={`text-sm font-medium ${unit.position > currentPos ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
-                            </div>
-                            {isActive && (
-                              <button
-                                onClick={() => saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length))}
-                                disabled={savingProgress || currentPos >= units.length}
-                                className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
-                                Naik Unit →
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {noChapterUnits.map(renderUnit)}
                     </div>
                   </div>
                 )
@@ -1142,7 +1240,7 @@ export default function KelasDetailPage() {
             /* Kelas Grup */
             <div className="bg-white rounded-xl border border-[#E5E3FF] p-4">
               <p className="font-bold text-[#1A1640] mb-3">Unit Progress Kelas</p>
-              <div className="space-y-2 mb-4">
+              <div className="space-y-1.5 mb-4">
                 {chapters.map(chapter => {
                   const chapterUnits = units.filter(u => u.chapter_id === chapter.id)
                   if (chapterUnits.length === 0) return null
@@ -1162,9 +1260,7 @@ export default function KelasDetailPage() {
                         className="w-full flex items-center justify-between px-4 py-2.5 bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors text-left"
                       >
                         <div className="flex items-center gap-2">
-                          {isChOpen
-                            ? <ChevronDown size={14} className="text-[#5C4FE5]" />
-                            : <ChevronRight size={14} className="text-gray-400" />}
+                          {isChOpen ? <ChevronDown size={14} className="text-[#5C4FE5]"/> : <ChevronRight size={14} className="text-gray-400"/>}
                           <span className="text-sm font-bold text-[#1A1640]">{chapter.chapter_title}</span>
                         </div>
                         <span className="text-xs text-[#7B78A8]">{doneCh}/{chapterUnits.length} unit selesai</span>
@@ -1175,14 +1271,58 @@ export default function KelasDetailPage() {
                           {chapterUnits.map(unit => {
                             const isDone   = unit.position < classCurrentUnit
                             const isActive = unit.position === classCurrentUnit
+                            const isLocked = unit.position > classCurrentUnit
+                            const unitLessons = lessons.filter(l => l.unit_id === unit.id)
+                            const hasLessons = unitLessons.length > 0
+                            const isUnitOpen = openUnits.has(`class_${unit.id}`)
+
                             return (
-                              <div key={unit.id} onClick={() => setClassCurrentUnit(unit.position)}
-                                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
-                                <div className="flex items-center gap-2">
-                                  <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
-                                  <span className={`text-sm font-medium ${unit.position > classCurrentUnit ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                              <div key={unit.id} className="rounded-lg overflow-hidden">
+                                <div
+                                  onClick={() => {
+                                    if (hasLessons && !isLocked) {
+                                      const key = `class_${unit.id}`
+                                      setOpenUnits(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+                                    }
+                                  }}
+                                  className={`flex items-center justify-between px-3 py-2.5 border ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200'} ${hasLessons && !isLocked ? 'cursor-pointer' : ''}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {hasLessons && !isLocked && (
+                                      isUnitOpen ? <ChevronDown size={12} className="text-[#5C4FE5]"/> : <ChevronRight size={12} className="text-gray-400"/>
+                                    )}
+                                    <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
+                                    <span className={`text-sm font-medium ${isLocked ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                                    {hasLessons && <span className="text-[10px] text-[#7B78A8]">({unitLessons.length} lesson)</span>}
+                                  </div>
+                                  {isActive && !hasLessons && <span className="text-xs font-bold text-[#5C4FE5] bg-purple-100 px-2 py-0.5 rounded-full">Aktif</span>}
                                 </div>
-                                {isActive && <span className="text-xs font-bold text-[#5C4FE5] bg-purple-100 px-2 py-0.5 rounded-full">Aktif</span>}
+
+                                {isUnitOpen && hasLessons && (
+                                  <div className="pl-8 pr-3 py-2 space-y-1 border-x border-b border-[#E5E3FF] bg-white">
+                                    {unitLessons.map(lesson => {
+                                      const lessonDone   = isDone || (isActive && lesson.position < classCurrentLesson)
+                                      const lessonActive = isActive && lesson.position === classCurrentLesson
+                                      return (
+                                        <div key={lesson.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                                          lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'}`}>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-xs">{lessonDone ? '✅' : lessonActive ? '▶️' : '🔒'}</span>
+                                            <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.title}</span>
+                                          </div>
+                                          {lessonActive && (
+                                            <button
+                                              onClick={() => advanceClassLesson(unit.id, unitLessons.length)}
+                                              disabled={savingProgress}
+                                              className="text-xs px-3 py-1 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-semibold">
+                                              {classCurrentLesson >= unitLessons.length ? 'Naik Unit →' : 'Naik Lesson →'}
+                                            </button>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             )
                           })}
@@ -1197,7 +1337,7 @@ export default function KelasDetailPage() {
                   const isDone   = unit.position < classCurrentUnit
                   const isActive = unit.position === classCurrentUnit
                   return (
-                    <div key={unit.id} onClick={() => setClassCurrentUnit(unit.position)}
+                    <div key={unit.id} onClick={() => { setClassCurrentUnit(unit.position); setClassCurrentLesson(1) }}
                       className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-2">
                         <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
