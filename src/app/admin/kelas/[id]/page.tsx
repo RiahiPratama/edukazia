@@ -1243,7 +1243,7 @@ export default function KelasDetailPage() {
                           {unitLessons.map(lesson => {
                             const lessonDone   = isDone || (isActive && lesson.position < currentLessonPos)
                             const lessonActive = isActive && lesson.position === currentLessonPos
-                            const canRevert    = isActive && lessonDone
+                            const canRevert    = (isActive || isDone) && lessonDone
                             return (
                               <div key={lesson.id}
                                 onClick={() => canRevert && revertStudentTo(enr.student_id, unit.position, lesson.position)}
@@ -1384,7 +1384,7 @@ export default function KelasDetailPage() {
                                     {unitLessons.map(lesson => {
                                       const lessonDone   = isDone || (isActive && lesson.position < classCurrentLesson)
                                       const lessonActive = isActive && lesson.position === classCurrentLesson
-                                      const canRevert    = isActive && lessonDone
+                                      const canRevert    = (isActive || isDone) && lessonDone
                                       return (
                                         <div key={lesson.id}
                                           onClick={() => canRevert && revertClassTo(unit.position, lesson.position)}
