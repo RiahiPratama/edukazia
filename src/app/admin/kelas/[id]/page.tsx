@@ -1405,7 +1405,6 @@ export default function KelasDetailPage() {
                   </div>
                 )
               })}
-            </div>
 
             {/* Bulk action for Privat */}
             {enrollments.filter(e => e.status === 'active').length > 1 && (
@@ -1454,6 +1453,7 @@ export default function KelasDetailPage() {
                 </div>
               </div>
             )}
+            </div>
           ) : (
             /* Kelas Grup */
             <div className="bg-white rounded-xl border border-[#E5E3FF] p-4">
