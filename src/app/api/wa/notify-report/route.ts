@@ -7,6 +7,10 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
  * 
  * Kirim WA ke ortu saat tutor submit/update laporan belajar
  * Body: { session_id, student_id, materi }
+ * 
+ * Nomor HP dicari dari:
+ * 1. profiles.phone (ortu)
+ * 2. students.relation_phone (fallback)
  */
 
 function fmtDate(iso: string) {
@@ -30,10 +34,10 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // ── 1. Ambil data siswa ──
+    // ── 1. Ambil data siswa (termasuk relation_phone) ──
     const { data: student } = await supabase
       .from('students')
-      .select('id, profile_id, parent_profile_id')
+      .select('id, profile_id, parent_profile_id, relation_phone')
       .eq('id', student_id)
       .single()
 
@@ -58,7 +62,10 @@ export async function POST(req: Request) {
       .eq('id', parentId)
       .single()
 
-    if (!parentProfile?.phone) {
+    // Cari nomor HP: profiles.phone → students.relation_phone
+    const parentPhone = parentProfile?.phone || student.relation_phone || null
+
+    if (!parentPhone) {
       return NextResponse.json({ sent: false, reason: 'Parent phone not found' })
     }
 
@@ -80,29 +87,29 @@ export async function POST(req: Request) {
     }
 
     const tanggal = session?.scheduled_at ? fmtDate(session.scheduled_at) : ''
-    const parentName = parentProfile.full_name ?? ''
-    const firstName = parentName.split(' ')[0] ?? 'Ayah/Bunda'
+    const parentName = parentProfile?.full_name ?? ''
+    const firstName = parentName.split(' ')[0] || 'Ayah/Bunda'
 
     // ── 5. Kirim WA ──
-    const message = `📊 *Laporan Belajar EduKazia*\nHalo Kak ${firstName} 👋\nLaporan tutor untuk sesi *${studentName}*, telah tersedia ya.\n\n🗓️ Sesi: ${tanggal}\n🧾 Progress materi, perkembangan siswa, dan saran buat ortu bisa dibaca lengkap pada...\n\n↓↓↓↓↓↓\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih! 🙏`
+    const message = `📊 *Laporan Belajar EduKazia*\nHalo Kak ${firstName} 👋\nLaporan tutor untuk sesi *${studentName}*, telah tersedia ya.\n\n🗓️ Sesi: ${tanggal}\n🧾 Progress materi, perkembangan siswa, dan saran buat ortu bisa dibaca lengkap pada...\n↓↓↓↓↓↓\n\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih! 🙏`
 
     const result = await sendWhatsApp({
-      target: formatPhoneID(parentProfile.phone),
+      target: formatPhoneID(parentPhone),
       message,
     })
 
     // ── 6. Log ──
     try {
       await supabase.from('notification_logs').insert({
-        type: 'wa_laporan_ortu',
-        target: formatPhoneID(parentProfile.phone),
+        type:       'wa_laporan_ortu',
+        target:     formatPhoneID(parentPhone),
         session_id,
         student_id,
-        payload: { parentName: firstName, studentName, kelasLabel },
-        status: result.status ? 'sent' : 'failed',
-        response: result.detail ?? null,
+        payload:    { parentName: firstName, studentName, kelasLabel },
+        status:     result.status ? 'sent' : 'failed',
+        response:   result.detail ?? null,
       })
-    } catch (_) { }
+    } catch (_) {}
 
     return NextResponse.json({ sent: result.status, detail: result.detail })
   } catch (err: any) {
