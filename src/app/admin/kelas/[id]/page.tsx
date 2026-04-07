@@ -137,6 +137,9 @@ export default function KelasDetailPage() {
   const [openUnits,        setOpenUnits]        = useState<Set<string>>(new Set())
   const [classCurrentLesson, setClassCurrentLesson] = useState<number>(1)
   const [studentLessonProgress, setStudentLessonProgress] = useState<Record<string, number>>({})
+  const [progressLogs, setProgressLogs] = useState<{id: string; student_id: string | null; from_unit: number; from_lesson: number; to_unit: number; to_lesson: number; action: string; created_at: string}[]>([])
+  const [confirmDialog, setConfirmDialog] = useState<{message: string; onConfirm: () => void} | null>(null)
+  const [showJumpDropdown, setShowJumpDropdown] = useState<string | null>(null)
 
   // Session detail expand (absensi + laporan)
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
@@ -235,6 +238,31 @@ export default function KelasDetailPage() {
       setStudentProgress(map)
       setStudentLessonProgress(lessonMap)
     }
+
+    // Fetch progress logs
+    const { data: logs } = await supabase
+      .from('progress_logs')
+      .select('id, student_id, from_unit, from_lesson, to_unit, to_lesson, action, created_at')
+      .eq('class_group_id', kelasId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    setProgressLogs(logs ?? [])
+  }
+
+  async function logProgress(studentId: string | null, fromUnit: number, fromLesson: number, toUnit: number, toLesson: number, action: string) {
+    await supabase.from('progress_logs').insert({
+      class_group_id: kelasId,
+      student_id: studentId,
+      from_unit: fromUnit,
+      from_lesson: fromLesson,
+      to_unit: toUnit,
+      to_lesson: toLesson,
+      action,
+    })
+  }
+
+  function confirmAction(message: string, onConfirm: () => void) {
+    setConfirmDialog({ message, onConfirm })
   }
 
   async function saveClassProgress() {
@@ -252,29 +280,17 @@ export default function KelasDetailPage() {
     const currentUnit = studentProgress[studentId] ?? 1
 
     if (currentLesson >= totalLessons) {
-      // Semua lesson selesai → naik unit, reset lesson ke 1
-      const newUnitPos = Math.min(currentUnit + 1, units.length)
+      const newUnitPos = Math.min(currentUnit + 1, units.length + 1)
       await supabase.from('student_unit_progress')
-        .upsert({
-          student_id: studentId,
-          class_group_id: kelasId,
-          current_unit_position: newUnitPos,
-          current_lesson_position: 1,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'student_id,class_group_id' })
+        .upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: newUnitPos, current_lesson_position: 1, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
+      await logProgress(studentId, currentUnit, currentLesson, newUnitPos, 1, 'naik_unit')
       setStudentProgress(prev => ({ ...prev, [studentId]: newUnitPos }))
       setStudentLessonProgress(prev => ({ ...prev, [studentId]: 1 }))
     } else {
-      // Naik lesson
       const newLesson = currentLesson + 1
       await supabase.from('student_unit_progress')
-        .upsert({
-          student_id: studentId,
-          class_group_id: kelasId,
-          current_unit_position: currentUnit,
-          current_lesson_position: newLesson,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'student_id,class_group_id' })
+        .upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: currentUnit, current_lesson_position: newLesson, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
+      await logProgress(studentId, currentUnit, currentLesson, currentUnit, newLesson, 'naik_lesson')
       setStudentLessonProgress(prev => ({ ...prev, [studentId]: newLesson }))
     }
     setSavingProgress(false)
@@ -283,73 +299,112 @@ export default function KelasDetailPage() {
   async function advanceClassLesson(unitId: string, totalLessons: number) {
     setSavingProgress(true)
     if (classCurrentLesson >= totalLessons) {
-      // Semua lesson selesai → naik unit, reset lesson ke 1
-      const newUnit = Math.min(classCurrentUnit + 1, units.length)
-      await supabase.from('class_groups')
-        .update({ current_unit_position: newUnit, current_lesson_position: 1 })
-        .eq('id', kelasId)
+      const newUnit = Math.min(classCurrentUnit + 1, units.length + 1)
+      await supabase.from('class_groups').update({ current_unit_position: newUnit, current_lesson_position: 1 }).eq('id', kelasId)
+      await logProgress(null, classCurrentUnit, classCurrentLesson, newUnit, 1, 'naik_unit_kelas')
       setClassCurrentUnit(newUnit)
       setClassCurrentLesson(1)
     } else {
       const newLesson = classCurrentLesson + 1
-      await supabase.from('class_groups')
-        .update({ current_lesson_position: newLesson })
-        .eq('id', kelasId)
+      await supabase.from('class_groups').update({ current_lesson_position: newLesson }).eq('id', kelasId)
+      await logProgress(null, classCurrentUnit, classCurrentLesson, classCurrentUnit, newLesson, 'naik_lesson_kelas')
       setClassCurrentLesson(newLesson)
     }
     setSavingProgress(false)
   }
 
   async function unlockAllStudentLessons(studentId: string) {
-    setSavingProgress(true)
     const currentUnit = studentProgress[studentId] ?? 1
-    const newUnitPos = currentUnit + 1
-    await supabase.from('student_unit_progress')
-      .upsert({
-        student_id: studentId,
-        class_group_id: kelasId,
-        current_unit_position: newUnitPos,
-        current_lesson_position: 1,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'student_id,class_group_id' })
-    setStudentProgress(prev => ({ ...prev, [studentId]: newUnitPos }))
-    setStudentLessonProgress(prev => ({ ...prev, [studentId]: 1 }))
-    setSavingProgress(false)
+    const currentLesson = studentLessonProgress[studentId] ?? 1
+    confirmAction(`Selesaikan semua lesson di unit ini dan naik ke unit berikutnya?`, async () => {
+      setSavingProgress(true)
+      const newUnitPos = currentUnit + 1
+      await supabase.from('student_unit_progress')
+        .upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: newUnitPos, current_lesson_position: 1, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
+      await logProgress(studentId, currentUnit, currentLesson, newUnitPos, 1, 'selesaikan_unit')
+      setStudentProgress(prev => ({ ...prev, [studentId]: newUnitPos }))
+      setStudentLessonProgress(prev => ({ ...prev, [studentId]: 1 }))
+      setSavingProgress(false)
+    })
   }
 
   async function unlockAllClassLessons() {
-    setSavingProgress(true)
-    const newUnit = classCurrentUnit + 1
-    await supabase.from('class_groups')
-      .update({ current_unit_position: newUnit, current_lesson_position: 1 })
-      .eq('id', kelasId)
-    setClassCurrentUnit(newUnit)
-    setClassCurrentLesson(1)
-    setSavingProgress(false)
+    confirmAction(`Selesaikan semua lesson di unit ini dan naik ke unit berikutnya?`, async () => {
+      setSavingProgress(true)
+      const newUnit = classCurrentUnit + 1
+      await supabase.from('class_groups').update({ current_unit_position: newUnit, current_lesson_position: 1 }).eq('id', kelasId)
+      await logProgress(null, classCurrentUnit, classCurrentLesson, newUnit, 1, 'selesaikan_unit_kelas')
+      setClassCurrentUnit(newUnit)
+      setClassCurrentLesson(1)
+      setSavingProgress(false)
+    })
   }
 
   async function revertStudentTo(studentId: string, unitPos: number, lessonPos: number) {
-    setSavingProgress(true)
-    await supabase.from('student_unit_progress')
-      .upsert({
-        student_id: studentId,
-        class_group_id: kelasId,
-        current_unit_position: unitPos,
-        current_lesson_position: lessonPos,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'student_id,class_group_id' })
-    setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
-    setStudentLessonProgress(prev => ({ ...prev, [studentId]: lessonPos }))
-    setSavingProgress(false)
+    const currentUnit = studentProgress[studentId] ?? 1
+    const currentLesson = studentLessonProgress[studentId] ?? 1
+    const unitName = units.find(u => u.position === unitPos)?.unit_name ?? `Unit ${unitPos}`
+    const lessonName = lessons.find(l => {
+      const u = units.find(u => u.position === unitPos)
+      return u && l.unit_id === u.id && l.position === lessonPos
+    })?.lesson_name ?? `Lesson ${lessonPos}`
+    confirmAction(`Kembalikan progress ke "${unitName}" — ${lessonName}?`, async () => {
+      setSavingProgress(true)
+      await supabase.from('student_unit_progress')
+        .upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: unitPos, current_lesson_position: lessonPos, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
+      await logProgress(studentId, currentUnit, currentLesson, unitPos, lessonPos, 'revert')
+      setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
+      setStudentLessonProgress(prev => ({ ...prev, [studentId]: lessonPos }))
+      setSavingProgress(false)
+    })
   }
 
   async function revertClassTo(unitPos: number, lessonPos: number) {
-    setSavingProgress(true)
-    await supabase.from('class_groups')
-      .update({ current_unit_position: unitPos, current_lesson_position: lessonPos })
-      .eq('id', kelasId)
-    setClassCurrentUnit(unitPos)
-    setClassCurrentLesson(lessonPos)
+    const unitName = units.find(u => u.position === unitPos)?.unit_name ?? `Unit ${unitPos}`
+    confirmAction(`Kembalikan progress kelas ke "${unitName}" — Lesson ${lessonPos}?`, async () => {
+      setSavingProgress(true)
+      await supabase.from('class_groups').update({ current_unit_position: unitPos, current_lesson_position: lessonPos }).eq('id', kelasId)
+      await logProgress(null, classCurrentUnit, classCurrentLesson, unitPos, lessonPos, 'revert_kelas')
+      setClassCurrentUnit(unitPos)
+      setClassCurrentLesson(lessonPos)
+      setSavingProgress(false)
+    })
+  }
+
+  function jumpStudentTo(studentId: string, unitPos: number, lessonPos: number) {
+    const currentUnit = studentProgress[studentId] ?? 1
+    const currentLesson = studentLessonProgress[studentId] ?? 1
+    if (unitPos === currentUnit && lessonPos === currentLesson) return
+    const unitName = units.find(u => u.position === unitPos)?.unit_name ?? `Unit ${unitPos}`
+    confirmAction(`Pindahkan progress ke "${unitName}" — Lesson ${lessonPos}?`, async () => {
+      setSavingProgress(true)
+      await supabase.from('student_unit_progress')
+        .upsert({ student_id: studentId, class_group_id: kelasId, current_unit_position: unitPos, current_lesson_position: lessonPos, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
+      await logProgress(studentId, currentUnit, currentLesson, unitPos, lessonPos, 'jump')
+      setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
+      setStudentLessonProgress(prev => ({ ...prev, [studentId]: lessonPos }))
+      setSavingProgress(false)
+      setShowJumpDropdown(null)
+    })
+  }
+
+  async function bulkSetProgress(unitPos: number, lessonPos: number) {
+    const activeEnrollments = enrollments.filter(e => e.status === 'active')
+    if (activeEnrollments.length === 0) return
+    confirmAction(`Terapkan progress (Unit ${unitPos}, Lesson ${lessonPos}) ke semua ${activeEnrollments.length} siswa aktif?`, async () => {
+      setSavingProgress(true)
+      for (const enr of activeEnrollments) {
+        const oldUnit = studentProgress[enr.student_id] ?? 1
+        const oldLesson = studentLessonProgress[enr.student_id] ?? 1
+        await supabase.from('student_unit_progress')
+          .upsert({ student_id: enr.student_id, class_group_id: kelasId, current_unit_position: unitPos, current_lesson_position: lessonPos, updated_at: new Date().toISOString() }, { onConflict: 'student_id,class_group_id' })
+        await logProgress(enr.student_id, oldUnit, oldLesson, unitPos, lessonPos, 'bulk_set')
+        setStudentProgress(prev => ({ ...prev, [enr.student_id]: unitPos }))
+        setStudentLessonProgress(prev => ({ ...prev, [enr.student_id]: lessonPos }))
+      }
+      setSavingProgress(false)
+    })
+  }
     setSavingProgress(false)
   }
 
@@ -914,6 +969,16 @@ export default function KelasDetailPage() {
                                 {current}/{enr.sessions_total} sesi
                               </span>
                             </div>
+                            {units.length > 0 && (() => {
+                              const uPos = classType === 'Privat' ? (studentProgress[enr.student_id] ?? 1) : classCurrentUnit
+                              const lPos = classType === 'Privat' ? (studentLessonProgress[enr.student_id] ?? 1) : classCurrentLesson
+                              const unitName = units.find(u => u.position === uPos)?.unit_name
+                              const activeUnit = units.find(u => u.position === uPos)
+                              const lessonName = activeUnit ? lessons.find(l => l.unit_id === activeUnit.id && l.position === lPos)?.lesson_name : null
+                              return unitName ? (
+                                <div className="text-[10px] text-[#7B78A8] mt-0.5">📖 {unitName}{lessonName ? ` — ${lessonName}` : ''}</div>
+                              ) : null
+                            })()}
                           </div>
                           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
                             {st.label}
@@ -1273,7 +1338,41 @@ export default function KelasDetailPage() {
 
                 return (
                   <div key={enr.student_id} className="bg-white rounded-xl border border-[#E5E3FF] p-4">
-                    <p className="font-bold text-[#1A1640] mb-3">{enr.student_name}</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-bold text-[#1A1640]">{enr.student_name}</p>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowJumpDropdown(showJumpDropdown === enr.student_id ? null : enr.student_id)}
+                          className="text-[10px] px-2.5 py-1 bg-[#F0EFFF] text-[#5C4FE5] rounded-lg hover:bg-[#5C4FE5] hover:text-white transition-colors font-bold">
+                          🎯 Pindah ke...
+                        </button>
+                        {showJumpDropdown === enr.student_id && (
+                          <div className="absolute right-0 top-8 z-30 w-64 bg-white rounded-xl border border-[#E5E3FF] shadow-lg max-h-60 overflow-y-auto">
+                            {units.map(u => {
+                              const unitLessons = lessons.filter(l => l.unit_id === u.id)
+                              return (
+                                <div key={u.id}>
+                                  <div className="px-3 py-1.5 bg-[#F7F6FF] text-xs font-bold text-[#4A4580] sticky top-0">{u.unit_name}</div>
+                                  {unitLessons.length > 0 ? unitLessons.map(l => (
+                                    <button key={l.id}
+                                      onClick={() => jumpStudentTo(enr.student_id, u.position, l.position)}
+                                      className={`w-full text-left px-4 py-1.5 text-xs hover:bg-[#F0EFFF] transition-colors ${u.position === currentPos && l.position === currentLessonPos ? 'text-[#5C4FE5] font-bold bg-[#F0EFFF]' : 'text-[#1A1640]'}`}>
+                                      {l.lesson_name} {u.position === currentPos && l.position === currentLessonPos ? '← saat ini' : ''}
+                                    </button>
+                                  )) : (
+                                    <button
+                                      onClick={() => jumpStudentTo(enr.student_id, u.position, 1)}
+                                      className={`w-full text-left px-4 py-1.5 text-xs hover:bg-[#F0EFFF] transition-colors ${u.position === currentPos ? 'text-[#5C4FE5] font-bold bg-[#F0EFFF]' : 'text-gray-400'}`}>
+                                      (tanpa lesson)
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div className="space-y-1.5">
                       {chapters.map(chapter => {
                         const chapterUnits = chapterMap.get(chapter.id) ?? []
@@ -1309,6 +1408,54 @@ export default function KelasDetailPage() {
                 )
               })}
             </div>
+
+            {/* Bulk action for Privat */}
+            {enrollments.filter(e => e.status === 'active').length > 1 && (
+              <div className="bg-[#F7F6FF] rounded-xl border border-[#E5E3FF] p-3 flex items-center justify-between">
+                <span className="text-xs text-[#4A4580] font-semibold">🎯 Terapkan progress yang sama ke semua siswa</span>
+                <div className="flex gap-2">
+                  {(() => {
+                    const firstStudent = enrollments.find(e => e.status === 'active')
+                    if (!firstStudent) return null
+                    const uPos = studentProgress[firstStudent.student_id] ?? 1
+                    const lPos = studentLessonProgress[firstStudent.student_id] ?? 1
+                    const unitName = units.find(u => u.position === uPos)?.unit_name ?? `Unit ${uPos}`
+                    return (
+                      <button onClick={() => bulkSetProgress(uPos, lPos)} disabled={savingProgress}
+                        className="text-[10px] px-3 py-1.5 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-bold">
+                        Samakan ke: {unitName}, L{lPos}
+                      </button>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Progress History */}
+            {progressLogs.length > 0 && (
+              <div className="bg-white rounded-xl border border-[#E5E3FF] p-4">
+                <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide mb-2">📋 Riwayat Perubahan</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {progressLogs.map(log => {
+                    const studentName = log.student_id ? enrollments.find(e => e.student_id === log.student_id)?.student_name ?? '—' : 'Kelas'
+                    const actionLabels: Record<string, string> = {
+                      naik_lesson: '⬆️ Naik Lesson', naik_unit: '⬆️ Naik Unit', selesaikan_unit: '✅ Selesaikan Unit',
+                      revert: '↩ Kembali', jump: '🎯 Pindah', bulk_set: '👥 Bulk Set',
+                      naik_lesson_kelas: '⬆️ Naik Lesson', naik_unit_kelas: '⬆️ Naik Unit',
+                      selesaikan_unit_kelas: '✅ Selesaikan Unit', revert_kelas: '↩ Kembali',
+                    }
+                    return (
+                      <div key={log.id} className="flex items-center gap-2 text-[10px] text-[#7B78A8] py-1 border-b border-[#F0EFFF] last:border-0">
+                        <span className="font-semibold text-[#1A1640]">{studentName}</span>
+                        <span>{actionLabels[log.action] ?? log.action}</span>
+                        <span>U{log.from_unit}.L{log.from_lesson} → U{log.to_unit}.L{log.to_lesson}</span>
+                        <span className="ml-auto">{new Date(log.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           ) : (
             /* Kelas Grup */
             <div className="bg-white rounded-xl border border-[#E5E3FF] p-4">
@@ -1638,6 +1785,25 @@ export default function KelasDetailPage() {
                 {absensiSaving ? (
                   <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"/> Menyimpan...</>
                 ) : 'Simpan Absensi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl border border-[#E5E3FF] shadow-xl p-6 max-w-sm w-full mx-4">
+            <p className="text-sm font-semibold text-[#1A1640] mb-4">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDialog(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#4A4580] border border-[#E5E3FF] hover:bg-[#F7F6FF] transition-colors">
+                Batal
+              </button>
+              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null) }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-[#5C4FE5] hover:bg-[#4338CA] transition-colors">
+                Ya, Lanjutkan
               </button>
             </div>
           </div>
