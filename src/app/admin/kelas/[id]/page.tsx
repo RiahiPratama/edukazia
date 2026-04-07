@@ -142,15 +142,6 @@ export default function KelasDetailPage() {
   const [showPerpanjang, setShowPerpanjang] = useState(false)
   const [perpanjangEnr,  setPerpanjangEnr]  = useState<Enrollment | null>(null)
 
-  // Buat Tagihan state
-  const [showBuatTagihan, setShowBuatTagihan] = useState(false)
-  const [tagihanForm, setTagihanForm] = useState({
-    student_id: '', enrollment_id: '', base_amount: '', registration_fee: '0',
-    discount_amount: '0', discount_note: '', method: 'transfer', period_label: '', is_new_student: false,
-  })
-  const [tagihanSaving, setTagihanSaving] = useState(false)
-  const [tagihanError, setTagihanError] = useState('')
-
   // Level state
   const [classLevels,     setClassLevels]     = useState<ClassGroupLevel[]>([])
   const [availableLevels, setAvailableLevels] = useState<Level[]>([])
@@ -245,52 +236,6 @@ export default function KelasDetailPage() {
       }, { onConflict: 'student_id,class_group_id' })
     setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
     setSavingProgress(false)
-  }
-
-  async function handleBuatTagihan() {
-    setTagihanError('')
-    const base = Number(tagihanForm.base_amount) || 0
-    const regFee = Number(tagihanForm.registration_fee) || 0
-    const disc = Number(tagihanForm.discount_amount) || 0
-    const total = base + regFee - disc
-
-    if (!tagihanForm.enrollment_id) { setTagihanError('Pilih siswa terlebih dahulu'); return }
-    if (base <= 0) { setTagihanError('Biaya kursus harus lebih dari 0'); return }
-    if (total <= 0) { setTagihanError('Total tagihan harus lebih dari 0'); return }
-
-    setTagihanSaving(true)
-    try {
-      const enrollment = enrollments.find(e => e.id === tagihanForm.enrollment_id)
-      if (!enrollment) throw new Error('Enrollment tidak ditemukan')
-
-      const { error: insertErr } = await supabase.from('payments').insert({
-        student_id: enrollment.student_id,
-        enrollment_id: tagihanForm.enrollment_id,
-        amount: total,
-        base_amount: base,
-        registration_fee: regFee,
-        discount_amount: disc,
-        discount_note: tagihanForm.discount_note || null,
-        method: tagihanForm.method,
-        status: 'paid',
-        period_label: tagihanForm.period_label || null,
-        is_new_student: tagihanForm.is_new_student,
-        paid_at: new Date().toISOString(),
-      })
-
-      if (insertErr) throw new Error(insertErr.message)
-
-      setShowBuatTagihan(false)
-      setTagihanForm({
-        student_id: '', enrollment_id: '', base_amount: '', registration_fee: '0',
-        discount_amount: '0', discount_note: '', method: 'transfer', period_label: '', is_new_student: false,
-      })
-      fetchAll()
-    } catch (err: any) {
-      setTagihanError(err.message)
-    } finally {
-      setTagihanSaving(false)
-    }
   }
 
   async function fetchAll() {
@@ -762,7 +707,7 @@ export default function KelasDetailPage() {
                           enr.session_start_offset + (enr.attended_count ?? 0),
                           enr.sessions_total
                         )
-                        const pct = Math.min(((enr.attended_count ?? 0) / enr.sessions_total) * 100, 100)
+                        const pct = (enr.attended_count ?? 0) === 0 ? 0 : Math.min((Math.max(0, current - 1) / enr.sessions_total) * 100, 100)
                         const isActive  = enr.status === 'active'
                         const isRenewed = enr.status === 'renewed'
                         const barColor  = isRenewed ? 'bg-[#C4BFFF]' : 'bg-[#5C4FE5]'
@@ -816,7 +761,7 @@ export default function KelasDetailPage() {
                         enr.session_start_offset + (enr.attended_count ?? 0),
                         enr.sessions_total
                       )
-                      const pct     = Math.min(((enr.attended_count ?? 0) / enr.sessions_total) * 100, 100)
+                      const pct     = (enr.attended_count ?? 0) === 0 ? 0 : Math.min((Math.max(0, current - 1) / enr.sessions_total) * 100, 100)
                       const isActive = enr.status === 'active'
                       const st = isActive ? { label: 'Aktif', cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
                                : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
@@ -1035,21 +980,16 @@ export default function KelasDetailPage() {
       {/* Tab: Pembayaran */}
       {activeTab === 'pembayaran' && (
         <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-          {/* Header with Buat Tagihan button */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[#E5E3FF] bg-[#F7F6FF]">
-            <span className="text-xs font-bold text-[#7B78A8] uppercase tracking-wider">Daftar Pembayaran</span>
-            <button onClick={() => setShowBuatTagihan(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#5C4FE5] text-white text-xs font-bold hover:bg-[#4338CA] transition">
-              <Plus size={12}/> Buat Tagihan
-            </button>
-          </div>
           {payments.length === 0 ? (
             <div className="px-5 py-12 text-center">
               <div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3">
                 <CreditCard size={20} className="text-[#C4BFFF]"/>
               </div>
               <p className="text-sm text-[#7B78A8] font-semibold">Belum ada data pembayaran</p>
-              <p className="text-xs text-[#7B78A8] mt-1">Klik tombol &quot;Buat Tagihan&quot; di atas untuk mencatat pembayaran</p>
+              <Link href="/admin/pembayaran"
+                className="mt-3 inline-block text-sm text-[#5C4FE5] font-semibold hover:underline">
+                + Buat tagihan di menu Pembayaran
+              </Link>
             </div>
           ) : (
             payments.map((p, idx) => {
@@ -1342,153 +1282,6 @@ export default function KelasDetailPage() {
               </div>
             ))
           )}
-        </div>
-      )}
-
-      {/* Modal Buat Tagihan */}
-      {showBuatTagihan && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF]">
-              <div>
-                <h3 className="font-bold text-[#1A1640] text-sm" style={{fontFamily:'Sora,sans-serif'}}>Buat Tagihan Pembayaran</h3>
-                <p className="text-xs text-[#7B78A8] mt-0.5">{kelas?.label}</p>
-              </div>
-              <button onClick={() => { setShowBuatTagihan(false); setTagihanError('') }}
-                className="p-1.5 rounded-lg hover:bg-[#F7F6FF] text-[#7B78A8]"><X size={16}/></button>
-            </div>
-            <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
-              {/* Pilih Siswa */}
-              <div>
-                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">
-                  Siswa <span className="text-red-500">*</span>
-                </label>
-                <select value={tagihanForm.enrollment_id}
-                  onChange={e => {
-                    const enr = enrollments.find(en => en.id === e.target.value)
-                    setTagihanForm(f => ({ ...f, enrollment_id: e.target.value, student_id: enr?.student_id ?? '' }))
-                  }}
-                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
-                  <option value="">— Pilih siswa —</option>
-                  {enrollments.filter(e => e.status === 'active').map(e => (
-                    <option key={e.id} value={e.id}>{e.student_name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Biaya Kursus */}
-              <div>
-                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">
-                  Biaya Kursus (Rp) <span className="text-red-500">*</span>
-                </label>
-                <input type="number" min="0" value={tagihanForm.base_amount}
-                  onChange={e => setTagihanForm(f => ({ ...f, base_amount: e.target.value }))}
-                  placeholder="500000"
-                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-              </div>
-
-              {/* Biaya Pendaftaran + Siswa Baru */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Biaya Pendaftaran</label>
-                  <input type="number" min="0" value={tagihanForm.registration_fee}
-                    onChange={e => setTagihanForm(f => ({ ...f, registration_fee: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-                </div>
-                <div className="flex items-end pb-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={tagihanForm.is_new_student}
-                      onChange={e => setTagihanForm(f => ({ ...f, is_new_student: e.target.checked }))}
-                      className="w-4 h-4 rounded border-[#E5E3FF] text-[#5C4FE5] focus:ring-[#5C4FE5]"/>
-                    <span className="text-xs font-semibold text-[#4A4580]">Siswa Baru</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Diskon */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Diskon (Rp)</label>
-                  <input type="number" min="0" value={tagihanForm.discount_amount}
-                    onChange={e => setTagihanForm(f => ({ ...f, discount_amount: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Keterangan Diskon</label>
-                  <input type="text" value={tagihanForm.discount_note}
-                    onChange={e => setTagihanForm(f => ({ ...f, discount_note: e.target.value }))}
-                    placeholder="Diskon promo"
-                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-                </div>
-              </div>
-
-              {/* Metode + Periode */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Metode Bayar</label>
-                  <select value={tagihanForm.method}
-                    onChange={e => setTagihanForm(f => ({ ...f, method: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
-                    <option value="transfer">Transfer Bank</option>
-                    <option value="cash">Tunai</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Label Periode</label>
-                  <input type="text" value={tagihanForm.period_label}
-                    onChange={e => setTagihanForm(f => ({ ...f, period_label: e.target.value }))}
-                    placeholder="April 2026"
-                    className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
-                </div>
-              </div>
-
-              {/* Preview Total */}
-              {tagihanForm.base_amount && (
-                <div className="bg-[#F0EFFF] rounded-xl p-3 border border-[#E5E3FF]">
-                  <div className="flex justify-between text-xs text-[#4A4580]">
-                    <span>Biaya Kursus</span>
-                    <span>{fmtRp(Number(tagihanForm.base_amount) || 0)}</span>
-                  </div>
-                  {Number(tagihanForm.registration_fee) > 0 && (
-                    <div className="flex justify-between text-xs text-[#4A4580] mt-1">
-                      <span>Biaya Pendaftaran</span>
-                      <span>{fmtRp(Number(tagihanForm.registration_fee))}</span>
-                    </div>
-                  )}
-                  {Number(tagihanForm.discount_amount) > 0 && (
-                    <div className="flex justify-between text-xs text-emerald-600 mt-1">
-                      <span>Diskon</span>
-                      <span>-{fmtRp(Number(tagihanForm.discount_amount))}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm font-bold text-[#5C4FE5] mt-2 pt-2 border-t border-[#E5E3FF]">
-                    <span>Total</span>
-                    <span>{fmtRp(
-                      (Number(tagihanForm.base_amount) || 0) +
-                      (Number(tagihanForm.registration_fee) || 0) -
-                      (Number(tagihanForm.discount_amount) || 0)
-                    )}</span>
-                  </div>
-                </div>
-              )}
-
-              {tagihanError && (
-                <p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-xl border border-red-200">{tagihanError}</p>
-              )}
-            </div>
-            <div className="flex gap-2 px-5 py-4 border-t border-[#E5E3FF]">
-              <button onClick={() => { setShowBuatTagihan(false); setTagihanError('') }}
-                className="flex-1 py-2.5 border border-[#E5E3FF] text-[#7B78A8] font-semibold rounded-xl text-sm hover:bg-[#F7F6FF] transition">
-                Batal
-              </button>
-              <button onClick={handleBuatTagihan} disabled={tagihanSaving}
-                className="flex-1 py-2.5 bg-[#5C4FE5] hover:bg-[#4338CA] text-white font-bold rounded-xl text-sm transition disabled:opacity-60 flex items-center justify-center gap-2">
-                {tagihanSaving ? (
-                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"/> Menyimpan...</>
-                ) : (<><Check size={14}/> Simpan Tagihan</>)}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
