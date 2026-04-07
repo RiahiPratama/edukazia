@@ -328,6 +328,31 @@ export default function KelasDetailPage() {
     setSavingProgress(false)
   }
 
+  async function revertStudentTo(studentId: string, unitPos: number, lessonPos: number) {
+    setSavingProgress(true)
+    await supabase.from('student_unit_progress')
+      .upsert({
+        student_id: studentId,
+        class_group_id: kelasId,
+        current_unit_position: unitPos,
+        current_lesson_position: lessonPos,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'student_id,class_group_id' })
+    setStudentProgress(prev => ({ ...prev, [studentId]: unitPos }))
+    setStudentLessonProgress(prev => ({ ...prev, [studentId]: lessonPos }))
+    setSavingProgress(false)
+  }
+
+  async function revertClassTo(unitPos: number, lessonPos: number) {
+    setSavingProgress(true)
+    await supabase.from('class_groups')
+      .update({ current_unit_position: unitPos, current_lesson_position: lessonPos })
+      .eq('id', kelasId)
+    setClassCurrentUnit(unitPos)
+    setClassCurrentLesson(lessonPos)
+    setSavingProgress(false)
+  }
+
   async function saveStudentProgress(studentId: string, unitPos: number) {
     setSavingProgress(true)
     await supabase.from('student_unit_progress')
@@ -1185,6 +1210,14 @@ export default function KelasDetailPage() {
                           {hasLessons && <span className="text-[10px] text-[#7B78A8]">({unitLessons.length} lesson)</span>}
                         </div>
                         <div className="flex items-center gap-2">
+                          {isDone && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); revertStudentTo(enr.student_id, unit.position, 1) }}
+                              disabled={savingProgress}
+                              className="text-[10px] px-2 py-0.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors font-semibold">
+                              ↩ Kembali
+                            </button>
+                          )}
                           {isActive && !hasLessons && (
                             <button
                               onClick={(e) => { e.stopPropagation(); saveStudentProgress(enr.student_id, Math.min(currentPos + 1, units.length)) }}
@@ -1210,9 +1243,12 @@ export default function KelasDetailPage() {
                           {unitLessons.map(lesson => {
                             const lessonDone   = isDone || (isActive && lesson.position < currentLessonPos)
                             const lessonActive = isActive && lesson.position === currentLessonPos
+                            const canRevert    = isActive && lessonDone
                             return (
-                              <div key={lesson.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
-                                lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'}`}>
+                              <div key={lesson.id}
+                                onClick={() => canRevert && revertStudentTo(enr.student_id, unit.position, lesson.position)}
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                                lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'} ${canRevert ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}`}>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs">{lessonDone ? '✅' : lessonActive ? '▶️' : '🔒'}</span>
                                   <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.lesson_name}</span>
@@ -1225,6 +1261,7 @@ export default function KelasDetailPage() {
                                     {currentLessonPos >= unitLessons.length ? 'Naik Unit →' : 'Naik Lesson →'}
                                   </button>
                                 )}
+                                {canRevert && <span className="text-[10px] text-green-600 opacity-50">↩ klik untuk kembali</span>}
                               </div>
                             )
                           })}
@@ -1347,9 +1384,12 @@ export default function KelasDetailPage() {
                                     {unitLessons.map(lesson => {
                                       const lessonDone   = isDone || (isActive && lesson.position < classCurrentLesson)
                                       const lessonActive = isActive && lesson.position === classCurrentLesson
+                                      const canRevert    = isActive && lessonDone
                                       return (
-                                        <div key={lesson.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
-                                          lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'}`}>
+                                        <div key={lesson.id}
+                                          onClick={() => canRevert && revertClassTo(unit.position, lesson.position)}
+                                          className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                                          lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'} ${canRevert ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}`}>
                                           <div className="flex items-center gap-2">
                                             <span className="text-xs">{lessonDone ? '✅' : lessonActive ? '▶️' : '🔒'}</span>
                                             <span className={`font-medium ${lessonActive ? 'text-[#5C4FE5]' : ''}`}>{lesson.lesson_name}</span>
@@ -1362,6 +1402,7 @@ export default function KelasDetailPage() {
                                               {classCurrentLesson >= unitLessons.length ? 'Naik Unit →' : 'Naik Lesson →'}
                                             </button>
                                           )}
+                                          {canRevert && <span className="text-[10px] text-green-600 opacity-50">↩ klik untuk kembali</span>}
                                         </div>
                                       )
                                     })}
