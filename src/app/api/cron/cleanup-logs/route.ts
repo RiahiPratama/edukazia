@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   // Count sebelum hapus
   const { count } = await supabase
     .from('notification_logs')
-    .select('id', { count: 'exact', head: true })
+    .select('*', { count: 'exact', head: true })
     .lt('created_at', cutoffISO)
 
   // Hapus log lama
