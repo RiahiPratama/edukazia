@@ -145,7 +145,7 @@ export async function GET(req: Request) {
   const results: { sessionId: string; tutor: string; status: boolean }[] = []
 
   for (const r of reminders) {
-    const message = `📋 *Reminder EduKazia*\n\nHalo ${r.tutorName}! 👋\n\nKelas *${r.kelasLabel}* (${r.courseName}) akan selesai dalam 10 menit.\n\n✅ Jangan lupa isi *absensi siswa* ya!\n👉 app.edukazia.com/tutor/absensi\n\nTerima kasih! 🙏`
+    const message = `📋 *Reminder EduKazia*\nHalo Kak ${r.tutorName}! 👋\nKelas *${r.kelasLabel}* akan selesai dalam 10 menit lagi.\n\n✅ Jangan lupa isi *absensi siswa* ya!\n\n👉 app.edukazia.com/tutor/absensi\n\nTerima kasih! 🙏`
 
     const res = await sendWhatsApp({
       target: formatPhoneID(r.tutorPhone),
