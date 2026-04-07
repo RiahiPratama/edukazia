@@ -303,7 +303,7 @@ export default function KelasDetailPage() {
   async function unlockAllStudentLessons(studentId: string) {
     setSavingProgress(true)
     const currentUnit = studentProgress[studentId] ?? 1
-    const newUnitPos = Math.min(currentUnit + 1, units.length)
+    const newUnitPos = currentUnit + 1
     await supabase.from('student_unit_progress')
       .upsert({
         student_id: studentId,
@@ -319,7 +319,7 @@ export default function KelasDetailPage() {
 
   async function unlockAllClassLessons() {
     setSavingProgress(true)
-    const newUnit = Math.min(classCurrentUnit + 1, units.length)
+    const newUnit = classCurrentUnit + 1
     await supabase.from('class_groups')
       .update({ current_unit_position: newUnit, current_lesson_position: 1 })
       .eq('id', kelasId)
@@ -1196,8 +1196,8 @@ export default function KelasDetailPage() {
                           {isActive && hasLessons && (
                             <button
                               onClick={(e) => { e.stopPropagation(); unlockAllStudentLessons(enr.student_id) }}
-                              disabled={savingProgress || currentPos >= units.length}
-                              className="text-[10px] px-2.5 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-40 font-semibold">
+                              disabled={savingProgress}
+                              className="text-[10px] px-2.5 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-60 font-bold shadow-sm">
                               Selesaikan Unit ✓
                             </button>
                           )}
@@ -1335,8 +1335,8 @@ export default function KelasDetailPage() {
                                   {isActive && hasLessons && (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); unlockAllClassLessons() }}
-                                      disabled={savingProgress || classCurrentUnit >= units.length}
-                                      className="text-[10px] px-2.5 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-40 font-semibold">
+                                      disabled={savingProgress}
+                                      className="text-[10px] px-2.5 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-60 font-bold shadow-sm">
                                       Selesaikan Unit ✓
                                     </button>
                                   )}
