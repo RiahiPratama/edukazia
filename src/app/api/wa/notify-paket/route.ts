@@ -7,7 +7,8 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
  * 
  * Dipanggil setelah absensi disimpan
  * Cek sisa sesi, kirim WA ke ortu kalau sisa 2, 1, atau 0
- * SKIP kalau sudah ada enrollment baru (P2) di class group yang sama
+ * SKIP kalau sudah ada enrollment baru (P2)
+ * Handle Diri Sendiri: template personal "kamu" bukan nama orang ketiga
  * 
  * Body: { class_group_id, student_ids: string[] }
  */
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
 
     const kursusLabel = [courseData?.name, ctData?.name].filter(Boolean).join(' · ')
 
-    // 2. Ambil SEMUA enrollments aktif (untuk cek duplikat enrollment / perpanjangan)
+    // 2. Ambil SEMUA enrollments aktif
     const { data: allEnrollments } = await supabase
       .from('enrollments')
       .select('id, student_id, session_start_offset, sessions_total, enrolled_at')
@@ -93,8 +94,9 @@ export async function POST(req: Request) {
       if (!student) continue
 
       const studentName = (profMap[student.profile_id] as any)?.full_name ?? 'Siswa'
+      const isDiriSendiri = student.parent_profile_id === student.profile_id
 
-      // CEK: ada enrollment lebih baru? → ortu sudah perpanjang, skip
+      // CEK: ada enrollment lebih baru? → skip
       const hasNewerEnrollment = (allEnrollments ?? []).some(e =>
         e.student_id === enr.student_id &&
         e.id !== enr.id &&
@@ -125,7 +127,7 @@ export async function POST(req: Request) {
         continue
       }
 
-      // Cek duplikat per enrollment (anti-spam)
+      // Anti-spam per enrollment
       const notifType = sisa === 0 ? 'wa_paket_selesai' : `wa_paket_sisa_${sisa}`
       const { data: existing } = await supabase
         .from('notification_logs')
@@ -140,7 +142,7 @@ export async function POST(req: Request) {
         continue
       }
 
-      // Data ortu
+      // Data penerima
       const parentId = student.parent_profile_id ?? student.profile_id
       const parentProf = profMap[parentId] as any
       const parentPhone = parentProf?.phone || student.relation_phone
@@ -148,14 +150,21 @@ export async function POST(req: Request) {
 
       const firstName = (parentProf?.full_name ?? '').split(' ')[0] || 'Ayah/Bunda'
 
+      // Template pesan — Diri Sendiri vs Ortu
       let message = ''
 
       if (sisa === 2) {
-        message = `📚 *Info Paket EduKazia*\n\nHalo Kak ${firstName} 👋\nPaket *${studentName}* untuk kursus\n*(${kursusLabel})*, tersisa\n*2 pertemuan lagi* di periode ini.\n\nYuk perpanjang sekarang biar progress\nbelajarnya tidak terputus! 💪\n\n📋 Cek laporan belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nCukup balas pesan ini:\n*"Perpanjang Paket Min"*\ndan admin EduKazia siap proses! 😊\n\n\nTerima kasih! 🙏`
+        message = isDiriSendiri
+          ? `📚 *Info Paket EduKazia*\n\nHalo Kak ${firstName} 👋\nPaket kamu untuk kursus\n*(${kursusLabel})*, tersisa\n*2 pertemuan lagi* di periode ini.\n\nYuk perpanjang sekarang biar progress\nbelajarnya tidak terputus! 💪\n\n📋 Cek laporan belajar kamu di:\n🔗 app.edukazia.com/ortu/dashboard\n\nCukup balas pesan ini:\n*"Perpanjang Paket Min"*\ndan admin EduKazia siap proses! 😊\n\n\nTerima kasih! 🙏`
+          : `📚 *Info Paket EduKazia*\n\nHalo Kak ${firstName} 👋\nPaket *${studentName}* untuk kursus\n*(${kursusLabel})*, tersisa\n*2 pertemuan lagi* di periode ini.\n\nYuk perpanjang sekarang biar progress\nbelajarnya tidak terputus! 💪\n\n📋 Cek laporan belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nCukup balas pesan ini:\n*"Perpanjang Paket Min"*\ndan admin EduKazia siap proses! 😊\n\n\nTerima kasih! 🙏`
       } else if (sisa === 1) {
-        message = `⏳ *Sisa 1 Sesi Lagi!*\n\nHalo Kak ${firstName} 👋\n\nPaket *${studentName}* untuk kursus\n*(${kursusLabel})* hanya tersisa\n*1 sesi pertemuan terakhir* di periode ini.\n\n📋 Cek laporan belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nCukup balas pesan ini:\n*"Perpanjang Paket Berikutnya Min"*\ndan admin EduKazia siap proses! 😊\n\nTerima kasih! 🙏`
+        message = isDiriSendiri
+          ? `⏳ *Sisa 1 Sesi Lagi!*\n\nHalo Kak ${firstName} 👋\n\nPaket kamu untuk kursus\n*(${kursusLabel})* hanya tersisa\n*1 sesi pertemuan terakhir* di periode ini.\n\n📋 Cek laporan belajar kamu di:\n🔗 app.edukazia.com/ortu/dashboard\n\nCukup balas pesan ini:\n*"Perpanjang Paket Berikutnya Min"*\ndan admin EduKazia siap proses! 😊\n\nTerima kasih! 🙏`
+          : `⏳ *Sisa 1 Sesi Lagi!*\n\nHalo Kak ${firstName} 👋\n\nPaket *${studentName}* untuk kursus\n*(${kursusLabel})* hanya tersisa\n*1 sesi pertemuan terakhir* di periode ini.\n\n📋 Cek laporan belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nCukup balas pesan ini:\n*"Perpanjang Paket Berikutnya Min"*\ndan admin EduKazia siap proses! 😊\n\nTerima kasih! 🙏`
       } else {
-        message = `🎓 *Paket Selesai!*\nHalo Kak ${firstName}. 👋\n\nSelamat! *${studentName}* telah\nmenyelesaikan kursus *(${kursusLabel})*\ndengan tuntas untuk periode ini! 🎉\n\n📋 Cek laporan belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nLanjut ke periode berikutnya?\nProgress yang sudah dibangun sayang\nkalau berhenti sekarang! 🚀\n\nJika Kak ${firstName} berkenan,\nmaka Admin buatkan nota *"Perpanjangan paket"* ${studentName}.\n\nCukup balas pesan ini:\n*"Oke Min, Buatkan Notanya."*\ndan admin EduKazia langsung proses! 😊\n\nTerima kasih atas kepercayaannya! 🙏`
+        message = isDiriSendiri
+          ? `🎓 *Paket Selesai!*\nHalo Kak ${firstName}. 👋\n\nSelamat! Kamu telah menyelesaikan kursus\n*(${kursusLabel})*\ndengan tuntas untuk periode ini! 🎉\n\n📋 Cek laporan belajar kamu di:\n🔗 app.edukazia.com/ortu/dashboard\n\nLanjut ke periode berikutnya?\nProgress yang sudah dibangun sayang\nkalau berhenti sekarang! 🚀\n\nCukup balas pesan ini:\n*"Oke Min, Buatkan Notanya."*\ndan admin EduKazia langsung proses! 😊\n\nTerima kasih atas kepercayaannya! 🙏`
+          : `🎓 *Paket Selesai!*\nHalo Kak ${firstName}. 👋\n\nSelamat! *${studentName}* telah\nmenyelesaikan kursus *(${kursusLabel})*\ndengan tuntas untuk periode ini! 🎉\n\n📋 Cek laporan belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nLanjut ke periode berikutnya?\nProgress yang sudah dibangun sayang\nkalau berhenti sekarang! 🚀\n\nJika Kak ${firstName} berkenan,\nmaka Admin buatkan nota *"Perpanjangan paket"* ${studentName}.\n\nCukup balas pesan ini:\n*"Oke Min, Buatkan Notanya."*\ndan admin EduKazia langsung proses! 😊\n\nTerima kasih atas kepercayaannya! 🙏`
       }
 
       const res = await sendWhatsApp({
@@ -171,7 +180,7 @@ export async function POST(req: Request) {
           target:     formatPhoneID(parentPhone),
           student_id: enr.student_id,
           session_id: enr.id,
-          payload:    { parentName: firstName, studentName, kelasLabel: cg?.label, kursusLabel, sisa },
+          payload:    { parentName: firstName, studentName, kelasLabel: cg?.label, kursusLabel, sisa, isDiriSendiri },
           status:     res.status ? 'sent' : 'failed',
           response:   res.detail ?? null,
         })

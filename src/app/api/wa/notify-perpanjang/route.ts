@@ -5,7 +5,8 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
 /**
  * POST /api/wa/notify-perpanjang
  * 
- * Kirim WA ke ortu saat admin membuat perpanjangan paket
+ * Kirim WA ke ortu/siswa saat admin membuat perpanjangan paket
+ * Handle Diri Sendiri: template personal "kamu"
  * Body: { student_id, class_group_id, sessions_total }
  */
 
@@ -68,9 +69,12 @@ export async function POST(req: Request) {
 
     const firstName = (parentProf?.full_name ?? '').split(' ')[0] || 'Ayah/Bunda'
     const totalSesi = sessions_total ?? 8
+    const isDiriSendiri = student.parent_profile_id === student.profile_id
 
     // 4. Kirim WA
-    const message = `🎉 *Perpanjangan Paket Berhasil!*\n\nHalo Kak ${firstName}. 👋\n\nPaket baru *${studentName}* untuk kursus\n*(${kursusLabel})* sudah diproses! ✅\n\n📚 Jumlah sesi: *${totalSesi} pertemuan*\n🗓️ Jadwal akan dilanjutkan otomatis\n\n📋 Pantau jadwal & progress belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih atas kepercayaannya!`
+    const message = isDiriSendiri
+      ? `🎉 *Perpanjangan Paket Berhasil!*\n\nHalo Kak ${firstName}. 👋\n\nPaket baru kamu untuk kursus\n*(${kursusLabel})* sudah diproses! ✅\n\n📚 Jumlah sesi: *${totalSesi} pertemuan*\n🗓️ Jadwal akan dilanjutkan otomatis\n\n📋 Pantau jadwal & progress belajar kamu di:\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih atas kepercayaannya!`
+      : `🎉 *Perpanjangan Paket Berhasil!*\n\nHalo Kak ${firstName}. 👋\n\nPaket baru *${studentName}* untuk kursus\n*(${kursusLabel})* sudah diproses! ✅\n\n📚 Jumlah sesi: *${totalSesi} pertemuan*\n🗓️ Jadwal akan dilanjutkan otomatis\n\n📋 Pantau jadwal & progress belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih atas kepercayaannya!`
 
     const result = await sendWhatsApp({
       target: formatPhoneID(parentPhone),
@@ -83,7 +87,7 @@ export async function POST(req: Request) {
         type:       'wa_perpanjang_paket',
         target:     formatPhoneID(parentPhone),
         student_id,
-        payload:    { parentName: firstName, studentName, kelasLabel: cg?.label, kursusLabel, totalSesi },
+        payload:    { parentName: firstName, studentName, kelasLabel: cg?.label, kursusLabel, totalSesi, isDiriSendiri },
         status:     result.status ? 'sent' : 'failed',
         response:   result.detail ?? null,
       })

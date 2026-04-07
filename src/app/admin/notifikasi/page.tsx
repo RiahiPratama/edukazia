@@ -11,7 +11,8 @@ const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> 
   wa_paket_sisa_2:     { label: 'Sisa 2 Sesi',       color: '#633806', bg: '#FAEEDA' },
   wa_paket_sisa_1:     { label: 'Sisa 1 Sesi',       color: '#72243E', bg: '#FBEAF0' },
   wa_paket_selesai:    { label: 'Paket Selesai',      color: '#791F1F', bg: '#FCEBEB' },
-  wa_perpanjang_paket: { label: 'Perpanjangan',       color: '#166534', bg: '#DCFCE7' },
+  wa_perpanjang_paket:      { label: 'Perpanjangan',       color: '#166534', bg: '#DCFCE7' },
+  wa_reminder_kelas_siswa: { label: 'Reminder Siswa',     color: '#7C3AED', bg: '#EDE9FE' },
 }
 
 const STATUS_STYLES: Record<string, { label: string; color: string; bg: string }> = {
