@@ -7,8 +7,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
-  Layers, CreditCard, Coins, FolderOpen, Globe, LogOut, Menu, Globe2,
-  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText, Library
+  Layers, CreditCard, FolderOpen, Globe, LogOut, Menu, Globe2,
+  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText, Library, Wallet
 } from 'lucide-react'
 
 // Nav structure dengan sub-menu
@@ -33,8 +33,9 @@ const navGroups = [
     { href: '/admin/pustaka', label: 'Pustaka', icon: Library },
   ]},
   { group: 'Keuangan', items: [
-    { href: '/admin/pembayaran', label: 'Pendapatan',   icon: TrendingUp },
-    { href: '/admin/honor',      label: 'Pengeluaran',  icon: TrendingDown },
+    { href: '/admin/keuangan',             label: 'Ringkasan',    icon: Wallet },
+    { href: '/admin/keuangan/pendapatan',  label: 'Pendapatan',   icon: TrendingUp },
+    { href: '/admin/keuangan/pengeluaran', label: 'Pengeluaran',  icon: TrendingDown },
   ]},
   { group: 'Sistem', items: [
     { href: '/admin/materi',  label: 'Bank Materi',    icon: FolderOpen },
@@ -55,6 +56,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   function isActive(href: string) {
     if (href === '/admin/dashboard') return pathname === '/admin/dashboard'
+    if (href === '/admin/keuangan') return pathname === '/admin/keuangan'
     return pathname.startsWith(href)
   }
 
