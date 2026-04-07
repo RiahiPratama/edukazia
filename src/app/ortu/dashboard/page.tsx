@@ -116,7 +116,7 @@ export default async function OrtuDashboardPage() {
       : Promise.resolve({ data: [] }),
     allCompletedSessions.length > 0
       ? supabase.from('session_reports').select('session_id, student_id, materi, perkembangan, saran_ortu, recording_url, created_at')
-          .in('session_id', allCompletedSessions.slice(0, 20))
+          .in('session_id', allCompletedSessions.slice(0, 20).map((s: any) => s.id))
           .in('student_id', studentIds)
           .order('created_at', { ascending: false })
           .limit(10)

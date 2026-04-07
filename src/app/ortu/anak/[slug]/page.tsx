@@ -337,6 +337,18 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
             )
             const total    = e.sessions_total ?? 8
 
+            // Bar visual: offset-1 + completed (bar selalu 1 di belakang teks)
+            const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+            const hasScheduledToday = (todaySessions ?? []).some((s: any) =>
+              s.class_group_id === e.class_group_id
+            )
+            const rawBar = e.session_start_offset === 0
+              ? Math.max(completedInCG - 1, 0)
+              : Math.max(((e.session_start_offset ?? 1) - 1) + completedInCG, 0)
+            const barProgress = hasScheduledToday
+              ? Math.min(rawBar, total - 1)
+              : Math.min(rawBar, total)
+
             return (
               <div key={e.id} className="bg-white border border-stone-100 rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-stone-50">
@@ -355,7 +367,7 @@ export default async function OrtuAnakPage({ params }: { params: Promise<{ slug:
                   </div>
                   <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all"
-                      style={{ width: `${Math.min(100, Math.round(progress / total * 100))}%`, background: '#5C4FE5' }} />
+                      style={{ width: `${Math.min(100, Math.round(barProgress / total * 100))}%`, background: '#5C4FE5' }} />
                   </div>
                 </div>
               </div>
