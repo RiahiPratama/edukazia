@@ -82,16 +82,10 @@ export default function KeuanganOverviewPage() {
 
     // ── PENGELUARAN ─────────────────────────────────────────────────────────
 
-    // 4. Tutor honor payments
+    // 4. Tutor honor payments (source of truth — prepaid & postpaid)
     const { data: honors } = await supabase
       .from('tutor_honor_payments')
       .select('amount, paid_at')
-
-    // 5. Tutor payments (status = 'paid')
-    const { data: tutorPay } = await supabase
-      .from('tutor_payments')
-      .select('total, paid_at')
-      .eq('status', 'paid')
 
     // ── Aggregate per month ─────────────────────────────────────────────────
     const monthMap = new Map<string, { pendapatan: number; pengeluaran: number }>()
@@ -109,9 +103,8 @@ export default function KeuanganOverviewPage() {
     ;(subs ?? []).forEach((s) => addToMonth(s.created_at, Number(s.price_paid), 'pendapatan'))
     ;(pustaka ?? []).forEach((p) => addToMonth(p.created_at, Number(p.amount_paid), 'pendapatan'))
 
-    // Pengeluaran
+    // Pengeluaran (hanya tutor_honor_payments — source of truth)
     ;(honors ?? []).forEach((h) => addToMonth(h.paid_at, h.amount, 'pengeluaran'))
-    ;(tutorPay ?? []).forEach((t) => addToMonth(t.paid_at, t.total, 'pengeluaran'))
 
     // Ensure current month exists
     const currentMonth = getCurrentMonthWIT()
