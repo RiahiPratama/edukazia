@@ -165,7 +165,7 @@ export default async function MateriPage({
   let progress: { material_id: string; completed_at: string }[] = []
   try {
     const { data: progressData, error: progressError } = await supabase
-      .from('student_material_progress')
+      .from('material_progress')
       .select('material_id, completed_at')
       .eq('student_id', student.id)
     if (!progressError && progressData) {
