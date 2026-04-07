@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     const totalSesi = sessions_total ?? 8
 
     // 4. Kirim WA
-    const message = `🎉 *Perpanjangan Paket Berhasil!*\n\nHalo Kak ${firstName}. 👋\n\nPaket baru *${studentName}* untuk kursus\n*(${kursusLabel})* sudah diproses! ✅\n\n📚 Jumlah sesi: *${totalSesi} pertemuan*\n🗓️ Jadwal akan dilanjutkan otomatis\n\n📋 Pantau progress belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih atas kepercayaannya!\nSemangat belajar terus ya, ${studentName}! 🚀🙏`
+    const message = `🎉 *Perpanjangan Paket Berhasil!*\n\nHalo Kak ${firstName}. 👋\n\nPaket baru *${studentName}* untuk kursus\n*(${kursusLabel})* sudah diproses! ✅\n\n📚 Jumlah sesi: *${totalSesi} pertemuan*\n🗓️ Jadwal akan dilanjutkan otomatis\n\n📋 Pantau jadwal & progress belajar ${studentName} di:\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih atas kepercayaannya!`
 
     const result = await sendWhatsApp({
       target: formatPhoneID(parentPhone),

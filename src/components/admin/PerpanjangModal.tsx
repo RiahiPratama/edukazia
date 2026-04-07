@@ -275,6 +275,18 @@ export default function PerpanjangModal({
 
       // ✅ Success notification
       alert('✅ Kelas berhasil diperpanjang!')
+
+      // Kirim WA ke ortu — fire and forget
+      fetch('/api/wa/notify-perpanjang', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id:     enrollment.student_id,
+          class_group_id: kelasId,
+          sessions_total: parseInt(sessionsTotal),
+        }),
+      }).catch(() => {})
+
       onSuccess()
     } catch (err: any) {
       console.error('[PerpanjangModal] Error:', err)
