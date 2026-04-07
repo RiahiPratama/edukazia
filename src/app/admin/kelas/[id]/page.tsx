@@ -129,7 +129,7 @@ export default function KelasDetailPage() {
   const [classType,        setClassType]        = useState<string>('')
   const [classCurrentUnit, setClassCurrentUnit] = useState<number>(1)
   const [studentProgress,  setStudentProgress]  = useState<Record<string, number>>({})
-  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number; chapter_id: string | null}[]>([])
+  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number; chapter_id: string | null; level_id: string}[]>([])
   const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number}[]>([])
   const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
@@ -191,27 +191,25 @@ export default function KelasDetailPage() {
 
     const levelIds = (cg.class_group_levels as any[])?.map((l: any) => l.level_id) || []
     if (levelIds.length > 0) {
-      // Fetch units dengan chapter_id
+      // Fetch units dengan chapter_id dan level_id
       const { data: u } = await supabase
         .from('units')
-        .select('id, unit_name, position, chapter_id')
+        .select('id, unit_name, position, chapter_id, level_id')
         .in('level_id', levelIds)
         .order('position')
-      setUnits(u ?? [])
 
-      // Fetch lessons untuk semua unit
-      const unitIds = (u ?? []).map(unit => unit.id)
-      if (unitIds.length > 0) {
-        const { data: ls } = await supabase
-          .from('lessons')
-          .select('id, lesson_name, position, unit_id')
-          .in('unit_id', unitIds)
-          .order('position')
-        setLessons(ls ?? [])
-      }
+      // Fetch levels sort_order for proper ordering
+      const { data: lvls } = await supabase
+        .from('levels')
+        .select('id, sort_order')
+        .in('id', levelIds)
+        .order('sort_order')
+      const levelOrderMap: Record<string, number> = {}
+      lvls?.forEach((l: any) => { levelOrderMap[l.id] = l.sort_order ?? 0 })
 
       // Fetch chapters untuk grouping
       const chapterIds = [...new Set((u ?? []).map(u => u.chapter_id).filter(Boolean))] as string[]
+      let chapterOrderMap: Record<string, number> = {}
       if (chapterIds.length > 0) {
         const { data: ch } = await supabase
           .from('chapters')
@@ -219,8 +217,31 @@ export default function KelasDetailPage() {
           .in('id', chapterIds)
           .order('order_number')
         setChapters(ch ?? [])
-        // Auto-open semua chapter by default
         setOpenChapters(new Set((ch ?? []).map(c => c.id)))
+        ch?.forEach((c: any) => { chapterOrderMap[c.id] = c.order_number ?? 0 })
+      }
+
+      // Sort units by: level sort_order → chapter order_number → unit position
+      const sorted = (u ?? []).sort((a, b) => {
+        const la = levelOrderMap[a.level_id] ?? 0
+        const lb = levelOrderMap[b.level_id] ?? 0
+        if (la !== lb) return la - lb
+        const ca = a.chapter_id ? (chapterOrderMap[a.chapter_id] ?? 0) : 999
+        const cb = b.chapter_id ? (chapterOrderMap[b.chapter_id] ?? 0) : 999
+        if (ca !== cb) return ca - cb
+        return (a.position ?? 0) - (b.position ?? 0)
+      })
+      setUnits(sorted)
+
+      // Fetch lessons untuk semua unit
+      const unitIds = sorted.map(unit => unit.id)
+      if (unitIds.length > 0) {
+        const { data: ls } = await supabase
+          .from('lessons')
+          .select('id, lesson_name, position, unit_id')
+          .in('unit_id', unitIds)
+          .order('position')
+        setLessons(ls ?? [])
       }
     }
 
