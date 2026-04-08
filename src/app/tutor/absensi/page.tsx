@@ -210,6 +210,7 @@ function ModalLaporan({
       setForm({
         materi:        existing.materi ?? '',
         perkembangan:  existing.perkembangan ?? '',
+        saran_siswa:   existing.saran_siswa ?? '',
         saran_ortu:    existing.saran_ortu ?? '',
         recording_url: existing.recording_url ?? '',
       })
