@@ -22,6 +22,7 @@ type SesiRow = {
   classId:     string
   scheduledAt: string
   hasReport:   boolean
+  isAbsen:     boolean
   studentName: string | null
   materi:      string | null
 }
@@ -131,6 +132,25 @@ export default function AdminLaporanPage() {
     const reportSet = new Set((reports ?? []).map((r: any) => r.session_id))
     const reportMap = Object.fromEntries((reports ?? []).map((r: any) => [r.session_id, r.materi]))
 
+    // Fetch attendances to check for absent sessions
+    const { data: attendances } = await supabase
+      .from('attendances')
+      .select('session_id, status')
+      .in('session_id', sessionIds)
+
+    // Build absen set: sessions where ALL students are tidak_hadir
+    const attBySession: Record<string, string[]> = {}
+    ;(attendances ?? []).forEach((a: any) => {
+      if (!attBySession[a.session_id]) attBySession[a.session_id] = []
+      attBySession[a.session_id].push(a.status)
+    })
+    const absenSet = new Set<string>()
+    Object.entries(attBySession).forEach(([sid, statuses]) => {
+      if (statuses.length > 0 && statuses.every(s => s === 'tidak_hadir')) {
+        absenSet.add(sid)
+      }
+    })
+
     // Build struktur per tutor → per kelas → per sesi
     const tutorMap: Record<string, TutorRow> = {}
 
@@ -141,6 +161,7 @@ export default function AdminLaporanPage() {
       const tutorId   = kls.tutor_id
       const tutorName = tutorNameMap[tutorId] ?? 'Tutor'
       const hasReport = reportSet.has(s.id)
+      const isAbsen   = absenSet.has(s.id)
       const siswaList = enrollMap[s.class_group_id] ?? []
 
       if (!tutorMap[tutorId]) {
@@ -159,12 +180,14 @@ export default function AdminLaporanPage() {
         classId:     s.class_group_id,
         scheduledAt: s.scheduled_at,
         hasReport,
+        isAbsen,
         studentName: siswaList.length === 1 ? siswaList[0] : siswaList.length > 1 ? `${siswaList.length} siswa` : null,
         materi:      reportMap[s.id] ?? null,
       })
 
-      if (hasReport) { kelasRow.sudah++; tutorRow.sudah++ }
-      else           { kelasRow.belum++; tutorRow.belum++ }
+      // Absen = sudah (tidak perlu laporan), bukan belum
+      if (hasReport || isAbsen) { kelasRow.sudah++; tutorRow.sudah++ }
+      else                      { kelasRow.belum++; tutorRow.belum++ }
     })
 
     // Sort tutor: yang paling banyak belum laporan di atas
@@ -184,6 +207,10 @@ export default function AdminLaporanPage() {
 
   const totalSudah = data.reduce((s, t) => s + t.sudah, 0)
   const totalBelum = data.reduce((s, t) => s + t.belum, 0)
+  const totalAbsen = data.reduce((s, t) => {
+    return s + t.kelas.reduce((ks, k) => ks + k.sessions.filter(se => se.isAbsen).length, 0)
+  }, 0)
+  const totalLaporan = totalSudah - totalAbsen
   const totalSesi  = totalSudah + totalBelum
 
   return (
@@ -195,10 +222,11 @@ export default function AdminLaporanPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total Sesi', val: totalSesi, color: 'bg-[#F7F6FF] text-[#5C4FE5]', icon: Clock },
-          { label: 'Sudah Laporan', val: totalSudah, color: 'bg-green-50 text-green-700', icon: CheckCircle },
+          { label: 'Sudah Laporan', val: totalLaporan, color: 'bg-green-50 text-green-700', icon: CheckCircle },
+          { label: 'Siswa Absen', val: totalAbsen, color: 'bg-gray-50 text-gray-500', icon: Users },
           { label: 'Belum Laporan', val: totalBelum, color: 'bg-red-50 text-red-600', icon: XCircle },
         ].map(({ label, val, color, icon: Icon }) => (
           <div key={label} className={`${color} rounded-2xl p-4 border border-[#E5E3FF]`}>
@@ -301,7 +329,7 @@ export default function AdminLaporanPage() {
                   <div className="border-t border-[#F0EFFF]">
                     {tutor.kelas.map((kls, ki) => {
                       const filteredSessions = filter === 'belum'
-                        ? kls.sessions.filter(s => !s.hasReport)
+                        ? kls.sessions.filter(s => !s.hasReport && !s.isAbsen)
                         : kls.sessions
                       if (filteredSessions.length === 0) return null
 
@@ -327,12 +355,14 @@ export default function AdminLaporanPage() {
                           {filteredSessions.map((sesi, si) => (
                             <div key={sesi.sessionId}
                               className={`flex items-center gap-3 px-5 py-2.5 ${si > 0 ? 'border-t border-[#F7F6FF]' : ''} ${
-                                !sesi.hasReport ? 'bg-red-50/30' : ''
+                                !sesi.hasReport && !sesi.isAbsen ? 'bg-red-50/30' : ''
                               }`}>
 
                               {/* Status icon */}
                               {sesi.hasReport
                                 ? <CheckCircle size={14} className="text-green-500 flex-shrink-0"/>
+                                : sesi.isAbsen
+                                ? <span className="text-xs flex-shrink-0">🚫</span>
                                 : <XCircle size={14} className="text-red-400 flex-shrink-0"/>
                               }
 
@@ -353,6 +383,10 @@ export default function AdminLaporanPage() {
                               {sesi.hasReport && sesi.materi ? (
                                 <span className="text-[10px] text-[#7B78A8] truncate flex-1 italic">
                                   "{sesi.materi.replace(/---ID---|---EN---/g, '').trim().slice(0, 60)}..."
+                                </span>
+                              ) : sesi.isAbsen ? (
+                                <span className="text-[10px] text-gray-400 font-semibold flex-1">
+                                  Siswa tidak hadir
                                 </span>
                               ) : !sesi.hasReport ? (
                                 <span className="text-[10px] text-red-500 font-semibold flex-1">
