@@ -6,9 +6,10 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
  * POST /api/wa/notify-paket
  * 
  * Dipanggil setelah absensi disimpan
- * Cek sisa sesi, kirim WA ke ortu kalau sisa 2, 1, atau 0
+ * Hitung sisa = jumlah sesi SCHEDULED yang masih tersisa
+ * Kirim WA ke ortu kalau sisa 2, 1, atau 0
  * SKIP kalau sudah ada enrollment baru (P2)
- * Handle Diri Sendiri: template personal "kamu" bukan nama orang ketiga
+ * Handle Diri Sendiri: template personal "kamu"
  * 
  * Body: { class_group_id, student_ids: string[] }
  */
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
 
     const kursusLabel = [courseData?.name, ctData?.name].filter(Boolean).join(' · ')
 
-    // 2. Ambil SEMUA enrollments aktif
+    // 2. Ambil SEMUA enrollments aktif (untuk cek perpanjangan)
     const { data: allEnrollments } = await supabase
       .from('enrollments')
       .select('id, student_id, session_start_offset, sessions_total, enrolled_at')
@@ -54,26 +55,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ sent: 0, message: 'No active enrollments' })
     }
 
-    // 3. Ambil sesi completed
-    const { data: completedSessions } = await supabase
+    // 3. Ambil sesi SCHEDULED yang masih tersisa di class group
+    const { data: scheduledSessions } = await supabase
       .from('sessions')
-      .select('id, scheduled_at')
+      .select('id')
       .eq('class_group_id', class_group_id)
-      .eq('status', 'completed')
+      .eq('status', 'scheduled')
 
-    const completedIds = (completedSessions ?? []).map(s => s.id)
+    const sisaScheduled = (scheduledSessions ?? []).length
 
-    // 4. Ambil attendances hadir
-    const { data: attendances } = completedIds.length > 0
-      ? await supabase
-          .from('attendances')
-          .select('session_id, student_id, status')
-          .in('session_id', completedIds)
-          .in('student_id', student_ids)
-          .eq('status', 'hadir')
-      : { data: [] }
-
-    // 5. Ambil data siswa + ortu
+    // 4. Ambil data siswa + ortu
     const { data: students } = await supabase
       .from('students')
       .select('id, profile_id, parent_profile_id, relation_phone')
@@ -86,7 +77,7 @@ export async function POST(req: Request) {
 
     const profMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
 
-    // 6. Hitung sisa per siswa & kirim WA
+    // 5. Per siswa: cek & kirim
     const results: { student: string; sisa: number; sent: boolean; reason?: string }[] = []
 
     for (const enr of enrollments) {
@@ -108,19 +99,8 @@ export async function POST(req: Request) {
         continue
       }
 
-      // Hitung sisa
-      const enrolledAt = enr.enrolled_at ? new Date(enr.enrolled_at) : new Date(0)
-      const relevantSessions = (completedSessions ?? []).filter(s =>
-        new Date(s.scheduled_at) >= enrolledAt
-      )
-      const relevantIds = relevantSessions.map(s => s.id)
-      const hadirCount = (attendances ?? []).filter(a =>
-        a.student_id === enr.student_id && relevantIds.includes(a.session_id)
-      ).length
-
-      const done = (enr.session_start_offset ?? 0) + hadirCount
-      const total = enr.sessions_total ?? 8
-      const sisa = Math.max(total - done, 0)
+      // Sisa = jumlah sesi scheduled yang masih ada
+      const sisa = sisaScheduled
 
       if (sisa > 2) {
         results.push({ student: studentName, sisa, sent: false })
@@ -150,7 +130,7 @@ export async function POST(req: Request) {
 
       const firstName = (parentProf?.full_name ?? '').split(' ')[0] || 'Ayah/Bunda'
 
-      // Template pesan — Diri Sendiri vs Ortu
+      // Template pesan
       let message = ''
 
       if (sisa === 2) {
