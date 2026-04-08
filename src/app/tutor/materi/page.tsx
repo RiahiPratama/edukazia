@@ -27,6 +27,7 @@ type Material = {
   unit_position: number
   chapter_title: string | null
   level_name: string
+  level_id: string
   content_url: string | null
   canva_url: string | null
   slides_url: string | null
@@ -60,6 +61,7 @@ export default function TutorMateriPage() {
   const [activeTab, setActiveTab]     = useState<TabType>('live_zoom')
   const [openGroups, setOpenGroups]   = useState<Set<string>>(new Set())
   const [hasActiveSession, setHasActiveSession] = useState(false)
+  const [unitLockMap, setUnitLockMap] = useState<Record<string, number>>({})
 
   const [embedModal, setEmbedModal] = useState<{
     open: boolean; url: string; title: string; loading: boolean
@@ -97,7 +99,7 @@ export default function TutorMateriPage() {
       // Non-owner: filter by class group
       const { data: classGroups } = await supabase
         .from('class_groups')
-        .select('id')
+        .select('id, current_unit_position')
         .eq('tutor_id', tutor.id)
         .eq('status', 'active')
 
@@ -106,11 +108,20 @@ export default function TutorMateriPage() {
       const { data: cgl } = classGroupIds.length > 0
         ? await supabase
             .from('class_group_levels')
-            .select('level_id')
+            .select('level_id, class_group_id')
             .in('class_group_id', classGroupIds)
         : { data: [] }
 
       levelIds = Array.from(new Set(cgl?.map((c: any) => c.level_id).filter(Boolean) || []))
+
+      // Build unit lock map: level_id → MAX(current_unit_position) across all class groups
+      const lockMap: Record<string, number> = {}
+      cgl?.forEach((c: any) => {
+        const cg = classGroups?.find(g => g.id === c.class_group_id)
+        const pos = cg?.current_unit_position ?? 1
+        lockMap[c.level_id] = Math.max(lockMap[c.level_id] ?? 0, pos)
+      })
+      setUnitLockMap(lockMap)
     }
 
     if (levelIds.length === 0) { setLoading(false); return }
@@ -234,6 +245,7 @@ export default function TutorMateriPage() {
         unit_position: unit?.position || 0,
         chapter_title: chapter?.chapter_title || null,
         level_name: level?.name || '',
+        level_id: unit?.level_id || '',
         content_url: (content as any)?.content_url || null,
         canva_url: (content as any)?.canva_url || null,
         slides_url: (content as any)?.slides_url || null,
@@ -246,7 +258,12 @@ export default function TutorMateriPage() {
   }
 
   // ── Access check ──────────────────────────────────────────
-  const canAccess = (material: Material): 'allowed' | 'time_locked' | 'no_content' => {
+  const canAccess = (material: Material): 'allowed' | 'time_locked' | 'no_content' | 'unit_locked' => {
+    // Unit lock check for non-owner on live_zoom + kosakata
+    if (!tutorInfo?.is_owner && (material.category === 'live_zoom' || material.category === 'kosakata')) {
+      const maxPos = unitLockMap[material.level_id]
+      if (maxPos && material.unit_position > maxPos) return 'unit_locked'
+    }
     if (material.category === 'bacaan') {
       return material.storage_path ? 'allowed' : 'no_content'
     }
@@ -272,6 +289,10 @@ export default function TutorMateriPage() {
     const status = canAccess(material)
     if (status === 'time_locked') {
       alert('🔒 Materi hanya bisa diakses 20 menit sebelum kelas dimulai.')
+      return
+    }
+    if (status === 'unit_locked') {
+      alert('🔒 Unit ini belum dibuka. Hubungi admin untuk membuka unit berikutnya.')
       return
     }
     if (status === 'no_content') {
@@ -471,22 +492,27 @@ export default function TutorMateriPage() {
                     {group.units.map((uGroup, ui) => {
                       const uKey = `${chKey}__${uGroup.unit}`
                       const isUOpen = openGroups.has(uKey)
+                      const firstItem = uGroup.items[0]
+                      const isUnitLocked = !tutorInfo?.is_owner && firstItem && unitLockMap[firstItem.level_id] && firstItem.unit_position > unitLockMap[firstItem.level_id]
                       return (
                         <div key={ui} className="border-b border-[#F7F6FF] last:border-0">
                           {/* Unit header */}
-                          <button onClick={() => toggleGroup(uKey)}
-                            className="w-full flex items-center justify-between pl-10 pr-5 py-3 hover:bg-[#F7F6FF] transition-colors text-left">
+                          <button onClick={() => !isUnitLocked && toggleGroup(uKey)}
+                            className={`w-full flex items-center justify-between pl-10 pr-5 py-3 transition-colors text-left ${isUnitLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#F7F6FF]'}`}>
                             <div className="flex items-center gap-2">
-                              {isUOpen
+                              {isUnitLocked
+                                ? <Lock className="w-3.5 h-3.5 text-gray-400" />
+                                : isUOpen
                                 ? <ChevronDown className="w-3.5 h-3.5 text-[#5C4FE5]" />
                                 : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
-                              <span className="text-sm font-semibold text-[#1A1640]">{uGroup.unit}</span>
+                              <span className={`text-sm font-semibold ${isUnitLocked ? 'text-gray-400' : 'text-[#1A1640]'}`}>{uGroup.unit}</span>
+                              {isUnitLocked && <span className="text-[10px] text-gray-400">Belum dibuka</span>}
                             </div>
                             <span className="text-xs text-[#7B78A8]">{uGroup.items.length} materi</span>
                           </button>
 
                           {/* Materials */}
-                          {isUOpen && (
+                          {isUOpen && !isUnitLocked && (
                             <div className="divide-y divide-[#F7F6FF] bg-[#FAFAFE]">
                               {uGroup.items.map(material => {
                                 const status = canAccess(material)

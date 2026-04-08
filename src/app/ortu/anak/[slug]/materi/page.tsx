@@ -175,6 +175,52 @@ export default async function MateriPage({
     // tabel belum ada, progress kosong
   }
 
+  // 11. Unit Lock: fetch student_unit_progress (Privat) + class_groups (Grup)
+  const unitLockMap: Record<string, number> = {}
+
+  // Privat: dari student_unit_progress
+  const { data: studentProgress } = await supabase
+    .from('student_unit_progress')
+    .select('class_group_id, current_unit_position')
+    .eq('student_id', student.id)
+
+  // Map class_group → level via class_group_levels
+  if (studentProgress && studentProgress.length > 0) {
+    const spClassGroupIds = studentProgress.map(sp => sp.class_group_id)
+    const { data: spCgl } = await supabase
+      .from('class_group_levels')
+      .select('class_group_id, level_id')
+      .in('class_group_id', spClassGroupIds)
+    spCgl?.forEach((c: any) => {
+      const sp = studentProgress.find(s => s.class_group_id === c.class_group_id)
+      if (sp) {
+        unitLockMap[c.level_id] = Math.max(unitLockMap[c.level_id] ?? 0, sp.current_unit_position)
+      }
+    })
+  }
+
+  // Grup: dari class_groups.current_unit_position (untuk level yang belum ada di studentProgress)
+  if (classGroupIds.length > 0) {
+    const { data: cgPositions } = await supabase
+      .from('class_groups')
+      .select('id, current_unit_position')
+      .in('id', classGroupIds)
+
+    const { data: cgLevels } = await supabase
+      .from('class_group_levels')
+      .select('class_group_id, level_id')
+      .in('class_group_id', classGroupIds)
+
+    cgLevels?.forEach((c: any) => {
+      if (!unitLockMap[c.level_id]) {
+        const cg = cgPositions?.find(g => g.id === c.class_group_id)
+        if (cg) {
+          unitLockMap[c.level_id] = Math.max(unitLockMap[c.level_id] ?? 0, cg.current_unit_position)
+        }
+      }
+    })
+  }
+
   // Transform data grouped by LEVEL
   const levelsData = levelIds.map(levelId => {
     const level = levels?.find(l => l.id === levelId)
@@ -244,6 +290,7 @@ export default async function MateriPage({
         levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
         studentSlug={slug}
+        unitLockMap={unitLockMap}
       />
     </div>
   )

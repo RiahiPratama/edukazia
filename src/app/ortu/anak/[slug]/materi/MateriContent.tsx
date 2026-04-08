@@ -36,9 +36,10 @@ type MateriContentProps = {
   levelsData: LevelData[]
   studentName: string
   studentSlug: string
+  unitLockMap?: Record<string, number>
 }
 
-export default function MateriContent({ levelsData, studentName, studentSlug }: MateriContentProps) {
+export default function MateriContent({ levelsData, studentName, studentSlug, unitLockMap = {} }: MateriContentProps) {
   const [activeTab, setActiveTab] = useState<'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'>('live_zoom')
   const [openChapters, setOpenChapters] = useState<Set<string>>(new Set())
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
@@ -173,6 +174,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
   // Kumpulkan semua chapter dari semua level, filter by tab
   const allChapterGroups: {
     levelName: string
+    levelId: string
     chapterTitle: string
     units: Unit[]
   }[] = []
@@ -183,15 +185,24 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
       materials: u.materials.filter(m => m.category === activeTab)
     })).filter(u => u.materials.length > 0)
 
+    // On live_zoom tab, also include units that have materials but are locked (so they show with 🔒)
+    // For other tabs, locked units with materials are already included
+    const maxPos = unitLockMap[level.level_id] ?? 999
+    const allUnitsForTab = activeTab === 'live_zoom'
+      ? level.units.filter(u => u.materials.some(m => m.category === activeTab))
+      : filteredUnits
+
     const chapterMap = new Map<string, Unit[]>()
-    filteredUnits.forEach(u => {
+    allUnitsForTab.forEach(u => {
+      const unitWithFiltered = { ...u, materials: u.materials.filter(m => m.category === activeTab) }
+      if (unitWithFiltered.materials.length === 0) return
       const key = u.chapter_title || 'Tanpa Chapter'
       if (!chapterMap.has(key)) chapterMap.set(key, [])
-      chapterMap.get(key)!.push(u)
+      chapterMap.get(key)!.push(unitWithFiltered)
     })
 
     chapterMap.forEach((units, chapterTitle) => {
-      allChapterGroups.push({ levelName: level.level_name, chapterTitle, units })
+      allChapterGroups.push({ levelName: level.level_name, levelId: level.level_id, chapterTitle, units })
     })
   })
 
@@ -306,7 +317,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
         </div>
       ) : (
         <div className="space-y-3">
-          {allChapterGroups.map(({ levelName, chapterTitle, units }) => {
+          {allChapterGroups.map(({ levelName, levelId, chapterTitle, units }) => {
             const key = `${levelName}-${chapterTitle}`
             const isOpen = openChapters.has(key)
             return (
@@ -339,27 +350,32 @@ export default function MateriContent({ levelsData, studentName, studentSlug }: 
                 {isOpen && (
                   <div className="divide-y divide-[#E5E3FF]">
                     {units.map(unit => {
-                      const isUnitOpen = openUnits.has(unit.id)
+                      const maxPos = unitLockMap[levelId] ?? 999
+                      const isUnitLocked = activeTab === 'live_zoom' && unit.sort_order > maxPos
+                      const isUnitOpen = !isUnitLocked && openUnits.has(unit.id)
                       const lessonGroups = groupByLesson(unit.materials)
                       return (
                         <div key={unit.id}>
                           {/* Unit Header */}
                           <button
-                            onClick={() => toggleUnit(unit.id)}
-                            className="w-full px-5 py-3 flex items-center justify-between bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors"
+                            onClick={() => !isUnitLocked && toggleUnit(unit.id)}
+                            className={`w-full px-5 py-3 flex items-center justify-between transition-colors ${isUnitLocked ? 'bg-gray-50 opacity-60 cursor-not-allowed' : 'bg-[#F7F6FF] hover:bg-[#EEEDFE]'}`}
                           >
                             <div className="flex items-center gap-2">
-                              {isUnitOpen
+                              {isUnitLocked
+                                ? <span className="text-sm">🔒</span>
+                                : isUnitOpen
                                 ? <ChevronDown className="w-4 h-4 text-[#7B78A8]" />
                                 : <ChevronRight className="w-4 h-4 text-[#7B78A8]" />
                               }
-                              <span className="font-semibold text-[#1A1640] text-sm">{unit.name}</span>
+                              <span className={`font-semibold text-sm ${isUnitLocked ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.name}</span>
+                              {isUnitLocked && <span className="text-[10px] text-gray-400">Belum dibuka oleh tutor</span>}
                             </div>
                             <span className="text-xs text-[#7B78A8]">{unit.materials.length} materi</span>
                           </button>
 
                           {/* Lessons + Materials */}
-                          {isUnitOpen && (
+                          {isUnitOpen && !isUnitLocked && (
                             <div className="bg-white">
                               {Array.from(lessonGroups.entries()).map(([lessonTitle, materials]) => (
                                 <div key={lessonTitle} className="px-5 py-3 border-b border-[#E5E3FF] last:border-b-0">
