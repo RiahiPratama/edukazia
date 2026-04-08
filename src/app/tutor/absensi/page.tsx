@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CalendarDays, Check, MessageCircle, AlertTriangle, Clock, FileText, X, Send } from 'lucide-react'
+import { LaporanEditor } from '@/components/shared/LaporanEditor'
 
 type StatusAbsen = 'hadir' | 'tidak_hadir'
 
@@ -135,6 +136,7 @@ function ModalLaporan({
   const [form, setForm] = useState({
     materi:       '',
     perkembangan: '',
+    saran_siswa:  '',
     saran_ortu:   '',
     recording_url: '',
   })
@@ -176,7 +178,7 @@ function ModalLaporan({
         // Cek apakah sudah ada laporan
         const { data: existing } = await supabase
           .from('session_reports')
-          .select('materi, perkembangan, saran_ortu, recording_url')
+          .select('materi, perkembangan, saran_siswa, saran_ortu, recording_url')
           .eq('session_id', sesi.id)
           .eq('student_id', list[0].id)
           .single()
@@ -184,6 +186,7 @@ function ModalLaporan({
           setForm({
             materi:        existing.materi ?? '',
             perkembangan:  existing.perkembangan ?? '',
+            saran_siswa:   existing.saran_siswa ?? '',
             saran_ortu:    existing.saran_ortu ?? '',
             recording_url: existing.recording_url ?? '',
           })
@@ -196,10 +199,10 @@ function ModalLaporan({
 
   async function loadLaporanSiswa(studentId: string) {
     setSelectedSiswa(studentId)
-    setForm({ materi: '', perkembangan: '', saran_ortu: '', recording_url: '' })
+    setForm({ materi: '', perkembangan: '', saran_siswa: '', saran_ortu: '', recording_url: '' })
     const { data: existing } = await supabase
       .from('session_reports')
-      .select('materi, perkembangan, saran_ortu, recording_url')
+      .select('materi, perkembangan, saran_siswa, saran_ortu, recording_url')
       .eq('session_id', sesi.id)
       .eq('student_id', studentId)
       .single()
@@ -225,6 +228,7 @@ function ModalLaporan({
         student_id:    selectedSiswa,
         materi:        form.materi.trim(),
         perkembangan:  form.perkembangan.trim() || null,
+        saran_siswa:   form.saran_siswa.trim() || null,
         saran_ortu:    form.saran_ortu.trim() || null,
         recording_url: form.recording_url.trim() || null,
       }, { onConflict: 'session_id,student_id' })
@@ -243,7 +247,7 @@ function ModalLaporan({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF] rounded-t-2xl">
           <div>
@@ -273,38 +277,37 @@ function ModalLaporan({
               </div>
             )}
 
-            <div>
-              <label className={labelCls}>Materi yang diajarkan *</label>
-              <input
-                type="text"
-                value={form.materi}
-                onChange={e => setForm(p => ({ ...p, materi: e.target.value }))}
-                placeholder="Contoh: Persamaan kuadrat dan faktorisasi"
-                className={inputCls}
-              />
-            </div>
+            <LaporanEditor
+              label="Materi yang diajarkan *"
+              value={form.materi}
+              onChange={v => setForm(p => ({ ...p, materi: v }))}
+              placeholder={"Contoh:\n---ID---\n* Grammar: Present Tense\n* Kosakata: hewan\n---EN---\n* Grammar: Present Tense\n* Vocabulary: animals"}
+              rows={5}
+            />
 
-            <div>
-              <label className={labelCls}>Perkembangan siswa</label>
-              <textarea
-                value={form.perkembangan}
-                onChange={e => setForm(p => ({ ...p, perkembangan: e.target.value }))}
-                placeholder="Catatan perkembangan pemahaman siswa..."
-                rows={3}
-                className={inputCls + ' resize-none'}
-              />
-            </div>
+            <LaporanEditor
+              label="Perkembangan siswa"
+              value={form.perkembangan}
+              onChange={v => setForm(p => ({ ...p, perkembangan: v }))}
+              placeholder="Catatan perkembangan pemahaman siswa..."
+              rows={4}
+            />
 
-            <div>
-              <label className={labelCls}>Catatan / saran untuk orang tua</label>
-              <textarea
-                value={form.saran_ortu}
-                onChange={e => setForm(p => ({ ...p, saran_ortu: e.target.value }))}
-                placeholder="Pesan atau saran untuk orang tua siswa..."
-                rows={3}
-                className={inputCls + ' resize-none'}
-              />
-            </div>
+            <LaporanEditor
+              label="Saran untuk siswa"
+              value={form.saran_siswa}
+              onChange={v => setForm(p => ({ ...p, saran_siswa: v }))}
+              placeholder="Saran latihan mandiri untuk siswa..."
+              rows={3}
+            />
+
+            <LaporanEditor
+              label="Saran untuk orang tua"
+              value={form.saran_ortu}
+              onChange={v => setForm(p => ({ ...p, saran_ortu: v }))}
+              placeholder="Saran untuk orang tua mendampingi belajar..."
+              rows={3}
+            />
 
             <div>
               <label className={labelCls}>Link rekaman Google Drive (opsional)</label>
