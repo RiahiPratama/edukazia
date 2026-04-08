@@ -57,6 +57,11 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
   const [editLessonName, setEditLessonName] = useState('');
   const [editLessonPosition, setEditLessonPosition] = useState(1); // FIX: default 1, bukan 0
 
+  const [lessonHasMaterial, setLessonHasMaterial] = useState<Record<string, boolean>>({})
+  const [lessonPositionValid, setLessonPositionValid] = useState<boolean | null>(null)
+  const [lessonPositionMsg, setLessonPositionMsg] = useState('')
+  const [useExistingLesson, setUseExistingLesson] = useState<string | null>(null)
+
   const [loading, setLoading] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
 
@@ -186,6 +191,59 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
   const fetchLessons = async (unitId: string) => {
     const { data } = await supabase.from('lessons').select('*').eq('unit_id', unitId).order('position');
     setLessons(data || []);
+    // Check which lessons already have materials for this category
+    if (data && data.length > 0) {
+      const lessonIds = data.map((l: any) => l.id);
+      const { data: mats } = await supabase
+        .from('materials')
+        .select('lesson_id')
+        .in('lesson_id', lessonIds)
+        .eq('category', 'live_zoom');
+      const matSet: Record<string, boolean> = {};
+      (mats || []).forEach((m: any) => { matSet[m.lesson_id] = true; });
+      setLessonHasMaterial(matSet);
+      // Auto-set new lesson position
+      const maxPos = Math.max(...data.map((l: any) => l.position || 0), 0);
+      setNewLessonPosition(maxPos + 1);
+      // Find last lesson with material
+      const lastWithMat = [...data].reverse().find((l: any) => matSet[l.id]);
+      const lastEmpty = [...data].reverse().find((l: any) => !matSet[l.id]);
+      // Auto-select existing empty lesson if available
+      if (lastEmpty) {
+        setUseExistingLesson(lastEmpty.id);
+        setSelectedLesson(lastEmpty.id);
+      } else {
+        setUseExistingLesson(null);
+        setSelectedLesson('NEW');
+      }
+    } else {
+      setLessonHasMaterial({});
+      setNewLessonPosition(1);
+      setUseExistingLesson(null);
+      setSelectedLesson('NEW');
+    }
+  };
+
+  const validateLessonPosition = (pos: number) => {
+    setNewLessonPosition(pos);
+    const existing = lessons.find((l: any) => l.position === pos);
+    if (existing) {
+      const hasMat = lessonHasMaterial[existing.id];
+      if (hasMat) {
+        setLessonPositionValid(false);
+        setLessonPositionMsg(`Posisi ${pos} sudah terisi "${existing.lesson_name}" dan sudah ada materi`);
+      } else {
+        setLessonPositionValid(true);
+        setLessonPositionMsg(`Posisi ${pos} ada "${existing.lesson_name}" tapi belum ada materi — akan dipakai`);
+        setUseExistingLesson(existing.id);
+        setSelectedLesson(existing.id);
+      }
+    } else {
+      setLessonPositionValid(true);
+      setLessonPositionMsg(`Posisi ${pos} tersedia`);
+      setUseExistingLesson(null);
+      setSelectedLesson('NEW');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -221,6 +279,7 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
       } else {
         // CREATE MODE
         if (!selectedLevel) { alert('❌ Level harus dipilih!'); setLoading(false); return; }
+        if (lessonPositionValid === false) { alert('❌ Posisi lesson sudah terisi dengan materi!'); setLoading(false); return; }
         if (!selectedChapter || selectedChapter === 'NEW') {
           if (selectedChapter !== 'NEW') { alert('❌ Chapter harus dipilih!'); setLoading(false); return; }
         }
@@ -319,10 +378,11 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
     <form onSubmit={handleSubmit} className="space-y-6">
       {!isEditing && (
         <>
+          {/* Mata Pelajaran — dropdown */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">Mata Pelajaran *</label>
             <select value={selectedCourse}
-              onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }}
+              onChange={(e) => { setSelectedCourse(e.target.value); setSelectedLevel(''); setSelectedChapter(''); setSelectedUnit(''); setSelectedLesson(''); fetchLevels(e.target.value); }}
               required
               className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
               <option value="">Pilih Mata Pelajaran</option>
@@ -330,87 +390,186 @@ export default function LiveZoomForm({ onSave, onCancel, editData }: LiveZoomFor
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">Level Kurikulum *</label>
-            <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} required
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
-              <option value="">Pilih Level</option>
-              {levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}
-            </select>
-          </div>
+          {/* Level — pill selector */}
+          {selectedCourse && levels.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">Level Kurikulum *</label>
+              <div className="flex flex-wrap gap-2">
+                {levels.map((level) => (
+                  <button key={level.id} type="button"
+                    onClick={() => { setSelectedLevel(level.id); setSelectedChapter(''); setSelectedUnit(''); setSelectedLesson(''); }}
+                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                      selectedLevel === level.id
+                        ? 'bg-[#5C4FE5] text-white shadow-md'
+                        : 'bg-[#F7F6FF] text-[#4A4580] border border-[#E5E3FF] hover:border-[#5C4FE5] hover:text-[#5C4FE5]'
+                    }`}>
+                    {level.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {selectedLevel && (
             <>
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter * (WAJIB)</label>
-                <select value={selectedChapter} onChange={(e) => setSelectedChapter(e.target.value)} required
-                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
-                  <option value="">Pilih Chapter</option>
-                  <option value="NEW">+ Buat Chapter Baru</option>
-                  {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
-                </select>
-                {selectedChapter === 'NEW' && (
-                  <input type="text" value={newChapterTitle}
-                    onChange={(e) => setNewChapterTitle(e.target.value)}
-                    placeholder="Nama Chapter Baru (contoh: Mover)" required
-                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"/>
+              {/* Breadcrumb */}
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-[#F0EFFF] rounded-xl text-sm">
+                <span className="text-[#7B78A8]">📍</span>
+                <span className="font-semibold text-[#5C4FE5]">{courses.find(c => c.id === selectedCourse)?.name}</span>
+                <span className="text-[#C4BFFF]">→</span>
+                <span className="font-semibold text-[#5C4FE5]">{levels.find(l => l.id === selectedLevel)?.name}</span>
+                {selectedChapter && selectedChapter !== 'NEW' && (
+                  <><span className="text-[#C4BFFF]">→</span><span className="text-[#5C4FE5]">{chapters.find(c => c.id === selectedChapter)?.chapter_title}</span></>
                 )}
-                <p className="text-xs text-gray-600 mt-2">🔒 Unit hanya akan menampilkan yang sesuai dengan Chapter yang dipilih</p>
+                {selectedUnit && selectedUnit !== 'NEW' && (
+                  <><span className="text-[#C4BFFF]">→</span><span className="text-[#5C4FE5]">{units.find(u => u.id === selectedUnit)?.unit_name}</span></>
+                )}
               </div>
 
-              {selectedChapter && (
+              {/* Chapter + Unit — 2 kolom */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
-                  <select value={selectedUnit} onChange={(e) => setSelectedUnit(e.target.value)} required
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter *</label>
+                  <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); setSelectedUnit(''); setSelectedLesson(''); }} required
                     className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
-                    <option value="">Pilih Unit</option>
-                    <option value="NEW">+ Buat Unit Baru</option>
-                    {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
+                    <option value="">Pilih Chapter</option>
+                    <option value="NEW">+ Buat Chapter Baru</option>
+                    {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
                   </select>
-                  {selectedUnit === 'NEW' && (
-                    <div className="mt-2 space-y-2">
-                      <input type="text" value={newUnitName}
-                        onChange={(e) => setNewUnitName(e.target.value)}
-                        placeholder="Nama Unit Baru (contoh: 01 Clothes I like)" required
-                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Unit *</label>
-                        <input type="number" value={newUnitPosition}
-                          onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)}
-                          min="1" required
-                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                        <span className="text-xs text-gray-500">Menentukan urutan tampil unit di daftar materi</span>
+                  {selectedChapter === 'NEW' && (
+                    <input type="text" value={newChapterTitle}
+                      onChange={(e) => setNewChapterTitle(e.target.value)}
+                      placeholder="Nama Chapter Baru" required
+                      className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"/>
+                  )}
+                </div>
+
+                {selectedChapter && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
+                    <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); setSelectedLesson(''); }} required
+                      className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
+                      <option value="">Pilih Unit</option>
+                      <option value="NEW">+ Buat Unit Baru</option>
+                      {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
+                    </select>
+                    {selectedUnit === 'NEW' && (
+                      <div className="mt-2 space-y-2">
+                        <input type="text" value={newUnitName}
+                          onChange={(e) => setNewUnitName(e.target.value)}
+                          placeholder="Nama Unit Baru" required
+                          className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                        <div className="flex items-center gap-3">
+                          <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan *</label>
+                          <input type="number" value={newUnitPosition}
+                            onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)}
+                            min="1" required
+                            className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                        </div>
                       </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Lesson — smart position input */}
+              {selectedUnit && selectedUnit !== 'NEW' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson</label>
+
+                  {/* Info lesson terakhir */}
+                  {lessons.length > 0 ? (() => {
+                    const lastLesson = [...lessons].reverse().find((l: any) => lessonHasMaterial[l.id]);
+                    const lastEmpty = [...lessons].reverse().find((l: any) => !lessonHasMaterial[l.id]);
+                    return (
+                      <>
+                        {lastLesson && (
+                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">Lesson terakhir:</span>
+                              <span className="text-sm font-semibold text-gray-900">{lastLesson.position}. {lastLesson.lesson_name}</span>
+                            </div>
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 font-semibold">sudah ada materi</span>
+                          </div>
+                        )}
+                        {lastEmpty && (
+                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">Lesson kosong:</span>
+                              <span className="text-sm font-semibold text-gray-900">{lastEmpty.position}. {lastEmpty.lesson_name}</span>
+                            </div>
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">belum ada materi</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })() : (
+                    <div className="px-4 py-3 bg-gray-50 rounded-xl mb-3">
+                      <span className="text-sm text-gray-500 italic">Belum ada lesson di unit ini</span>
                     </div>
                   )}
+
+                  {/* Input posisi + nama */}
+                  <div className={`border-2 rounded-xl p-4 ${
+                    lessonPositionValid === false ? 'border-red-300 bg-red-50' :
+                    lessonPositionValid === true ? 'border-[#5C4FE5]/30 bg-[#F0EFFF]' :
+                    'border-dashed border-[#E5E3FF] bg-[#F7F6FF]'
+                  }`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div>
+                        <div className="text-xs text-[#7B78A8] mb-1">Posisi</div>
+                        <input type="number" value={newLessonPosition}
+                          onChange={(e) => validateLessonPosition(parseInt(e.target.value) || 1)}
+                          min="1" required
+                          className={`w-16 px-3 py-2 border-2 rounded-lg text-center font-semibold ${
+                            lessonPositionValid === false ? 'border-red-400 text-red-600' : 'border-[#E5E3FF] text-[#5C4FE5]'
+                          } bg-white focus:ring-2 focus:ring-[#5C4FE5]`}/>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs text-[#7B78A8] mb-1">Nama lesson</div>
+                        <input type="text" value={useExistingLesson ? (lessons.find((l: any) => l.id === useExistingLesson)?.lesson_name || '') : newLessonName}
+                          onChange={(e) => { if (!useExistingLesson) setNewLessonName(e.target.value); }}
+                          placeholder="Contoh: Week 13-16"
+                          readOnly={!!useExistingLesson}
+                          required={!useExistingLesson}
+                          className={`w-full px-3 py-2 border-2 border-[#E5E3FF] rounded-lg bg-white text-gray-900 font-medium focus:ring-2 focus:ring-[#5C4FE5] ${useExistingLesson ? 'bg-gray-50 text-gray-600' : ''}`}/>
+                      </div>
+                    </div>
+                    {lessonPositionValid !== null && (
+                      <div className={`flex items-center gap-2 text-xs font-semibold ${lessonPositionValid ? 'text-green-700' : 'text-red-600'}`}>
+                        <span>{lessonPositionValid ? '✅' : '🚫'}</span>
+                        <span>{lessonPositionMsg}</span>
+                      </div>
+                    )}
+                    {!lessonPositionValid && lessonPositionValid !== null && null}
+                    {lessonPositionValid === null && (
+                      <p className="text-xs text-[#7B78A8]">Posisi otomatis. Ubah angka jika ingin menaruh di urutan lain.</p>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {selectedUnit && (
+              {/* Lesson for NEW unit */}
+              {selectedUnit === 'NEW' && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson (Nama Materi) *</label>
-                  <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required
-                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
-                    <option value="">Pilih Lesson</option>
-                    <option value="NEW">+ Buat Lesson Baru</option>
-                    {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
-                  </select>
-                  {selectedLesson === 'NEW' && (
-                    <div className="mt-2 space-y-2">
-                      <input type="text" value={newLessonName}
-                        onChange={(e) => setNewLessonName(e.target.value)}
-                        placeholder="Nama Lesson Baru (contoh: 01_The Magic Crystal)" required
-                        className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Lesson *</label>
-                        <input type="number" value={newLessonPosition}
-                          onChange={(e) => setNewLessonPosition(parseInt(e.target.value) || 1)}
-                          min="1" required
-                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                        <span className="text-xs text-gray-500">Menentukan urutan tampil lesson di daftar materi</span>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson (unit baru)</label>
+                  <div className="border-2 border-dashed border-[#E5E3FF] bg-[#F7F6FF] rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="text-xs text-[#7B78A8] mb-1">Posisi</div>
+                        <input type="number" value={1} readOnly
+                          className="w-16 px-3 py-2 border-2 border-[#E5E3FF] rounded-lg text-center font-semibold text-[#5C4FE5] bg-gray-50"/>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs text-[#7B78A8] mb-1">Nama lesson</div>
+                        <input type="text" value={newLessonName}
+                          onChange={(e) => setNewLessonName(e.target.value)}
+                          placeholder="Contoh: Week 01-04" required
+                          className="w-full px-3 py-2 border-2 border-[#E5E3FF] rounded-lg bg-white text-gray-900 font-medium focus:ring-2 focus:ring-[#5C4FE5]"/>
                       </div>
                     </div>
-                  )}
+                    <p className="text-xs text-[#7B78A8] mt-2">Lesson pertama di unit baru ini</p>
+                  </div>
                 </div>
               )}
             </>
