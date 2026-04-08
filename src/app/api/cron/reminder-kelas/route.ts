@@ -31,7 +31,7 @@ export async function GET(req: Request) {
 
   const todayWIT = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const startUtc = new Date(todayWIT + 'T00:00:00+09:00').toISOString()
-  const endUtc   = new Date(todayWIT + 'T23:59:59+09:00').toISOString()
+  const endUtc = new Date(todayWIT + 'T23:59:59+09:00').toISOString()
 
   // 1. Ambil sesi scheduled hari ini
   const { data: sessions } = await supabase
@@ -124,7 +124,8 @@ export async function GET(req: Request) {
       if (!student) continue
 
       const studentProf = profMap[student.profile_id] as any
-      const studentName = studentProf?.full_name ?? 'Siswa'
+      const studentFullName = studentProf?.full_name ?? 'Siswa'
+      const studentFirstName = studentFullName.split(' ')[0]
 
       const parentId = student.parent_profile_id ?? student.profile_id
       const parentProf = profMap[parentId] as any
@@ -138,48 +139,46 @@ export async function GET(req: Request) {
         if (!sentSet.has(keyOrtu)) {
           const firstName = (parentProf?.full_name ?? '').split(' ')[0] || 'Ayah/Bunda'
 
-          const message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${firstName}. 👋\n\nKelas *${studentName}* untuk kursus\n*(${kursusLabel})* akan dimulai\n*10 menit lagi!*\n\n🕐 Jadwal: ${waktu} WIT\n💻 Pastikan *${studentName}* sudah standby\n   di Zoom 3 menit sebelum kelas ya!\n\n🍪 Jangan lupa siapkan cemilan atau air mineral\n   biar ${studentName} makin semangat belajar!\n\nTerima kasih! 🙏`
+          const message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${firstName}. 👋\n\nKelas *${studentFirstName}* untuk kursus\n*(${kursusLabel})* akan dimulai\n*dalam beberapa menit ke depan ya!*\n\n🕐 Jadwal: ${waktu} WIT\n💻 Pastikan *${studentFirstName}* sudah standby\n   di Zoom 3 menit sebelum kelas ya!\n\n🍪 Jangan lupa siapkan cemilan dan air putih\n   biar ${studentFirstName} makin semangat belajar!\n\nTerima kasih! 🙏`
 
           const res = await sendWhatsApp({ target: formatPhoneID(parentPhone), message })
           results.push({ target: firstName, type: 'ortu', status: res.status })
 
           try {
             await supabase.from('notification_logs').insert({
-              type:       'wa_reminder_kelas',
-              target:     formatPhoneID(parentPhone),
+              type: 'wa_reminder_kelas',
+              target: formatPhoneID(parentPhone),
               session_id: sesi.id,
               student_id: enr.student_id,
-              payload:    { parentName: firstName, studentName, kelasLabel: cg.label, kursusLabel },
-              status:     res.status ? 'sent' : 'failed',
-              response:   res.detail ?? null,
+              payload: { parentName: firstName, studentName: studentFirstName, kelasLabel: cg.label, kursusLabel },
+              status: res.status ? 'sent' : 'failed',
+              response: res.detail ?? null,
             })
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
       // ── Pesan ke SISWA (kalau punya nomor HP sendiri) ──
       const siswaPhone = studentProf?.phone
       if (siswaPhone) {
-        // Kalau Diri Sendiri, nomor sama dengan ortu — pastikan gak skip
-        // Kalau bukan Diri Sendiri, cek nomor siswa beda dari ortu
         const keySiswa = `wa_reminder_kelas_siswa-${sesi.id}-${enr.student_id}`
         if (!sentSet.has(keySiswa)) {
-          const message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${studentName}. 👋\n\nKelas kamu untuk kursus\n*(${kursusLabel})* akan dimulai\n*10 menit lagi!*\n\n🕐 Jadwal: ${waktu} WIT\n💻 Pastikan sudah standby di Zoom\n   3 menit sebelum kelas ya!\n\nSemangat belajarnya! 💪🚀`
+          const message = `🔔 *Reminder EduKazia*\n\nHalo Kak ${studentFirstName}. 👋\n\nKelas kamu untuk kursus\n*(${kursusLabel})* akan dimulai\n*dalam beberapa menit ke depan ya!*\n\n🕐 Jadwal: ${waktu} WIT\n💻 Pastikan sudah standby di Zoom\n   3 menit sebelum kelas ya!\n\nSemangat belajarnya! 💪🚀`
 
           const res = await sendWhatsApp({ target: formatPhoneID(siswaPhone), message })
-          results.push({ target: studentName, type: isDiriSendiri ? 'diri_sendiri' : 'siswa', status: res.status })
+          results.push({ target: studentFirstName, type: isDiriSendiri ? 'diri_sendiri' : 'siswa', status: res.status })
 
           try {
             await supabase.from('notification_logs').insert({
-              type:       'wa_reminder_kelas_siswa',
-              target:     formatPhoneID(siswaPhone),
+              type: 'wa_reminder_kelas_siswa',
+              target: formatPhoneID(siswaPhone),
               session_id: sesi.id,
               student_id: enr.student_id,
-              payload:    { studentName, kelasLabel: cg.label, kursusLabel },
-              status:     res.status ? 'sent' : 'failed',
-              response:   res.detail ?? null,
+              payload: { studentName: studentFirstName, kelasLabel: cg.label, kursusLabel },
+              status: res.status ? 'sent' : 'failed',
+              response: res.detail ?? null,
             })
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     }
