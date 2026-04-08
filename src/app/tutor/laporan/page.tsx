@@ -453,7 +453,7 @@ export default function TutorLaporanPage() {
       {/* Modal isi laporan */}
       {modalLaporan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF] bg-[#F7F6FF] rounded-t-2xl">
               <div>
                 <h3 className="font-bold text-[#1A1640] text-sm">Input Laporan Belajar</h3>
@@ -464,19 +464,34 @@ export default function TutorLaporanPage() {
               </button>
             </div>
             <div className="px-5 py-4 space-y-3">
-              {[
-                { field: 'materi' as keyof ReportForm, label: 'Materi yang Diajarkan *', placeholder: 'Contoh: Persamaan kuadrat...' },
-                { field: 'perkembangan' as keyof ReportForm, label: 'Perkembangan Siswa', placeholder: 'Catatan perkembangan...' },
-                { field: 'saranSiswa' as keyof ReportForm, label: 'Saran untuk Siswa', placeholder: 'Saran untuk siswa...' },
-                { field: 'saranOrtu' as keyof ReportForm, label: 'Saran untuk Orang Tua', placeholder: 'Pesan untuk orang tua...' },
-              ].map(({ field, label, placeholder }) => (
-                <div key={field}>
-                  <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">{label}</label>
-                  <textarea rows={2} placeholder={placeholder} value={modalForm[field]}
-                    onChange={e => setModalForm(p => ({ ...p, [field]: e.target.value }))}
-                    className={textareaCls} />
-                </div>
-              ))}
+              <LaporanEditor
+                label="Materi yang Diajarkan *"
+                value={modalForm.materi}
+                onChange={v => setModalForm(p => ({ ...p, materi: v }))}
+                placeholder={"Contoh:\n---ID---\n* Grammar: Present Tense\n* Kosakata: hewan\n---EN---\n* Grammar: Present Tense\n* Vocabulary: animals"}
+                rows={5}
+              />
+              <LaporanEditor
+                label="Perkembangan Siswa"
+                value={modalForm.perkembangan}
+                onChange={v => setModalForm(p => ({ ...p, perkembangan: v }))}
+                placeholder="Catatan perkembangan siswa..."
+                rows={4}
+              />
+              <LaporanEditor
+                label="Saran untuk Siswa"
+                value={modalForm.saranSiswa}
+                onChange={v => setModalForm(p => ({ ...p, saranSiswa: v }))}
+                placeholder="Saran latihan mandiri untuk siswa..."
+                rows={3}
+              />
+              <LaporanEditor
+                label="Saran untuk Orang Tua"
+                value={modalForm.saranOrtu}
+                onChange={v => setModalForm(p => ({ ...p, saranOrtu: v }))}
+                placeholder="Saran untuk orang tua mendampingi belajar..."
+                rows={3}
+              />
               <div>
                 <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide mb-1">Link Rekaman <span className="normal-case font-normal">(opsional)</span></label>
                 <input type="url" placeholder="https://drive.google.com/..." value={modalForm.recordingUrl}
