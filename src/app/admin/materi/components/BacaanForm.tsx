@@ -56,6 +56,11 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const [editLessonPosition, setEditLessonPosition] = useState(1);
   const [editMaterialTitle, setEditMaterialTitle] = useState('');
 
+  const [lessonHasMaterial, setLessonHasMaterial] = useState<Record<string, boolean>>({})
+  const [lessonPositionValid, setLessonPositionValid] = useState<boolean | null>(null)
+  const [lessonPositionMsg, setLessonPositionMsg] = useState('')
+  const [useExistingLesson, setUseExistingLesson] = useState<string | null>(null)
+
   const [loading, setLoading] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
 
@@ -151,8 +156,41 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   };
 
   const fetchLessons = async (unitId: string) => {
-    const { data } = await supabase.from('lessons').select('*').eq('unit_id', unitId);
+    const { data } = await supabase.from('lessons').select('*').eq('unit_id', unitId).order('position');
     setLessons(data || []);
+    if (data && data.length > 0) {
+      const lessonIds = data.map((l: any) => l.id);
+      const { data: mats } = await supabase.from('materials').select('lesson_id').in('lesson_id', lessonIds).eq('category', 'bacaan');
+      const matSet: Record<string, boolean> = {};
+      (mats || []).forEach((m: any) => { matSet[m.lesson_id] = true; });
+      setLessonHasMaterial(matSet);
+      const maxPos = Math.max(...data.map((l: any) => l.position || 0), 0);
+      setNewLessonPosition(maxPos + 1);
+      const lastEmpty = [...data].reverse().find((l: any) => !matSet[l.id]);
+      if (lastEmpty) { setUseExistingLesson(lastEmpty.id); setSelectedLesson(lastEmpty.id); }
+      else { setUseExistingLesson(null); setSelectedLesson('NEW'); }
+    } else {
+      setLessonHasMaterial({}); setNewLessonPosition(1); setUseExistingLesson(null); setSelectedLesson('NEW');
+    }
+  };
+
+  const validateLessonPosition = (pos: number) => {
+    setNewLessonPosition(pos);
+    const existing = lessons.find((l: any) => l.position === pos);
+    if (existing) {
+      if (lessonHasMaterial[existing.id]) {
+        setLessonPositionValid(false);
+        setLessonPositionMsg('Posisi ' + pos + ' sudah terisi dan sudah ada materi');
+      } else {
+        setLessonPositionValid(true);
+        setLessonPositionMsg('Posisi ' + pos + ' tersedia — lesson existing akan dipakai');
+        setUseExistingLesson(existing.id); setSelectedLesson(existing.id);
+      }
+    } else {
+      setLessonPositionValid(true);
+      setLessonPositionMsg('Posisi ' + pos + ' tersedia');
+      setUseExistingLesson(null); setSelectedLesson('NEW');
+    }
   };
 
   const toggleLevel = (levelId: string) => {
@@ -263,98 +301,147 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
       {!isEditing && (
         <>
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Mata Pelajaran *</label>
-            <select value={selectedCourse} onChange={(e) => { setSelectedCourse(e.target.value); fetchLevels(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">Mata Pelajaran *</label>
+            <select value={selectedCourse}
+              onChange={(e) => { setSelectedCourse(e.target.value); setSelectedLevels([]); setSelectedChapter(''); setSelectedUnit(''); setSelectedLesson(''); fetchLevels(e.target.value); }}
+              required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
               <option value="">Pilih Mata Pelajaran</option>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Level * (Pilih 1 atau lebih)</label>
-            {!selectedCourse ? (
-              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">Pilih Mata Pelajaran dulu</div>
-            ) : levels.length === 0 ? (
-              <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500">Tidak ada level tersedia</div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex gap-2 mb-2">
-                  <button type="button" onClick={selectAllLevels} className="px-3 py-1 text-xs bg-[#5C4FE5] text-white rounded hover:bg-[#4a3ec7]">Pilih Semua</button>
-                  <button type="button" onClick={clearAllLevels} className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Clear</button>
+          {selectedCourse && levels.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-gray-900">Level * (pilih 1 atau lebih)</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={selectAllLevels} className="px-3 py-1 text-xs bg-[#5C4FE5] text-white rounded-full hover:bg-[#4a3ec7] font-semibold">Pilih Semua</button>
+                  {selectedLevels.length > 0 && <button type="button" onClick={clearAllLevels} className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 font-semibold">Clear</button>}
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 {levels.map((level) => (
-                  <label key={level.id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${selectedLevels.includes(level.id) ? 'bg-[#5C4FE5] text-white' : 'bg-gray-50 text-gray-900 hover:bg-gray-100 border border-gray-300'}`}>
-                    <input type="checkbox" checked={selectedLevels.includes(level.id)} onChange={() => toggleLevel(level.id)} className="hidden" />
-                    <div className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${selectedLevels.includes(level.id) ? 'border-white bg-white' : 'border-gray-400 bg-white'}`}>
-                      {selectedLevels.includes(level.id) && <Check size={14} className="text-[#5C4FE5]" />}
-                    </div>
-                    <span className="text-sm font-medium">{level.name}</span>
-                  </label>
+                  <button key={level.id} type="button"
+                    onClick={() => toggleLevel(level.id)}
+                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                      selectedLevels.includes(level.id)
+                        ? 'bg-[#5C4FE5] text-white shadow-md'
+                        : 'bg-[#F7F6FF] text-[#4A4580] border border-[#E5E3FF] hover:border-[#5C4FE5]'
+                    }`}>
+                    {selectedLevels.includes(level.id) && <Check size={12}/>}
+                    {level.name}
+                  </button>
                 ))}
               </div>
-            )}
-            {selectedLevels.length > 0 && <p className="mt-2 text-xs text-gray-700 font-medium">Material akan dibuat untuk {selectedLevels.length} level</p>}
-          </div>
+              {selectedLevels.length > 0 && (
+                <p className="mt-2 text-xs text-[#5C4FE5] font-semibold">Material akan dibuat untuk {selectedLevels.length} level</p>
+              )}
+            </div>
+          )}
 
           {selectedLevels.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">Chapter *</label>
-              <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
-                <option value="">Pilih Chapter</option>
-                <option value="NEW">+ Buat Chapter Baru</option>
-                {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
-              </select>
-              {selectedChapter === 'NEW' && <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900" />}
-            </div>
-          )}
+            <>
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-[#F0EFFF] rounded-xl text-sm flex-wrap">
+                <span className="text-[#7B78A8]">📍</span>
+                <span className="font-semibold text-[#5C4FE5]">{courses.find(c => c.id === selectedCourse)?.name}</span>
+                <span className="text-[#C4BFFF]">→</span>
+                <span className="font-semibold text-[#5C4FE5]">{selectedLevels.length} level dipilih</span>
+              </div>
 
-          {selectedChapter && (
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">Unit *</label>
-              <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
-                <option value="">Pilih Unit</option>
-                <option value="NEW">+ Buat Unit Baru</option>
-                {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
-              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter *</label>
+                  <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); setSelectedUnit(''); setSelectedLesson(''); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required
+                    className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
+                    <option value="">Pilih Chapter</option>
+                    <option value="NEW">+ Buat Chapter Baru</option>
+                    {chapters.map((ch) => <option key={ch.id} value={ch.id}>{ch.chapter_title}</option>)}
+                  </select>
+                  {selectedChapter === 'NEW' && <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)} placeholder="Nama Chapter Baru" required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] mt-2 bg-white text-gray-900 font-medium"/>}
+                </div>
+                {selectedChapter && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
+                    <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); setSelectedLesson(''); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required
+                      className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
+                      <option value="">Pilih Unit</option>
+                      <option value="NEW">+ Buat Unit Baru</option>
+                      {units.map((u) => <option key={u.id} value={u.id}>{u.unit_name}</option>)}
+                    </select>
+                    {selectedUnit === 'NEW' && (
+                      <div className="mt-2 space-y-2">
+                        <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                        <div className="flex items-center gap-3">
+                          <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan *</label>
+                          <input type="number" value={newUnitPosition} onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)} min="1" required className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {selectedUnit && selectedUnit !== 'NEW' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson</label>
+                  {lessons.length > 0 ? (() => {
+                    const lastWithMat = [...lessons].reverse().find((l: any) => lessonHasMaterial[l.id]);
+                    return lastWithMat ? (
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Lesson terakhir:</span>
+                          <span className="text-sm font-semibold text-gray-900">{lastWithMat.position}. {lastWithMat.lesson_name}</span>
+                        </div>
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 font-semibold">sudah ada materi</span>
+                      </div>
+                    ) : null;
+                  })() : (
+                    <div className="px-4 py-3 bg-gray-50 rounded-xl mb-3"><span className="text-sm text-gray-500 italic">Belum ada lesson</span></div>
+                  )}
+                  <div className={`border-2 rounded-xl p-4 ${lessonPositionValid === false ? 'border-red-300 bg-red-50' : lessonPositionValid === true ? 'border-[#5C4FE5]/30 bg-[#F0EFFF]' : 'border-dashed border-[#E5E3FF] bg-[#F7F6FF]'}`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div>
+                        <div className="text-xs text-[#7B78A8] mb-1">Posisi</div>
+                        <input type="number" value={newLessonPosition} onChange={(e) => validateLessonPosition(parseInt(e.target.value) || 1)} min="1" required
+                          className={`w-16 px-3 py-2 border-2 rounded-lg text-center font-semibold ${lessonPositionValid === false ? 'border-red-400 text-red-600' : 'border-[#E5E3FF] text-[#5C4FE5]'} bg-white`}/>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs text-[#7B78A8] mb-1">Nama lesson</div>
+                        <input type="text" value={useExistingLesson ? (lessons.find((l: any) => l.id === useExistingLesson)?.lesson_name || '') : newLessonName}
+                          onChange={(e) => { if (!useExistingLesson) setNewLessonName(e.target.value); }}
+                          placeholder="Contoh: Week 13-16" readOnly={!!useExistingLesson} required={!useExistingLesson}
+                          className={`w-full px-3 py-2 border-2 border-[#E5E3FF] rounded-lg bg-white text-gray-900 font-medium ${useExistingLesson ? 'bg-gray-50 text-gray-600' : ''}`}/>
+                      </div>
+                    </div>
+                    {lessonPositionValid !== null && (
+                      <div className={`flex items-center gap-2 text-xs font-semibold ${lessonPositionValid ? 'text-green-700' : 'text-red-600'}`}>
+                        <span>{lessonPositionValid ? '✅' : '🚫'}</span><span>{lessonPositionMsg}</span>
+                      </div>
+                    )}
+                    {lessonPositionValid === null && <p className="text-xs text-[#7B78A8]">Posisi otomatis. Ubah angka jika ingin menaruh di urutan lain.</p>}
+                  </div>
+                </div>
+              )}
+
               {selectedUnit === 'NEW' && (
-                <div className="mt-2 space-y-2">
-                  <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)} placeholder="Nama Unit Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
-                  <div className="flex items-center gap-3">
-                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Unit *</label>
-                    <input type="number" value={newUnitPosition} onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)} min="1" required className="w-24 px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
-                    <span className="text-xs text-gray-500">Menentukan urutan tampil unit di daftar materi</span>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Lesson (unit baru)</label>
+                  <div className="border-2 border-dashed border-[#E5E3FF] bg-[#F7F6FF] rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="text-xs text-[#7B78A8] mb-1">Posisi</div>
+                        <input type="number" value={1} readOnly className="w-16 px-3 py-2 border-2 border-[#E5E3FF] rounded-lg text-center font-semibold text-[#5C4FE5] bg-gray-50"/>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs text-[#7B78A8] mb-1">Nama lesson</div>
+                        <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Contoh: Week 01-04" required
+                          className="w-full px-3 py-2 border-2 border-[#E5E3FF] rounded-lg bg-white text-gray-900 font-medium"/>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {selectedUnit && (
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">Lesson *</label>
-              <select value={selectedLesson} onChange={(e) => setSelectedLesson(e.target.value)} required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900">
-                <option value="">Pilih Lesson</option>
-                <option value="NEW">+ Buat Lesson Baru</option>
-                {lessons.map((l) => <option key={l.id} value={l.id}>{l.lesson_name}</option>)}
-              </select>
-              {selectedLesson === 'NEW' && (
-                <div className="mt-2 space-y-2">
-                  <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} placeholder="Nama Lesson Baru" required className="w-full px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
-                  <div className="flex items-center gap-3">
-                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Urutan Lesson *</label>
-                    <input
-                      type="number"
-                      value={newLessonPosition}
-                      onChange={(e) => setNewLessonPosition(parseInt(e.target.value) || 1)}
-                      min="1"
-                      required
-                      className="w-24 px-3 py-2 border border-gray-400 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900"
-                    />
-                    <span className="text-xs text-gray-500">Menentukan urutan tampil lesson di daftar materi</span>
-                  </div>
-                </div>
-              )}
-            </div>
+            </>
           )}
         </>
       )}
