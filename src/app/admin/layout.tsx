@@ -18,13 +18,16 @@ const navGroups = [
     { href: '/admin/jadwal',    label: 'Jadwal',     icon: CalendarDays },
   ]},
   { group: 'Akademik', items: [
+    { href: '/admin/kursus',  label: 'Kursus & Paket', icon: Layers },
+    { href: '/admin/kelas',   label: 'Kelas',          icon: BookOpen },
+    { href: '/admin/materi',  label: 'Bank Materi',    icon: FolderOpen },
+  ]},
+  { group: 'Direktori', items: [
     { href: '/admin/siswa',   label: 'Siswa',         icon: GraduationCap },
     { href: '/admin/tutor',   label: 'Tutor',          icon: Users, children: [
       { href: '/admin/absensi', label: 'Absensi Siswa',  icon: ClipboardList },
       { href: '/admin/laporan', label: 'Laporan Siswa',  icon: FileText },
     ]},
-    { href: '/admin/kelas',   label: 'Kelas',          icon: BookOpen },
-    { href: '/admin/kursus',  label: 'Kursus & Paket', icon: Layers },
     { href: '/admin/bimbel',  label: 'Bimbel (B2B)',   icon: Building2, children: [
       { href: '/admin/subscription', label: 'Subscription B2B', icon: CreditCard },
     ]},
@@ -39,7 +42,6 @@ const navGroups = [
   ]},
   { group: 'Sistem', items: [
     { href: '/admin/notifikasi', label: 'Notifikasi WA', icon: Bell },
-    { href: '/admin/materi',     label: 'Bank Materi',   icon: FolderOpen },
     { href: '/admin/konten',     label: 'Konten Landing', icon: Globe },
   ]},
 ]
