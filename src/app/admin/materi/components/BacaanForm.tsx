@@ -131,7 +131,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   };
 
   const fetchLevels = async (courseId: string) => {
-    const { data } = await supabase.from('levels').select('*').eq('course_id', courseId);
+    const { data } = await supabase.from('levels').select('*').eq('course_id', courseId).order('sort_order');
     setLevels(data || []);
   };
 

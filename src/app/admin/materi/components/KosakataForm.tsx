@@ -141,7 +141,7 @@ export default function KosakataForm({ onSave, onCancel, editData }: KosakataFor
   };
 
   const fetchLevels = async (courseId: string) => {
-    const { data } = await supabase.from('levels').select('*').eq('course_id', courseId);
+    const { data } = await supabase.from('levels').select('*').eq('course_id', courseId).order('sort_order');
     setLevels(data || []);
   };
 
