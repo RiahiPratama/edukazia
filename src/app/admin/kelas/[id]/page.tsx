@@ -952,8 +952,8 @@ export default function KelasDetailPage() {
                               {isActive ? 'Aktif' : isRenewed ? 'Diperpanjang' : enr.status}
                             </span>
 
-                            {/* Tombol perpanjang hanya untuk active */}
-                            {isActive && (
+                            {/* Tombol perpanjang untuk active & completed */}
+                            {(isActive || enr.status === 'completed') && (
                               <button onClick={() => openPerpanjang(enr)}
                                 className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#F0EFFF] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors flex-shrink-0">
                                 🔄 Perpanjang
@@ -1008,7 +1008,7 @@ export default function KelasDetailPage() {
                           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>
                             {st.label}
                           </span>
-                          {isActive && (
+                          {(isActive || enr.status === 'completed') && (
                             <button onClick={() => openPerpanjang(enr)}
                               className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-[#F0EFFF] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors flex-shrink-0">
                               🔄 Perpanjang
