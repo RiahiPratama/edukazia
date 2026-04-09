@@ -911,11 +911,12 @@ export default function KelasDetailPage() {
 
                       {/* List periode */}
                       {enrs.map((enr, pidx) => {
-                        // FIX formula: current = session_start_offset + attended (bukan -1)
-                        // session_start_offset=1, attended=0 → 1/8 ✅ "sedang di sesi ke-1"
+                        // display = offset + attended (sedang di sesi ke-X)
+                        // bar = (offset + attended - 1) / total (berapa yang selesai)
                         const attended = enr.attended_count ?? 0
-                        const current = Math.min(Math.max(0, enr.session_start_offset + attended - 1), enr.sessions_total)
-                        const pct = current === 0 ? 0 : Math.min((current / enr.sessions_total) * 100, 100)
+                        const display = Math.min(enr.session_start_offset + attended, enr.sessions_total)
+                        const completed = Math.min(Math.max(0, enr.session_start_offset + attended - 1), enr.sessions_total)
+                        const pct = completed === 0 ? 0 : Math.min((completed / enr.sessions_total) * 100, 100)
                         const isActive  = enr.status === 'active'
                         const isRenewed = enr.status === 'renewed'
                         const barColor  = isRenewed ? 'bg-[#C4BFFF]' : 'bg-[#5C4FE5]'
@@ -936,7 +937,7 @@ export default function KelasDetailPage() {
                                   <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }}/>
                                 </div>
                                 <span className={`text-[10px] font-bold ${isRenewed ? 'text-[#C4BFFF]' : 'text-[#5C4FE5]'}`}>
-                                  {current}/{enr.sessions_total} sesi
+                                  {display}/{enr.sessions_total} sesi
                                 </span>
                               </div>
                             </div>
@@ -966,8 +967,9 @@ export default function KelasDetailPage() {
                     (() => {
                       const enr = enrs[0]
                       const attended = enr.attended_count ?? 0
-                      const current = Math.min(Math.max(0, enr.session_start_offset + attended - 1), enr.sessions_total)
-                      const pct     = current === 0 ? 0 : Math.min((current / enr.sessions_total) * 100, 100)
+                      const display = Math.min(enr.session_start_offset + attended, enr.sessions_total)
+                      const completed = Math.min(Math.max(0, enr.session_start_offset + attended - 1), enr.sessions_total)
+                      const pct     = completed === 0 ? 0 : Math.min((completed / enr.sessions_total) * 100, 100)
                       const isActive = enr.status === 'active'
                       const st = isActive ? { label: 'Aktif', cls: 'bg-[#E6F4EC] text-[#1A5C36]' }
                                : enr.status === 'inactive' ? { label: 'Berhenti', cls: 'bg-[#FEE9E9] text-[#991B1B]' }
@@ -987,7 +989,7 @@ export default function KelasDetailPage() {
                                 <div className="h-full bg-[#5C4FE5] rounded-full transition-all" style={{ width: `${pct}%` }}/>
                               </div>
                               <span className="text-[10px] font-bold text-[#5C4FE5]">
-                                {current}/{enr.sessions_total} sesi
+                                {display}/{enr.sessions_total} sesi
                               </span>
                             </div>
                             {units.length > 0 && (() => {
