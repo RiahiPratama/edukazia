@@ -207,6 +207,24 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
           .ortu-content [class*="border-stone-100"],
           .ortu-content [class*="border-stone-50"] { border-color: #2A2A38 !important; }
           .ortu-content [class*="text-stone-700"][class*="font-bold"] { color: #D8D4E8 !important; }
+
+          .ortu-content [class*="bg-gray-50"] { background: rgba(255,255,255,0.04) !important; }
+          .ortu-content [class*="bg-gray-100"] { background: rgba(255,255,255,0.06) !important; }
+          .ortu-content [class*="text-gray-400"] { color: #5A5870 !important; }
+          .ortu-content [class*="text-gray-600"] { color: #B0ACBC !important; }
+          .ortu-content [class*="text-gray-900"] { color: #F0EDE8 !important; }
+          .ortu-content [class*="border-gray-200"] { border-color: #2A2A38 !important; }
+          .ortu-content .text-\\[\\#374151\\] { color: #D0CDE0 !important; }
+          .ortu-content .text-\\[\\#1A1640\\] { color: #F0EDE8 !important; }
+          .ortu-content .text-\\[\\#7B78A8\\] { color: #9B97C0 !important; }
+          .ortu-content .border-\\[\\#E5E3FF\\] { border-color: #2A2A38 !important; }
+          .ortu-content .bg-\\[\\#F7F6FF\\] { background: rgba(255,255,255,0.03) !important; }
+          .ortu-content .bg-\\[\\#EEEDFE\\] { background: rgba(255,255,255,0.06) !important; }
+          .ortu-content .bg-\\[\\#F0EFFF\\] { background: rgba(255,255,255,0.05) !important; }
+          .ortu-content .from-purple-50 { --tw-gradient-from: #1E1A3A !important; }
+          .ortu-content .to-white { --tw-gradient-to: var(--ortu-card-bg) !important; }
+          .ortu-content .hover\\:from-purple-100:hover { --tw-gradient-from: #2A2550 !important; }
+          .ortu-content .divide-\\[\\#E5E3FF\\] > :not(:last-child) { border-color: #2A2A38 !important; }
         `}</style>
       )}
 

@@ -45,10 +45,10 @@ export default async function MateriPage({
 
   if (!enrollments || enrollments.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F7F6FF] dark:bg-[#0F0B2E] p-6">
+      <div className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white dark:bg-[#1E1A4A] border-2 border-[#E5E3FF] dark:border-[#2D2760] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600 dark:text-gray-400">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
               Hubungi admin untuk mengatur level pembelajaran kamu.
             </p>
           </div>
@@ -91,10 +91,10 @@ export default async function MateriPage({
 
   if (levelIds.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F7F6FF] dark:bg-[#0F0B2E] p-6">
+      <div className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white dark:bg-[#1E1A4A] border-2 border-[#E5E3FF] dark:border-[#2D2760] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600 dark:text-gray-400">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
               Level pembelajaran tidak ditemukan.
             </p>
           </div>
@@ -118,10 +118,10 @@ export default async function MateriPage({
 
   if (!units || units.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F7F6FF] dark:bg-[#0F0B2E] p-6">
+      <div className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white dark:bg-[#1E1A4A] border-2 border-[#E5E3FF] dark:border-[#2D2760] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600 dark:text-gray-400">
+          <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
+            <p className="text-lg text-gray-600">
               Materi pembelajaran belum tersedia.
             </p>
           </div>
@@ -285,7 +285,7 @@ export default async function MateriPage({
   }).filter((l): l is NonNullable<typeof l> => l !== null)
 
   return (
-    <div className="min-h-screen bg-[#F7F6FF] dark:bg-[#0F0B2E]">
+    <div className="min-h-screen">
       <MateriContent
         levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
