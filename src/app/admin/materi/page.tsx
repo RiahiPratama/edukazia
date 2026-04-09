@@ -8,6 +8,7 @@ import KosakataForm from './components/KosakataForm';
 import CEFRForm from './components/CEFRForm';
 import CEFRBlockEditor from './components/CEFRBlockEditor';
 import MaterialList from './components/MaterialList';
+import ProgressOverview from './components/ProgressOverview';
 
 type TabType = 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
 
@@ -186,12 +187,15 @@ export default function MateriTutorPage() {
               {showForm ? (
                 renderForm()
               ) : (
-                <MaterialList
-                  key={refreshKey}
-                  category={activeTab}
-                  onEdit={handleEdit}
-                  onEditContent={activeTab === 'cefr' ? handleCEFREditContent : undefined}
-                />
+                <>
+                  <ProgressOverview category={activeTab} />
+                  <MaterialList
+                    key={refreshKey}
+                    category={activeTab}
+                    onEdit={handleEdit}
+                    onEditContent={activeTab === 'cefr' ? handleCEFREditContent : undefined}
+                  />
+                </>
               )}
             </>
           )}
