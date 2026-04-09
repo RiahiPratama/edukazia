@@ -268,6 +268,63 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const allLevelsHaveFiles = () => selectedLevels.every(id => !!jsxFiles[id]);
   const filledCount = sortedSelectedLevels.filter(l => !!jsxFiles[l.id]).length;
 
+  // ✅ Drag-drop state & handler
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = () => setIsDragging(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+      f.name.endsWith('.jsx') || f.name.endsWith('.tsx') || f.name.endsWith('.js')
+    );
+
+    if (files.length === 0) return;
+
+    // Auto-match: cari level name di filename (case insensitive)
+    const newFiles = { ...jsxFiles };
+    const unmatchedFiles: File[] = [];
+
+    for (const file of files) {
+      const nameLower = file.name.toLowerCase().replace(/[_\-\.]/g, ' ');
+      let matched = false;
+
+      for (const level of sortedSelectedLevels) {
+        // Match level name patterns: "eng 2.1", "eng2.1", "eng-2-1", "eng_2_1"
+        const levelLower = level.name.toLowerCase();
+        const levelCompact = levelLower.replace(/[\s\.]/g, '');
+        const levelDash = levelLower.replace(/[\s\.]/g, '-');
+        const levelUnderscore = levelLower.replace(/[\s\.]/g, '_');
+
+        if (nameLower.includes(levelLower) || nameLower.includes(levelCompact) ||
+            nameLower.includes(levelDash) || nameLower.includes(levelUnderscore)) {
+          newFiles[level.id] = file;
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched) unmatchedFiles.push(file);
+    }
+
+    // Assign unmatched files sequentially to empty slots
+    let emptyIdx = 0;
+    for (const file of unmatchedFiles) {
+      while (emptyIdx < sortedSelectedLevels.length && newFiles[sortedSelectedLevels[emptyIdx].id]) {
+        emptyIdx++;
+      }
+      if (emptyIdx < sortedSelectedLevels.length) {
+        newFiles[sortedSelectedLevels[emptyIdx].id] = file;
+        emptyIdx++;
+      }
+    }
+
+    setJsxFiles(newFiles);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -601,12 +658,29 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                     </div>
                   </div>
 
-                  <div className="border-2 border-[#E5E3FF] rounded-xl p-5 bg-[#FAFAFF]">
+                  <div
+                    className={`border-2 rounded-xl p-5 transition-colors ${isDragging ? 'border-[#5C4FE5] bg-[#F0EFFF]' : 'border-[#E5E3FF] bg-[#FAFAFF]'}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
                     <div className="flex items-center gap-2 mb-4">
                       <span className="w-6 h-6 flex items-center justify-center bg-[#5C4FE5] text-white text-xs font-bold rounded-full">2</span>
                       <span className="text-sm font-bold text-gray-900">Upload file per level</span>
                     </div>
-                    <p className="text-xs text-gray-500 mb-4">Upload file berbeda untuk setiap level. Diurutkan dari level terendah.</p>
+                    <p className="text-xs text-gray-500 mb-2">Upload file berbeda untuk setiap level. Diurutkan dari level terendah.</p>
+
+                    {/* ✅ Drag-drop hint */}
+                    <div className={`mb-3 px-4 py-3 rounded-lg border-2 border-dashed text-center transition-colors ${
+                      isDragging ? 'border-[#5C4FE5] bg-white' : 'border-gray-300 bg-gray-50'
+                    }`}>
+                      <p className={`text-sm font-semibold ${isDragging ? 'text-[#5C4FE5]' : 'text-gray-400'}`}>
+                        {isDragging ? '📥 Lepas file di sini...' : '📁 Drag & drop file ke sini — auto-match by nama level'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Contoh: <span className="font-mono">nouns-eng2.1.jsx</span> otomatis masuk ke ENG 2.1
+                      </p>
+                    </div>
 
                     <div className="space-y-2">
                       {sortedSelectedLevels.map((level, idx) => {

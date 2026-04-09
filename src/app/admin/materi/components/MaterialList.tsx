@@ -7,6 +7,7 @@ import MoveChapterModal from './MoveChapterModal';
 import MoveUnitModal from './MoveUnitModal';
 import ReorderPanel from './ReorderPanel';
 import DuplicateCloneModal from './DuplicateCloneModal';
+import PreviewModal from './PreviewModal';
 
 // Available icons for chapters and units
 const ICON_OPTIONS = [
@@ -193,6 +194,11 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     sourceChapterTitle?: string; sourceUnitName?: string; sourceLessonName?: string;
     chapterId?: string; chapterTitle?: string; unitCount?: number; lessonCount?: number;
     currentLevelId: string; currentLevelName: string;
+  } | null>(null);
+
+  // ✅ Preview modal state
+  const [previewData, setPreviewData] = useState<{
+    materialId: string; materialTitle: string; storageBucket: string; storagePath: string;
   } | null>(null);
 
   const supabase = createClient();
@@ -1435,6 +1441,20 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                   </label>
                                                 )
                                               )}
+                                              {/* ✅ Preview button for bacaan & cefr */}
+                                              {(material.category === 'bacaan' || material.category === 'cefr') && material.material_contents?.[0]?.storage_path && (
+                                                <button
+                                                  onClick={() => setPreviewData({
+                                                    materialId: material.id,
+                                                    materialTitle: material.title,
+                                                    storageBucket: material.material_contents![0].storage_bucket || 'components',
+                                                    storagePath: material.material_contents![0].storage_path!,
+                                                  })}
+                                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                  title="Preview materi">
+                                                  <Eye className="w-4 h-4" />
+                                                </button>
+                                              )}
                                               {material.category === 'cefr' && onEditContent && (
                                                 <button onClick={() => onEditContent(material.lesson_id, material.lesson_name)}
                                                   className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Edit konten block">
@@ -1529,6 +1549,13 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           {...duplicateCloneData}
           onClose={() => setDuplicateCloneData(null)}
           onSuccess={handleStructureSuccess}
+        />
+      )}
+
+      {previewData && (
+        <PreviewModal
+          {...previewData}
+          onClose={() => setPreviewData(null)}
         />
       )}
     </div>
