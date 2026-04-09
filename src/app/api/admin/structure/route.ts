@@ -42,6 +42,12 @@ export async function POST(request: NextRequest) {
         return await reorderUnits(supabase, body);
       case 'reorder_lessons':
         return await reorderLessons(supabase, body);
+      case 'delete_chapter':
+        return await deleteChapter(supabase, body);
+      case 'delete_unit':
+        return await deleteUnit(supabase, body);
+      case 'bulk_publish':
+        return await bulkPublish(supabase, body);
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -382,5 +388,247 @@ async function reorderLessons(supabase: any, body: any) {
   return NextResponse.json({
     success: true,
     message: `Urutan ${lesson_ids.length} lesson berhasil diperbarui`,
+  });
+}
+
+// ============================================================
+// HELPER: Hapus storage files untuk material IDs
+// ============================================================
+async function deleteStorageFiles(supabase: any, materialIds: string[]) {
+  if (materialIds.length === 0) return 0;
+
+  const { data: contents } = await supabase
+    .from('material_contents')
+    .select('storage_path, storage_bucket')
+    .in('material_id', materialIds);
+
+  let deletedCount = 0;
+  for (const mc of (contents ?? [])) {
+    if (mc.storage_path && mc.storage_bucket) {
+      const { error } = await supabase.storage
+        .from(mc.storage_bucket)
+        .remove([mc.storage_path]);
+      if (!error) deletedCount++;
+      else console.warn('⚠️ Gagal hapus file:', mc.storage_path, error.message);
+    }
+  }
+  return deletedCount;
+}
+
+// ============================================================
+// 5. DELETE CHAPTER — cascade hapus semua isi + storage files
+// ============================================================
+async function deleteChapter(supabase: any, body: any) {
+  const { chapter_id } = body;
+  if (!chapter_id) return NextResponse.json({ error: 'chapter_id wajib diisi' }, { status: 400 });
+
+  // Verify chapter exists
+  const { data: chapter } = await supabase
+    .from('chapters')
+    .select('id, chapter_title, level_id')
+    .eq('id', chapter_id)
+    .single();
+
+  if (!chapter) return NextResponse.json({ error: 'Chapter tidak ditemukan' }, { status: 404 });
+
+  // Get all units in this chapter
+  const { data: units } = await supabase
+    .from('units')
+    .select('id')
+    .eq('chapter_id', chapter_id);
+
+  const unitIds = (units || []).map((u: any) => u.id);
+
+  // Get all lessons in these units
+  let lessonIds: string[] = [];
+  if (unitIds.length > 0) {
+    const { data: lessons } = await supabase
+      .from('lessons')
+      .select('id')
+      .in('unit_id', unitIds);
+    lessonIds = (lessons || []).map((l: any) => l.id);
+  }
+
+  // Get all materials in these lessons
+  let materialIds: string[] = [];
+  if (lessonIds.length > 0) {
+    const { data: materials } = await supabase
+      .from('materials')
+      .select('id')
+      .in('lesson_id', lessonIds);
+    materialIds = (materials || []).map((m: any) => m.id);
+  }
+
+  // 1. Delete storage files
+  const filesDeleted = await deleteStorageFiles(supabase, materialIds);
+
+  // 2. Delete material_contents
+  if (materialIds.length > 0) {
+    await supabase.from('material_contents').delete().in('material_id', materialIds);
+  }
+
+  // 3. Delete materials
+  if (materialIds.length > 0) {
+    await supabase.from('materials').delete().in('id', materialIds);
+  }
+
+  // 4. Delete lessons
+  if (lessonIds.length > 0) {
+    await supabase.from('lessons').delete().in('id', lessonIds);
+  }
+
+  // 5. Delete units
+  if (unitIds.length > 0) {
+    await supabase.from('units').delete().in('id', unitIds);
+  }
+
+  // 6. Delete chapter
+  const { error: deleteErr } = await supabase
+    .from('chapters')
+    .delete()
+    .eq('id', chapter_id);
+
+  if (deleteErr) {
+    console.error('Delete chapter error:', deleteErr);
+    return NextResponse.json({ error: 'Gagal hapus chapter', details: deleteErr.message }, { status: 500 });
+  }
+
+  // 7. Rapikan order_number di level asal
+  const { data: remainingChapters } = await supabase
+    .from('chapters')
+    .select('id')
+    .eq('level_id', chapter.level_id)
+    .order('order_number', { ascending: true });
+
+  if (remainingChapters) {
+    for (let i = 0; i < remainingChapters.length; i++) {
+      await supabase.from('chapters').update({ order_number: i + 1 }).eq('id', remainingChapters[i].id);
+    }
+  }
+
+  console.log(`✅ Chapter "${chapter.chapter_title}" dihapus: ${materialIds.length} material, ${filesDeleted} file`);
+
+  return NextResponse.json({
+    success: true,
+    message: `Chapter "${chapter.chapter_title}" berhasil dihapus (${unitIds.length} unit, ${lessonIds.length} lesson, ${materialIds.length} material, ${filesDeleted} file)`,
+  });
+}
+
+// ============================================================
+// 6. DELETE UNIT — cascade hapus semua isi + storage files
+// ============================================================
+async function deleteUnit(supabase: any, body: any) {
+  const { unit_id } = body;
+  if (!unit_id) return NextResponse.json({ error: 'unit_id wajib diisi' }, { status: 400 });
+
+  // Verify unit exists
+  const { data: unit } = await supabase
+    .from('units')
+    .select('id, unit_name, chapter_id')
+    .eq('id', unit_id)
+    .single();
+
+  if (!unit) return NextResponse.json({ error: 'Unit tidak ditemukan' }, { status: 404 });
+
+  // Get all lessons
+  const { data: lessons } = await supabase
+    .from('lessons')
+    .select('id')
+    .eq('unit_id', unit_id);
+
+  const lessonIds = (lessons || []).map((l: any) => l.id);
+
+  // Get all materials
+  let materialIds: string[] = [];
+  if (lessonIds.length > 0) {
+    const { data: materials } = await supabase
+      .from('materials')
+      .select('id')
+      .in('lesson_id', lessonIds);
+    materialIds = (materials || []).map((m: any) => m.id);
+  }
+
+  // 1. Delete storage files
+  const filesDeleted = await deleteStorageFiles(supabase, materialIds);
+
+  // 2. Delete material_contents
+  if (materialIds.length > 0) {
+    await supabase.from('material_contents').delete().in('material_id', materialIds);
+  }
+
+  // 3. Delete materials
+  if (materialIds.length > 0) {
+    await supabase.from('materials').delete().in('id', materialIds);
+  }
+
+  // 4. Delete lessons
+  if (lessonIds.length > 0) {
+    await supabase.from('lessons').delete().in('id', lessonIds);
+  }
+
+  // 5. Delete unit
+  const { error: deleteErr } = await supabase
+    .from('units')
+    .delete()
+    .eq('id', unit_id);
+
+  if (deleteErr) {
+    console.error('Delete unit error:', deleteErr);
+    return NextResponse.json({ error: 'Gagal hapus unit', details: deleteErr.message }, { status: 500 });
+  }
+
+  // 6. Rapikan position di chapter
+  if (unit.chapter_id) {
+    const { data: remainingUnits } = await supabase
+      .from('units')
+      .select('id')
+      .eq('chapter_id', unit.chapter_id)
+      .order('position', { ascending: true });
+
+    if (remainingUnits) {
+      for (let i = 0; i < remainingUnits.length; i++) {
+        await supabase.from('units').update({ position: i + 1 }).eq('id', remainingUnits[i].id);
+      }
+    }
+  }
+
+  console.log(`✅ Unit "${unit.unit_name}" dihapus: ${materialIds.length} material, ${filesDeleted} file`);
+
+  return NextResponse.json({
+    success: true,
+    message: `Unit "${unit.unit_name}" berhasil dihapus (${lessonIds.length} lesson, ${materialIds.length} material, ${filesDeleted} file)`,
+  });
+}
+
+// ============================================================
+// 7. BULK PUBLISH — batch update is_published
+// ============================================================
+async function bulkPublish(supabase: any, body: any) {
+  const { material_ids, is_published } = body;
+
+  if (!material_ids || !Array.isArray(material_ids) || material_ids.length === 0) {
+    return NextResponse.json({ error: 'material_ids[] wajib diisi' }, { status: 400 });
+  }
+
+  if (typeof is_published !== 'boolean') {
+    return NextResponse.json({ error: 'is_published (boolean) wajib diisi' }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('materials')
+    .update({ is_published })
+    .in('id', material_ids);
+
+  if (error) {
+    console.error('Bulk publish error:', error);
+    return NextResponse.json({ error: 'Gagal update publish status', details: error.message }, { status: 500 });
+  }
+
+  const action = is_published ? 'dipublish' : 'di-unpublish';
+  console.log(`✅ ${material_ids.length} material ${action}`);
+
+  return NextResponse.json({
+    success: true,
+    message: `${material_ids.length} material berhasil ${action}`,
   });
 }

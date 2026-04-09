@@ -163,6 +163,13 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   // ✅ NEW: Dropdown menu state
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
+  // ✅ NEW: Search state
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // ✅ NEW: Bulk select state
+  const [selectedMaterials, setSelectedMaterials] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   // ✅ NEW: Modal states for structure management
   const [moveChapterData, setMoveChapterData] = useState<{
     chapterId: string; chapterTitle: string; currentLevelId: string;
@@ -218,7 +225,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
 
   useEffect(() => {
     applyFilters();
-  }, [materials, selectedLevel, selectedChapter, selectedUnit, selectedLesson]);
+  }, [materials, selectedLevel, selectedChapter, selectedUnit, selectedLesson, searchQuery]);
 
   const fetchMaterials = async () => {
     setLoading(true);
@@ -358,7 +365,19 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     if (selectedLevel) filtered = filtered.filter(m => m.level_id === selectedLevel);
     if (selectedUnit) filtered = filtered.filter(m => m.unit_id === selectedUnit);
     if (selectedLesson) filtered = filtered.filter(m => m.lesson_id === selectedLesson);
+    // ✅ Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(m =>
+        m.title?.toLowerCase().includes(q) ||
+        m.lesson_name?.toLowerCase().includes(q) ||
+        m.unit_name?.toLowerCase().includes(q) ||
+        m.chapter_title?.toLowerCase().includes(q) ||
+        m.level_name?.toLowerCase().includes(q)
+      );
+    }
     setFilteredMaterials(filtered);
+    setSelectedMaterials(new Set()); // clear selection on filter change
   };
 
   const groupByChapterUnitAndLesson = () => {
@@ -794,6 +813,95 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     fetchMaterials();
   };
 
+  // ✅ DELETE CHAPTER
+  const handleDeleteChapter = async (chapterId: string, chapterTitle: string, unitCount: number, lessonCount: number) => {
+    const msg = unitCount > 0
+      ? `Hapus chapter "${chapterTitle}" beserta ${unitCount} unit, ${lessonCount} lesson, dan SEMUA materi + file di dalamnya?\n\nAksi ini TIDAK BISA DIBATALKAN!`
+      : `Hapus chapter kosong "${chapterTitle}"?`;
+
+    if (!confirm(msg)) return;
+
+    try {
+      const res = await fetch('/api/admin/structure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_chapter', chapter_id: chapterId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+      alert(`✅ ${data.message}`);
+      fetchMaterials();
+    } catch (err) {
+      alert(`❌ Gagal hapus chapter: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  // ✅ DELETE UNIT
+  const handleDeleteUnit = async (unitId: string, unitName: string, lessonCount: number) => {
+    const msg = lessonCount > 0
+      ? `Hapus unit "${unitName}" beserta ${lessonCount} lesson dan SEMUA materi + file di dalamnya?\n\nAksi ini TIDAK BISA DIBATALKAN!`
+      : `Hapus unit kosong "${unitName}"?`;
+
+    if (!confirm(msg)) return;
+
+    try {
+      const res = await fetch('/api/admin/structure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_unit', unit_id: unitId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+      alert(`✅ ${data.message}`);
+      fetchMaterials();
+    } catch (err) {
+      alert(`❌ Gagal hapus unit: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  // ✅ BULK PUBLISH / UNPUBLISH
+  const toggleSelectMaterial = (id: string) => {
+    setSelectedMaterials(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedMaterials(new Set(filteredMaterials.map(m => m.id)));
+  };
+
+  const clearSelection = () => setSelectedMaterials(new Set());
+
+  const handleBulkPublish = async (publish: boolean) => {
+    if (selectedMaterials.size === 0) return;
+    const action = publish ? 'publish' : 'unpublish';
+    if (!confirm(`${publish ? 'Publish' : 'Unpublish'} ${selectedMaterials.size} material?`)) return;
+
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/admin/structure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulk_publish',
+          material_ids: [...selectedMaterials],
+          is_published: publish,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+      alert(`✅ ${data.message}`);
+      setSelectedMaterials(new Set());
+      fetchMaterials();
+    } catch (err) {
+      alert(`❌ Gagal ${action}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8 text-center">
@@ -819,6 +927,20 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
 
   return (
     <div className="space-y-6">
+      {/* ✅ Search Bar */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 Cari materi, lesson, unit, chapter, atau level..."
+          className="w-full px-4 py-2.5 pl-10 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900"
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="grid grid-cols-4 gap-4">
         <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white">
@@ -840,7 +962,35 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         </select>
       </div>
 
-      <div className="text-lg font-semibold text-gray-900">{totalMaterials} Materi</div>
+      {/* ✅ Material Count + Bulk Actions Toolbar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-lg font-semibold text-gray-900">{totalMaterials} Materi</span>
+          {totalMaterials > 0 && (
+            <button onClick={selectedMaterials.size === filteredMaterials.length ? clearSelection : selectAllVisible}
+              className="text-xs px-2.5 py-1 border border-[#5C4FE5] text-[#5C4FE5] rounded-full hover:bg-[#F7F6FF] font-semibold transition-colors">
+              {selectedMaterials.size === filteredMaterials.length ? '✕ Batal pilih' : '☑ Pilih semua'}
+            </button>
+          )}
+        </div>
+        {selectedMaterials.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 font-semibold">{selectedMaterials.size} dipilih</span>
+            <button onClick={() => handleBulkPublish(true)} disabled={bulkLoading}
+              className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
+              Publish
+            </button>
+            <button onClick={() => handleBulkPublish(false)} disabled={bulkLoading}
+              className="px-3 py-1.5 bg-gray-500 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors">
+              Unpublish
+            </button>
+            <button onClick={clearSelection}
+              className="px-3 py-1.5 text-gray-500 text-xs font-semibold hover:text-gray-700 transition-colors">
+              Batal
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Material List Grouped by Chapter → Unit → Lesson */}
       <div className="space-y-4">
@@ -911,6 +1061,12 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                 unitCount,
                                 lessonCount,
                               }),
+                            },
+                            {
+                              label: 'Hapus chapter',
+                              icon: <Trash2 className="w-4 h-4" />,
+                              danger: true,
+                              onClick: () => handleDeleteChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, unitCount, lessonCount),
                             },
                           ]}
                         />
@@ -1040,6 +1196,12 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                           currentLevelName: chapterGroup.levelName,
                                           lessonCount: unitLessonCount,
                                         }),
+                                      },
+                                      {
+                                        label: 'Hapus unit',
+                                        icon: <Trash2 className="w-4 h-4" />,
+                                        danger: true,
+                                        onClick: () => handleDeleteUnit(unitGroup.unitId, unitGroup.unitName, unitLessonCount),
                                       },
                                     ]}
                                   />
@@ -1204,6 +1366,12 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                         ) : (
                                           <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                                             <div className="flex items-center gap-3">
+                                              <input
+                                                type="checkbox"
+                                                checked={selectedMaterials.has(material.id)}
+                                                onChange={() => toggleSelectMaterial(material.id)}
+                                                className="w-4 h-4 text-[#5C4FE5] focus:ring-[#5C4FE5] rounded border-gray-300 cursor-pointer"
+                                              />
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
                                               <span className="text-sm font-semibold text-gray-700">{getMaterialDisplayName(material)}</span>
                                               {(material.category === 'bacaan' || material.category === 'cefr') && (
