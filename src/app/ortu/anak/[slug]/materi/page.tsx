@@ -106,8 +106,9 @@ export default async function MateriPage({
   // 5. Get levels with courses
   const { data: levels } = await supabase
     .from('levels')
-    .select('id, name, course_id, courses:course_id(id, name)')
+    .select('id, name, sort_order, course_id, courses:course_id(id, name)')
     .in('id', levelIds)
+    .order('sort_order')
 
   // 6. Get all units for ALL enrolled levels
   const { data: units } = await supabase
@@ -283,6 +284,11 @@ export default async function MateriPage({
       units: transformedUnits
     }
   }).filter((l): l is NonNullable<typeof l> => l !== null)
+    .sort((a, b) => {
+      const aSort = levels?.find(l => l.id === a.level_id)?.sort_order ?? 0
+      const bSort = levels?.find(l => l.id === b.level_id)?.sort_order ?? 0
+      return aSort - bSort
+    })
 
   return (
     <div className="min-h-screen">
