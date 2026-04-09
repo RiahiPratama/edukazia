@@ -98,8 +98,18 @@ async function moveChapter(supabase: any, body: any) {
     .order('order_number', { ascending: false })
     .limit(1);
 
+  // Get max chapter_number di level tujuan (bisa beda row dari max order_number)
+  const { data: maxChapterNumRow } = await supabase
+    .from('chapters')
+    .select('chapter_number')
+    .eq('level_id', target_level_id)
+    .order('chapter_number', { ascending: false })
+    .limit(1);
+
   const maxOrder = existingChapters?.[0]?.order_number || 0;
+  const maxChapterNumber = maxChapterNumRow?.[0]?.chapter_number || 0;
   const newOrder = target_position || (maxOrder + 1);
+  const newChapterNumber = maxChapterNumber + 1;
 
   // Kalau target_position specified, geser chapter yang sudah ada di posisi itu ke bawah
   if (target_position) {
@@ -123,7 +133,7 @@ async function moveChapter(supabase: any, body: any) {
   // UPDATE chapter — pindah ke level baru
   const { error: updateChapterErr } = await supabase
     .from('chapters')
-    .update({ level_id: target_level_id, order_number: newOrder })
+    .update({ level_id: target_level_id, order_number: newOrder, chapter_number: newChapterNumber })
     .eq('id', chapter_id);
 
   if (updateChapterErr) {
