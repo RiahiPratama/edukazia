@@ -185,10 +185,10 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
       materials: u.materials.filter(m => m.category === activeTab)
     })).filter(u => u.materials.length > 0)
 
-    // On live_zoom tab, also include units that have materials but are locked (so they show with 🔒)
+    // On live_zoom/bacaan/cefr tabs, also include units that have materials but are locked (so they show with 🔒)
     // For other tabs, locked units with materials are already included
     const maxPos = unitLockMap[level.level_id] ?? 999
-    const allUnitsForTab = activeTab === 'live_zoom'
+    const allUnitsForTab = activeTab !== 'kosakata'
       ? level.units.filter(u => u.materials.some(m => m.category === activeTab))
       : filteredUnits
 
@@ -351,7 +351,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                   <div className="divide-y divide-[#E5E3FF]">
                     {units.map(unit => {
                       const maxPos = unitLockMap[levelId] ?? 999
-                      const isUnitLocked = activeTab === 'live_zoom' && unit.sort_order > maxPos
+                      const isUnitLocked = activeTab !== 'kosakata' && unit.sort_order > maxPos
                       const isUnitOpen = !isUnitLocked && openUnits.has(unit.id)
                       const lessonGroups = groupByLesson(unit.materials)
                       return (
