@@ -81,16 +81,15 @@ export default function PreviewModal({ materialId, materialTitle, storageBucket,
           }
         }
 
-        cleanSource += '\\nreturn __DefaultComponent__;';
-
-        // Transpile JSX → JS using Babel
+        // Transpile JSX → JS using Babel (as script, no return)
         var transpiled = Babel.transform(cleanSource, {
           presets: ['react'],
           filename: 'component.jsx',
         }).code;
 
-        // Execute transpiled code
-        var factory = new Function('React', 'useState', 'useEffect', 'useRef', 'useMemo', 'useCallback', 'Fragment', 'createElement', transpiled);
+        // Wrap transpiled code in function with return
+        var wrappedCode = transpiled + '\\nreturn __DefaultComponent__;';
+        var factory = new Function('React', 'useState', 'useEffect', 'useRef', 'useMemo', 'useCallback', 'Fragment', 'createElement', wrappedCode);
         var Component = factory(React, useState, useEffect, useRef, useMemo, useCallback, Fragment, createElement);
 
         if (typeof Component === 'function') {
