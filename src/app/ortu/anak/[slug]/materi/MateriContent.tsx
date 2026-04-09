@@ -14,6 +14,7 @@ type Material = {
   slides_url: string | null
   completed: boolean
   lesson_title: string
+  lesson_position: number
   unit_name: string
 }
 
@@ -37,9 +38,10 @@ type MateriContentProps = {
   studentName: string
   studentSlug: string
   unitLockMap?: Record<string, number>
+  lessonLockMap?: Record<string, number>
 }
 
-export default function MateriContent({ levelsData, studentName, studentSlug, unitLockMap = {} }: MateriContentProps) {
+export default function MateriContent({ levelsData, studentName, studentSlug, unitLockMap = {}, lessonLockMap = {} }: MateriContentProps) {
   const [activeTab, setActiveTab] = useState<'live_zoom' | 'bacaan' | 'kosakata' | 'cefr'>('live_zoom')
   const [openChapters, setOpenChapters] = useState<Set<string>>(new Set())
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
@@ -377,9 +379,20 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                           {/* Lessons + Materials */}
                           {isUnitOpen && !isUnitLocked && (
                             <div className="bg-white">
-                              {Array.from(lessonGroups.entries()).map(([lessonTitle, materials]) => (
-                                <div key={lessonTitle} className="px-5 py-3 border-b border-[#E5E3FF] last:border-b-0">
-                                  <p className="text-sm font-medium text-[#374151] mb-2">{lessonTitle}</p>
+                              {Array.from(lessonGroups.entries()).map(([lessonTitle, materials]) => {
+                                // Lesson lock: di unit saat ini, lesson di atas current_lesson_position dikunci
+                                const lessonPos = materials[0]?.lesson_position ?? 0
+                                const maxLessonPos = lessonLockMap[levelId] ?? 999
+                                const isLessonLocked = activeTab !== 'kosakata' && unit.sort_order === maxPos && lessonPos > maxLessonPos
+
+                                return (
+                                <div key={lessonTitle} className={`px-5 py-3 border-b border-[#E5E3FF] last:border-b-0 ${isLessonLocked ? 'opacity-50' : ''}`}>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {isLessonLocked && <span className="text-sm">🔒</span>}
+                                    <p className={`text-sm font-medium ${isLessonLocked ? 'text-gray-400' : 'text-[#374151]'}`}>{lessonTitle}</p>
+                                    {isLessonLocked && <span className="text-[10px] text-gray-400">Belum dibuka</span>}
+                                  </div>
+                                  {!isLessonLocked && (
                                   <div className="flex flex-wrap gap-2 pl-2">
                                     {materials.map(material => {
                                       const isClickable = material.student_content_url ||
@@ -429,8 +442,10 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                                       )
                                     })}
                                   </div>
+                                  )}
                                 </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           )}
                         </div>

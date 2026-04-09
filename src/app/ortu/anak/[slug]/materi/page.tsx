@@ -178,11 +178,12 @@ export default async function MateriPage({
 
   // 11. Unit Lock: fetch student_unit_progress (Privat) + class_groups (Grup)
   const unitLockMap: Record<string, number> = {}
+  const lessonLockMap: Record<string, number> = {}
 
   // Privat: dari student_unit_progress
   const { data: studentProgress } = await supabase
     .from('student_unit_progress')
-    .select('class_group_id, current_unit_position')
+    .select('class_group_id, current_unit_position, current_lesson_position')
     .eq('student_id', student.id)
 
   // Map class_group → level via class_group_levels
@@ -196,6 +197,7 @@ export default async function MateriPage({
       const sp = studentProgress.find(s => s.class_group_id === c.class_group_id)
       if (sp) {
         unitLockMap[c.level_id] = Math.max(unitLockMap[c.level_id] ?? 0, sp.current_unit_position)
+        lessonLockMap[c.level_id] = Math.max(lessonLockMap[c.level_id] ?? 0, sp.current_lesson_position ?? 999)
       }
     })
   }
@@ -204,7 +206,7 @@ export default async function MateriPage({
   if (classGroupIds.length > 0) {
     const { data: cgPositions } = await supabase
       .from('class_groups')
-      .select('id, current_unit_position')
+      .select('id, current_unit_position, current_lesson_position')
       .in('id', classGroupIds)
 
     const { data: cgLevels } = await supabase
@@ -217,6 +219,7 @@ export default async function MateriPage({
         const cg = cgPositions?.find(g => g.id === c.class_group_id)
         if (cg) {
           unitLockMap[c.level_id] = Math.max(unitLockMap[c.level_id] ?? 0, cg.current_unit_position)
+          lessonLockMap[c.level_id] = Math.max(lessonLockMap[c.level_id] ?? 0, cg.current_lesson_position ?? 999)
         }
       }
     })
@@ -261,6 +264,7 @@ export default async function MateriPage({
             slides_url: content?.slides_url || null,
             completed: isCompleted || false,
             lesson_title: lesson.lesson_name,
+            lesson_position: lesson.position ?? 0,
             unit_name: unit.unit_name
           }
         })
@@ -297,6 +301,7 @@ export default async function MateriPage({
         studentName={profile?.full_name || 'Student'}
         studentSlug={slug}
         unitLockMap={unitLockMap}
+        lessonLockMap={lessonLockMap}
       />
     </div>
   )
