@@ -63,6 +63,25 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const [loading, setLoading] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
 
+  // ✅ Referensi struktur existing per level (multi-level mode)
+  type LevelStructure = {
+    levelId: string;
+    levelName: string;
+    chapters: {
+      id: string;
+      title: string;
+      units: {
+        id: string;
+        name: string;
+        lessonCount: number;
+        lastLesson: string | null;
+      }[];
+    }[];
+  };
+  const [levelStructures, setLevelStructures] = useState<LevelStructure[]>([]);
+  const [loadingStructure, setLoadingStructure] = useState(false);
+  const [showStructure, setShowStructure] = useState(true);
+
   const supabase = createClient();
   const isEditing = !!editData;
   const isMultiLevel = selectedLevels.length > 1;
@@ -70,6 +89,85 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const sortedSelectedLevels = levels
     .filter(l => selectedLevels.includes(l.id))
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  // ✅ Fetch existing structure saat multi-level
+  useEffect(() => {
+    if (isMultiLevel && selectedLevels.length > 0) {
+      fetchLevelStructures();
+    } else {
+      setLevelStructures([]);
+    }
+  }, [selectedLevels, isMultiLevel]);
+
+  const fetchLevelStructures = async () => {
+    setLoadingStructure(true);
+    try {
+      // 1. Fetch chapters for all selected levels
+      const { data: chaptersData } = await supabase
+        .from('chapters')
+        .select('id, chapter_title, level_id, order_number')
+        .in('level_id', selectedLevels)
+        .order('order_number');
+
+      if (!chaptersData || chaptersData.length === 0) {
+        setLevelStructures(sortedSelectedLevels.map(l => ({ levelId: l.id, levelName: l.name, chapters: [] })));
+        setLoadingStructure(false);
+        return;
+      }
+
+      // 2. Fetch units for these chapters
+      const chapterIds = chaptersData.map(c => c.id);
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select('id, unit_name, chapter_id, position')
+        .in('chapter_id', chapterIds)
+        .order('position');
+
+      // 3. Fetch lessons for these units (hanya nama & position untuk last lesson)
+      const unitIds = (unitsData || []).map(u => u.id);
+      const { data: lessonsData } = await supabase
+        .from('lessons')
+        .select('id, lesson_name, unit_id, position')
+        .in('unit_id', unitIds)
+        .order('position', { ascending: true });
+
+      // 4. Count lessons per unit & find last lesson
+      const lessonsByUnit: Record<string, { count: number; last: string | null }> = {};
+      (lessonsData || []).forEach(l => {
+        if (!lessonsByUnit[l.unit_id]) lessonsByUnit[l.unit_id] = { count: 0, last: null };
+        lessonsByUnit[l.unit_id].count++;
+        lessonsByUnit[l.unit_id].last = `${l.position}. ${l.lesson_name}`;
+      });
+
+      // 5. Group by level
+      const structures: LevelStructure[] = sortedSelectedLevels.map(level => {
+        const levelChapters = (chaptersData || []).filter(c => c.level_id === level.id);
+        return {
+          levelId: level.id,
+          levelName: level.name,
+          chapters: levelChapters.map(ch => {
+            const chUnits = (unitsData || []).filter(u => u.chapter_id === ch.id);
+            return {
+              id: ch.id,
+              title: ch.chapter_title,
+              units: chUnits.map(u => ({
+                id: u.id,
+                name: u.unit_name,
+                lessonCount: lessonsByUnit[u.id]?.count || 0,
+                lastLesson: lessonsByUnit[u.id]?.last || null,
+              })),
+            };
+          }),
+        };
+      });
+
+      setLevelStructures(structures);
+    } catch (err) {
+      console.error('Error fetching level structures:', err);
+    } finally {
+      setLoadingStructure(false);
+    }
+  };
 
   useEffect(() => { fetchCourses(); }, []);
 
@@ -409,6 +507,57 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
               {/* ════════ MULTI-LEVEL MODE ════════ */}
               {isMultiLevel && (
                 <>
+                  {/* ✅ Referensi struktur existing */}
+                  <div className="border-2 border-blue-200 rounded-xl overflow-hidden">
+                    <button type="button" onClick={() => setShowStructure(!showStructure)}
+                      className="w-full px-5 py-3 flex items-center justify-between bg-blue-50 hover:bg-blue-100 transition-colors">
+                      <span className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                        📋 Struktur existing per level
+                        {loadingStructure && <span className="text-xs font-normal text-blue-500">(memuat...)</span>}
+                      </span>
+                      <span className="text-blue-500 text-xs">{showStructure ? '▲ Tutup' : '▼ Buka'}</span>
+                    </button>
+                    {showStructure && (
+                      <div className="px-5 py-4 bg-white space-y-4 max-h-[400px] overflow-y-auto">
+                        {loadingStructure ? (
+                          <div className="flex items-center gap-2 text-sm text-gray-400 py-4 justify-center">
+                            <div className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                            Memuat struktur...
+                          </div>
+                        ) : levelStructures.length === 0 ? (
+                          <p className="text-sm text-gray-400 text-center py-4">Belum ada data struktur</p>
+                        ) : (
+                          levelStructures.map(ls => (
+                            <div key={ls.levelId}>
+                              <div className="text-xs font-bold text-[#5C4FE5] uppercase tracking-wide mb-2">{ls.levelName}</div>
+                              {ls.chapters.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic ml-3 mb-2">Belum ada chapter</p>
+                              ) : (
+                                ls.chapters.map(ch => (
+                                  <div key={ch.id} className="ml-3 mb-2">
+                                    <div className="text-sm font-semibold text-gray-800">📚 {ch.title}</div>
+                                    {ch.units.length === 0 ? (
+                                      <p className="text-xs text-gray-400 italic ml-5">Belum ada unit</p>
+                                    ) : (
+                                      ch.units.map(u => (
+                                        <div key={u.id} className="ml-5 flex items-center gap-2 py-0.5">
+                                          <span className="text-xs text-gray-600">📖 {u.name}</span>
+                                          <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-semibold">{u.lessonCount} lesson</span>
+                                          {u.lastLesson && (
+                                            <span className="text-xs text-gray-400">terakhir: <span className="font-medium text-gray-600">{u.lastLesson}</span></span>
+                                          )}
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="border-2 border-[#E5E3FF] rounded-xl p-5 bg-[#FAFAFF]">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="w-6 h-6 flex items-center justify-center bg-[#5C4FE5] text-white text-xs font-bold rounded-full">1</span>
