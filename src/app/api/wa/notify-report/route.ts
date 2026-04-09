@@ -6,11 +6,8 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
  * POST /api/wa/notify-report
  * 
  * Kirim WA ke ortu saat tutor submit/update laporan belajar
+ * Anti-duplikat: 1 notif per session_id + student_id per hari
  * Body: { session_id, student_id, materi }
- * 
- * Nomor HP dicari dari:
- * 1. profiles.phone (ortu)
- * 2. students.relation_phone (fallback)
  */
 
 function fmtDate(iso: string) {
@@ -34,7 +31,20 @@ export async function POST(req: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // ── 1. Ambil data siswa (termasuk relation_phone) ──
+    // Anti-duplikat: cek apakah notif laporan sudah pernah dikirim untuk sesi + siswa ini
+    const { data: existingLog } = await supabase
+      .from('notification_logs')
+      .select('id')
+      .eq('type', 'wa_laporan_ortu')
+      .eq('session_id', session_id)
+      .eq('student_id', student_id)
+      .limit(1)
+
+    if (existingLog && existingLog.length > 0) {
+      return NextResponse.json({ sent: false, reason: 'Already notified for this session' })
+    }
+
+    // 1. Ambil data siswa
     const { data: student } = await supabase
       .from('students')
       .select('id, profile_id, parent_profile_id, relation_phone')
@@ -45,7 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
-    // ── 2. Ambil nama siswa ──
+    // 2. Ambil nama siswa
     const { data: studentProfile } = await supabase
       .from('profiles')
       .select('full_name')
@@ -54,7 +64,7 @@ export async function POST(req: Request) {
 
     const studentName = studentProfile?.full_name ?? 'Siswa'
 
-    // ── 3. Ambil data ortu (phone + nama) ──
+    // 3. Ambil data ortu
     const parentId = student.parent_profile_id ?? student.profile_id
     const { data: parentProfile } = await supabase
       .from('profiles')
@@ -62,14 +72,13 @@ export async function POST(req: Request) {
       .eq('id', parentId)
       .single()
 
-    // Cari nomor HP: profiles.phone → students.relation_phone
     const parentPhone = parentProfile?.phone || student.relation_phone || null
 
     if (!parentPhone) {
       return NextResponse.json({ sent: false, reason: 'Parent phone not found' })
     }
 
-    // ── 4. Ambil data sesi (tanggal + kelas) ──
+    // 4. Ambil data sesi
     const { data: session } = await supabase
       .from('sessions')
       .select('scheduled_at, class_group_id')
@@ -90,7 +99,7 @@ export async function POST(req: Request) {
     const parentName = parentProfile?.full_name ?? ''
     const firstName = parentName.split(' ')[0] || 'Ayah/Bunda'
 
-    // ── 5. Kirim WA ──
+    // 5. Kirim WA
     const message = `📊 *Laporan Belajar EduKazia*\nHalo Kak ${firstName} 👋\nLaporan tutor untuk sesi *${studentName}*, telah tersedia ya.\n\n🗓️ Sesi: ${tanggal}\n🧾 Progress materi, perkembangan siswa, dan saran buat ortu bisa dibaca lengkap pada...\n↓↓↓↓↓↓\n\n🔗 app.edukazia.com/ortu/dashboard\n\nTerima kasih! 🙏`
 
     const result = await sendWhatsApp({
@@ -98,7 +107,7 @@ export async function POST(req: Request) {
       message,
     })
 
-    // ── 6. Log ──
+    // 6. Log
     try {
       await supabase.from('notification_logs').insert({
         type:       'wa_laporan_ortu',
