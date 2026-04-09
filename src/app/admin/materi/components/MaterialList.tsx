@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2, Eye, EyeOff, MoreVertical, ArrowUpDown, FolderOutput } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import MoveChapterModal from './MoveChapterModal';
+import MoveUnitModal from './MoveUnitModal';
+import ReorderPanel from './ReorderPanel';
 
 // Available icons for chapters and units
 const ICON_OPTIONS = [
@@ -27,7 +30,7 @@ const getIconComponent = (iconName: string | null) => {
   return icon ? icon.Component : Library;
 };
 
-// ✅ FIX 1: Type diperbarui — tambah storage fields, hapus content_data legacy
+// ✅ Type diperbarui — sesuai schema DB terbaru
 type MaterialWithHierarchy = {
   id: string;
   title: string;
@@ -45,7 +48,7 @@ type MaterialWithHierarchy = {
   created_at: string;
   lesson_id: string;
   lesson_name: string;
-  lesson_position: number; // ✅ untuk sorting lesson
+  lesson_position: number;
   unit_id: string;
   unit_name: string;
   unit_position: number;
@@ -53,10 +56,10 @@ type MaterialWithHierarchy = {
   chapter_id: string | null;
   chapter_title: string | null;
   chapter_icon: string | null;
-  chapter_order: number;     // ✅ untuk sorting chapter
+  chapter_order: number;
   level_id: string;
   level_name: string;
-  level_sort_order: number;  // ✅ untuk sorting level
+  level_sort_order: number;
 };
 
 type Level = { id: string; name: string; };
@@ -67,8 +70,38 @@ type Lesson = { id: string; lesson_name: string; };
 type MaterialListProps = {
   category: 'live_zoom' | 'bacaan' | 'kosakata' | 'cefr';
   onEdit?: (material: any) => void;
-  onEditContent?: (lessonId: string, lessonName: string) => void; // ✅ CEFR block editor
+  onEditContent?: (lessonId: string, lessonName: string) => void;
 };
+
+// ✅ Dropdown Menu Component — reusable untuk chapter & unit
+function DropdownMenu({ items, onClose }: { items: { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean }[]; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-40 min-w-[200px]">
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => { item.onClick(); onClose(); }}
+          className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2.5 hover:bg-gray-50 transition-colors ${
+            item.danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700'
+          }`}
+        >
+          {item.icon}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function MaterialList({ category, onEdit, onEditContent }: MaterialListProps) {
   const [materials, setMaterials] = useState<MaterialWithHierarchy[]>([]);
@@ -127,6 +160,24 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [convertProgress, setConvertProgress] = useState<string>('');
 
+  // ✅ NEW: Dropdown menu state
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  // ✅ NEW: Modal states for structure management
+  const [moveChapterData, setMoveChapterData] = useState<{
+    chapterId: string; chapterTitle: string; currentLevelId: string;
+    currentLevelName: string; unitCount: number; lessonCount: number;
+  } | null>(null);
+
+  const [moveUnitData, setMoveUnitData] = useState<{
+    unitId: string; unitName: string; currentChapterId: string;
+    currentChapterTitle: string; currentLevelName: string; lessonCount: number;
+  } | null>(null);
+
+  const [reorderData, setReorderData] = useState<{
+    mode: 'units' | 'lessons'; parentId: string; parentName: string; parentBadge?: string;
+  } | null>(null);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -174,7 +225,6 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     setError(null);
 
     try {
-      // ✅ FIX 2: Query diperbarui — hapus content_data, tambah storage_bucket & storage_path
       const { data: materialsData, error: materialsError } = await supabase
         .from('materials')
         .select(`
@@ -238,7 +288,6 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       const chaptersMap = new Map(chaptersData?.map(ch => [ch.id, ch]) || []);
       const levelsMap = new Map(levelsData?.map(lv => [lv.id, lv]) || []);
 
-      // ✅ FIX 3: Mapping diperbarui — tambah material_contents, hapus content_data
       const materialsWithHierarchy: MaterialWithHierarchy[] = materialsData.map(material => {
         const lesson = lessonsMap.get(material.lesson_id);
         const unit = lesson ? unitsMap.get(lesson.unit_id) : null;
@@ -251,11 +300,11 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           category: material.category,
           position: material.position,
           is_published: material.is_published,
-          material_contents: material.material_contents, // ✅ ini yang selama ini hilang
+          material_contents: material.material_contents,
           created_at: material.created_at,
           lesson_id: material.lesson_id,
           lesson_name: lesson?.lesson_name || 'Unknown Lesson',
-          lesson_position: lesson?.position || 0, // ✅ dari tabel lessons
+          lesson_position: lesson?.position || 0,
           unit_id: lesson?.unit_id || '',
           unit_name: unit?.unit_name || 'Unknown Unit',
           unit_position: unit?.position || 0,
@@ -319,6 +368,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         chapterTitle: string;
         chapterIcon: string;
         chapterOrder: number;
+        levelId: string;
         levelName: string;
         levelSortOrder: number;
         units: {
@@ -351,6 +401,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           chapterTitle: material.chapter_title || 'Chapter Tidak Diketahui',
           chapterIcon: material.chapter_icon || 'Library',
           chapterOrder: material.chapter_order || 0,
+          levelId: material.level_id || '',
           levelName: material.level_name || '',
           levelSortOrder: material.level_sort_order || 0,
           units: {}
@@ -371,7 +422,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         chapterGroups[chapterId].units[unitId].lessons[lessonId] = {
           lessonId,
           lessonName: material.lesson_name || 'Lesson Tidak Diketahui',
-          lessonPosition: material.lesson_position || 0, // ✅ dari tabel lessons
+          lessonPosition: material.lesson_position || 0,
           materials: []
         };
       }
@@ -384,21 +435,15 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
 
   const toggleUnit = (unitId: string) => {
     const newExpanded = new Set(expandedUnits);
-    if (newExpanded.has(unitId)) {
-      newExpanded.delete(unitId);
-    } else {
-      newExpanded.add(unitId);
-    }
+    if (newExpanded.has(unitId)) newExpanded.delete(unitId);
+    else newExpanded.add(unitId);
     setExpandedUnits(newExpanded);
   };
 
   const toggleChapter = (chapterId: string) => {
     const newExpanded = new Set(expandedChapters);
-    if (newExpanded.has(chapterId)) {
-      newExpanded.delete(chapterId);
-    } else {
-      newExpanded.add(chapterId);
-    }
+    if (newExpanded.has(chapterId)) newExpanded.delete(chapterId);
+    else newExpanded.add(chapterId);
     setExpandedChapters(newExpanded);
   };
 
@@ -493,12 +538,8 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     if (!confirm('Yakin ingin menghapus material ini?')) return;
 
     try {
-      const response = await fetch(`/api/admin/materials/${materialId}`, {
-        method: 'DELETE',
-      });
-
+      const response = await fetch(`/api/admin/materials/${materialId}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete');
-
       alert('✅ Material berhasil dihapus!');
       fetchMaterials();
     } catch (error) {
@@ -660,7 +701,6 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       const mc = material.material_contents?.[0];
       if (!mc?.storage_bucket) throw new Error('Storage bucket tidak ditemukan');
 
-      // Upload file baru
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
       const ext = replacingFile.name.split('.').pop()?.toLowerCase() || 'jsx';
@@ -673,12 +713,10 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
 
       if (uploadError) throw new Error(uploadError.message);
 
-      // Hapus file lama kalau ada
       if (mc.storage_path) {
         await supabase.storage.from(mc.storage_bucket).remove([mc.storage_path]);
       }
 
-      // Update storage_path di material_contents
       const { error: updateError } = await supabase
         .from('material_contents')
         .update({ storage_path: newPath })
@@ -700,9 +738,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
   // Platform detection helper
   const detectPlatformFromUrl = (url: string, category: string): string => {
     if (!url) return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
-    
     const urlLower = url.toLowerCase();
-    
     if (urlLower.includes('zoom.us') || urlLower.includes('zoom.com')) return 'Live Zoom';
     if (urlLower.includes('meet.google.com') || urlLower.includes('meet.app.goo.gl')) return 'Live GMeet';
     if (urlLower.includes('teams.microsoft.com') || urlLower.includes('teams.live.com')) return 'Live MS Teams';
@@ -710,34 +746,24 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     if (urlLower.includes('canva.com')) return 'Kosakata Canva';
     if (urlLower.includes('docs.google.com') || urlLower.includes('drive.google.com')) return 'Kosakata GDocs';
     if (urlLower.includes('figma.com')) return 'Kosakata Figma';
-    
     return category === 'live_zoom' ? 'Live Class' : 'Kosakata';
   };
 
-  // ✅ FIX 5a: Untuk live_zoom & kosakata — ambil URL eksternal dari content_url
   const getExternalUrl = (material: MaterialWithHierarchy): string => {
     const contentUrl = material.material_contents?.[0]?.content_url;
     if (contentUrl && contentUrl.startsWith('http')) return contentUrl;
     return '#';
   };
 
-  // ✅ FIX 5b: Untuk bacaan & cefr — generate public URL dari Supabase Storage
   const getStorageUrl = (material: MaterialWithHierarchy): string => {
     const mc = material.material_contents?.[0];
     if (!mc?.storage_bucket || !mc?.storage_path) return '#';
-
-    const { data } = supabase.storage
-      .from(mc.storage_bucket)
-      .getPublicUrl(mc.storage_path);
-
+    const { data } = supabase.storage.from(mc.storage_bucket).getPublicUrl(mc.storage_path);
     return data.publicUrl;
   };
 
-  // Get display name for material
   const getMaterialDisplayName = (material: MaterialWithHierarchy): string => {
-    if (material.category === 'bacaan' || material.category === 'cefr') {
-      return material.title || 'Bacaan';
-    }
+    if (material.category === 'bacaan' || material.category === 'cefr') return material.title || 'Bacaan';
     return detectPlatformFromUrl(getExternalUrl(material), material.category);
   };
 
@@ -749,6 +775,23 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
       case 'cefr': return <Headphones className="w-5 h-5" />;
       default: return <FileText className="w-5 h-5" />;
     }
+  };
+
+  // ✅ NEW: Helper to count total lessons in a chapter group
+  const countChapterLessons = (chapterGroup: any): number => {
+    let total = 0;
+    Object.values(chapterGroup.units).forEach((unitGroup: any) => {
+      total += Object.keys(unitGroup.lessons).length;
+    });
+    return total;
+  };
+
+  // ✅ NEW: Handle structure management success — refresh materials
+  const handleStructureSuccess = () => {
+    setMoveChapterData(null);
+    setMoveUnitData(null);
+    setReorderData(null);
+    fetchMaterials();
   };
 
   if (loading) {
@@ -764,10 +807,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     return (
       <div className="p-8 text-center">
         <p className="text-red-600">{error}</p>
-        <button
-          onClick={() => fetchMaterials()}
-          className="mt-4 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7]"
-        >
+        <button onClick={() => fetchMaterials()} className="mt-4 px-4 py-2 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7]">
           Coba Lagi
         </button>
       </div>
@@ -812,6 +852,8 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
           .map((chapterGroup) => {
           const ChapterIcon = getIconComponent(chapterGroup.chapterIcon);
           const isEditingChapter = editingChapterId === chapterGroup.chapterId;
+          const unitCount = Object.keys(chapterGroup.units).length;
+          const lessonCount = countChapterLessons(chapterGroup);
 
           return (
             <div key={chapterGroup.chapterId} className="bg-white rounded-xl border-2 border-[#5C4FE5] overflow-hidden">
@@ -829,10 +871,51 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                     </div>
                   </button>
                   <div className="flex items-center gap-3">
-                    <button onClick={() => startEditChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, chapterGroup.chapterIcon)} className="p-2 text-gray-600 hover:bg-white rounded-lg transition-colors" title="Edit chapter">
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <span className="text-sm text-gray-600 font-semibold">{Object.keys(chapterGroup.units).length} unit</span>
+                    <span className="text-sm text-gray-600 font-semibold">{unitCount} unit</span>
+                    {/* ✅ NEW: ⋯ Dropdown Menu for Chapter */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setOpenDropdown(openDropdown === `ch-${chapterGroup.chapterId}` ? null : `ch-${chapterGroup.chapterId}`)}
+                        className="p-2 text-gray-500 hover:bg-white hover:text-gray-700 rounded-lg transition-colors"
+                        title="Opsi chapter"
+                      >
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                      {openDropdown === `ch-${chapterGroup.chapterId}` && (
+                        <DropdownMenu
+                          onClose={() => setOpenDropdown(null)}
+                          items={[
+                            {
+                              label: 'Rename chapter',
+                              icon: <Edit className="w-4 h-4" />,
+                              onClick: () => startEditChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, chapterGroup.chapterIcon),
+                            },
+                            {
+                              label: 'Reorder unit',
+                              icon: <ArrowUpDown className="w-4 h-4" />,
+                              onClick: () => setReorderData({
+                                mode: 'units',
+                                parentId: chapterGroup.chapterId,
+                                parentName: chapterGroup.chapterTitle,
+                                parentBadge: chapterGroup.levelName,
+                              }),
+                            },
+                            {
+                              label: 'Pindah ke level lain',
+                              icon: <FolderOutput className="w-4 h-4" />,
+                              onClick: () => setMoveChapterData({
+                                chapterId: chapterGroup.chapterId,
+                                chapterTitle: chapterGroup.chapterTitle,
+                                currentLevelId: chapterGroup.levelId,
+                                currentLevelName: chapterGroup.levelName,
+                                unitCount,
+                                lessonCount,
+                              }),
+                            },
+                          ]}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -840,10 +923,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                   <div className="flex items-center gap-3">
                     <input type="text" value={editingChapterTitle} onChange={(e) => setEditingChapterTitle(e.target.value)} placeholder="Nama Chapter" className="flex-1 px-3 py-2 border-2 border-[#5C4FE5] rounded-lg text-lg font-bold focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900" />
                     <select value={editingChapterIcon} onChange={(e) => setEditingChapterIcon(e.target.value)} className="px-3 py-2 border-2 border-[#5C4FE5] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-semibold">
-                      {ICON_OPTIONS.map(opt => {
-                        const Icon = opt.Component;
-                        return <option key={opt.value} value={opt.value}>{opt.label}</option>;
-                      })}
+                      {ICON_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                     <div className="flex gap-2">
                       {ICON_OPTIONS.slice(0, 6).map(opt => {
@@ -875,6 +955,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                     .map((unitGroup) => {
                     const UnitIcon = getIconComponent(unitGroup.unitIcon);
                     const isEditingUnit = editingUnitId === unitGroup.unitId;
+                    const unitLessonCount = Object.keys(unitGroup.lessons).length;
 
                     return (
                       <div key={unitGroup.unitId} className="border-b-2 border-gray-200 last:border-b-0">
@@ -888,12 +969,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                   <UnitIcon className="w-5 h-5 text-[#5C4FE5]" />
                                   <span className="text-lg font-semibold text-gray-900">{unitGroup.unitName}</span>
                                 </button>
-                                <div className="flex items-center gap-2 ml-4">
-                                  <span className="text-sm text-gray-600">Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span></span>
-                                  <button onClick={() => startEditPosition(unitGroup.unitId, unitGroup.unitName, unitGroup.unitIcon, unitGroup.unitPosition || 0)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Edit nama, icon & urutan">
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-                                </div>
+                                <span className="text-sm text-gray-500 ml-2">Urutan: <span className="font-semibold">{unitGroup.unitPosition || 0}</span></span>
                               </>
                             ) : (
                               <div className="flex items-center gap-3 flex-1">
@@ -922,7 +998,55 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                               </div>
                             )}
                           </div>
-                          {!isEditingUnit && <span className="text-sm text-gray-600">{Object.keys(unitGroup.lessons).length} lesson</span>}
+                          {!isEditingUnit && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-600">{unitLessonCount} lesson</span>
+                              {/* ✅ NEW: ⋯ Dropdown Menu for Unit */}
+                              <div className="relative">
+                                <button
+                                  onClick={() => setOpenDropdown(openDropdown === `un-${unitGroup.unitId}` ? null : `un-${unitGroup.unitId}`)}
+                                  className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-lg transition-colors"
+                                  title="Opsi unit"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                {openDropdown === `un-${unitGroup.unitId}` && (
+                                  <DropdownMenu
+                                    onClose={() => setOpenDropdown(null)}
+                                    items={[
+                                      {
+                                        label: 'Rename unit',
+                                        icon: <Edit className="w-4 h-4" />,
+                                        onClick: () => startEditPosition(unitGroup.unitId, unitGroup.unitName, unitGroup.unitIcon, unitGroup.unitPosition || 0),
+                                      },
+                                      {
+                                        label: 'Reorder lesson',
+                                        icon: <ArrowUpDown className="w-4 h-4" />,
+                                        onClick: () => setReorderData({
+                                          mode: 'lessons',
+                                          parentId: unitGroup.unitId,
+                                          parentName: unitGroup.unitName,
+                                          parentBadge: chapterGroup.chapterTitle,
+                                        }),
+                                      },
+                                      {
+                                        label: 'Pindah ke chapter lain',
+                                        icon: <FolderOutput className="w-4 h-4" />,
+                                        onClick: () => setMoveUnitData({
+                                          unitId: unitGroup.unitId,
+                                          unitName: unitGroup.unitName,
+                                          currentChapterId: chapterGroup.chapterId,
+                                          currentChapterTitle: chapterGroup.chapterTitle,
+                                          currentLevelName: chapterGroup.levelName,
+                                          lessonCount: unitLessonCount,
+                                        }),
+                                      },
+                                    ]}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Lessons under this unit */}
@@ -932,7 +1056,6 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                               .sort((a, b) => {
                                 const posDiff = (a.lessonPosition || 0) - (b.lessonPosition || 0);
                                 if (posDiff !== 0) return posDiff;
-                                // fallback sort by name kalau position sama
                                 return a.lessonName.localeCompare(b.lessonName);
                               })
                               .map((lessonGroup) => {
@@ -1007,15 +1130,11 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                     <div className="pl-8">
                                       {lessonGroup.materials.map((material) => {
                                         const isEditingMaterial = editingMaterialId === material.id;
-
-                                        // ✅ FIX 6: Pisah URL berdasarkan kategori
                                         const isUrlBased = material.category === 'live_zoom' || material.category === 'kosakata';
                                         const materialUrl = isUrlBased ? getExternalUrl(material) : getStorageUrl(material);
-
                                         const isReplacingFile = replacingFileId === material.id;
 
                                         return isReplacingFile ? (
-                                          // ✅ UI Ganti File untuk bacaan & cefr
                                           <div key={material.id} className="px-6 py-3 bg-orange-50 border-b border-gray-100">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
@@ -1025,25 +1144,14 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                 <span className="text-sm text-orange-700 font-medium">
                                                   {replacingFile ? replacingFile.name : 'Pilih file baru (.jsx)'}
                                                 </span>
-                                                <input
-                                                  type="file"
-                                                  accept=".jsx,.tsx"
-                                                  className="hidden"
-                                                  onChange={(e) => setReplacingFile(e.target.files?.[0] || null)}
-                                                />
+                                                <input type="file" accept=".jsx,.tsx" className="hidden" onChange={(e) => setReplacingFile(e.target.files?.[0] || null)} />
                                               </label>
-                                              <button
-                                                onClick={() => saveReplaceFile(material)}
-                                                disabled={savingFile || !replacingFile}
-                                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg transition-all disabled:opacity-50 text-sm"
-                                              >
+                                              <button onClick={() => saveReplaceFile(material)} disabled={savingFile || !replacingFile}
+                                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-700 shadow-lg transition-all disabled:opacity-50 text-sm">
                                                 {savingFile ? 'Mengupload...' : 'GANTI'}
                                               </button>
-                                              <button
-                                                onClick={cancelReplaceFile}
-                                                disabled={savingFile}
-                                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
-                                              >
+                                              <button onClick={cancelReplaceFile} disabled={savingFile}
+                                                className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm">
                                                 CANCEL
                                               </button>
                                             </div>
@@ -1051,7 +1159,6 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                         ) : isEditingMaterial ? (
                                           <div key={material.id} className="px-6 py-4 bg-blue-50 border-b border-gray-100">
                                             <div className="space-y-3">
-                                              {/* Live Zoom — 3 fields */}
                                               {material.category === 'live_zoom' ? (
                                                 <>
                                                   <div className="flex items-center gap-2">
@@ -1060,37 +1167,28 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                   </div>
                                                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-1">
                                                     <label className="text-xs font-bold text-orange-700">🎨 Canva URL (Owner)</label>
-                                                    <input type="url" value={editingCanvaUrl}
-                                                      onChange={e => setEditingCanvaUrl(e.target.value)}
-                                                      placeholder="https://canva.link/..."
-                                                      className="w-full px-3 py-2 border border-orange-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-orange-400" />
+                                                    <input type="url" value={editingCanvaUrl} onChange={e => setEditingCanvaUrl(e.target.value)}
+                                                      placeholder="https://canva.link/..." className="w-full px-3 py-2 border border-orange-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-orange-400" />
                                                   </div>
                                                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
                                                     <label className="text-xs font-bold text-blue-700">📄 Konten Siswa – Google Drive PDF</label>
-                                                    <input type="url" value={editingStudentUrl}
-                                                      onChange={e => setEditingStudentUrl(e.target.value)}
-                                                      placeholder="https://drive.google.com/file/d/..."
-                                                      className="w-full px-2 py-1.5 border border-blue-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-blue-400" />
+                                                    <input type="url" value={editingStudentUrl} onChange={e => setEditingStudentUrl(e.target.value)}
+                                                      placeholder="https://drive.google.com/file/d/..." className="w-full px-2 py-1.5 border border-blue-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-blue-400" />
                                                   </div>
                                                   <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
                                                     <label className="text-xs font-bold text-green-700">📊 Google Slides (Freelancer & B2B)</label>
-                                                    <input type="url" value={editingSlidesUrl}
-                                                      onChange={e => setEditingSlidesUrl(e.target.value)}
-                                                      placeholder="https://docs.google.com/presentation/d/..."
-                                                      className="w-full px-3 py-2 border border-green-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-green-400" />
+                                                    <input type="url" value={editingSlidesUrl} onChange={e => setEditingSlidesUrl(e.target.value)}
+                                                      placeholder="https://docs.google.com/presentation/d/..." className="w-full px-3 py-2 border border-green-300 rounded text-sm bg-white text-gray-900 focus:ring-1 focus:ring-green-400" />
                                                   </div>
                                                 </>
                                               ) : (
-                                                /* Non-live_zoom: 1 URL saja */
                                                 <div className="flex items-center gap-3">
                                                   <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
                                                   <input type="url" value={editingMaterialUrl}
                                                     onChange={e => { setEditingMaterialUrl(e.target.value); setEditingMaterialTitle(detectPlatformFromUrl(e.target.value, material.category)); }}
-                                                    placeholder="https://..."
-                                                    className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900" />
+                                                    placeholder="https://..." className="flex-1 px-3 py-2 border-2 border-blue-500 rounded text-sm focus:ring-2 focus:ring-blue-500 bg-white text-gray-900" />
                                                 </div>
                                               )}
-                                              {/* Action buttons */}
                                               <div className="flex gap-2 justify-end">
                                                 <button onClick={cancelEditMaterial} disabled={savingMaterial}
                                                   className="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm">
@@ -1107,10 +1205,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                           <div key={material.id} className="px-6 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                                             <div className="flex items-center gap-3">
                                               <div className="text-gray-400">{getCategoryIcon(material.category)}</div>
-                                              <span className="text-sm font-semibold text-gray-700">
-                                                {getMaterialDisplayName(material)}
-                                              </span>
-                                              {/* Tampilkan nama file untuk bacaan & cefr */}
+                                              <span className="text-sm font-semibold text-gray-700">{getMaterialDisplayName(material)}</span>
                                               {(material.category === 'bacaan' || material.category === 'cefr') && (
                                                 <span className="text-xs text-gray-400 font-mono">
                                                   {material.material_contents?.[0]?.storage_path?.split('/').pop() || '-'}
@@ -1121,29 +1216,19 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                               )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                              {/* Tombol buka link — hanya untuk live_zoom & kosakata */}
                                               {isUrlBased && (
-                                                <a
-                                                  href={materialUrl}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                  title="Buka link"
-                                                >
+                                                <a href={materialUrl} target="_blank" rel="noopener noreferrer"
+                                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Buka link">
                                                   <ExternalLink className="w-4 h-4" />
                                                 </a>
                                               )}
-                                              {/* Tombol edit URL — hanya untuk live_zoom & kosakata */}
                                               {isUrlBased && (
                                                 <button
                                                   onClick={() => startEditMaterial(material.id, material.title, materialUrl, material.category, material.material_contents?.[0]?.canva_url || '', material.material_contents?.[0]?.slides_url || '')}
-                                                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                  title="Edit link"
-                                                >
+                                                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" title="Edit link">
                                                   <Edit className="w-4 h-4" />
                                                 </button>
                                               )}
-                                              {/* ✅ Tombol Convert PDF — hanya untuk live_zoom */}
                                               {material.category === 'live_zoom' && (
                                                 convertingId === material.id ? (
                                                   <div className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600">
@@ -1158,45 +1243,26 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                   </label>
                                                 )
                                               )}
-                                              {/* ✅ Tombol Edit Konten Block Editor — hanya untuk CEFR */}
                                               {material.category === 'cefr' && onEditContent && (
-                                                <button
-                                                  onClick={() => onEditContent(material.lesson_id, material.lesson_name)}
-                                                  className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                                                  title="Edit konten block"
-                                                >
+                                                <button onClick={() => onEditContent(material.lesson_id, material.lesson_name)}
+                                                  className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Edit konten block">
                                                   <LayoutList className="w-4 h-4" />
                                                 </button>
                                               )}
-                                              {/* ✅ Tombol Ganti File — hanya untuk bacaan */}
                                               {material.category === 'bacaan' && (
-                                                <button
-                                                  onClick={() => startReplaceFile(material.id)}
-                                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                                  title="Ganti file"
-                                                >
+                                                <button onClick={() => startReplaceFile(material.id)}
+                                                  className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="Ganti file">
                                                   <Upload className="w-4 h-4" />
                                                 </button>
                                               )}
                                               <button
                                                 onClick={() => handleTogglePublish(material.id, material.is_published)}
-                                                className={`p-2 rounded-lg transition-colors ${
-                                                  material.is_published
-                                                    ? 'text-green-600 hover:bg-green-50'
-                                                    : 'text-gray-400 hover:bg-gray-100'
-                                                }`}
-                                                title={material.is_published ? 'Unpublish' : 'Publish'}
-                                              >
-                                                {material.is_published
-                                                  ? <Eye className="w-4 h-4" />
-                                                  : <EyeOff className="w-4 h-4" />
-                                                }
+                                                className={`p-2 rounded-lg transition-colors ${material.is_published ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                                                title={material.is_published ? 'Unpublish' : 'Publish'}>
+                                                {material.is_published ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                               </button>
-                                              <button
-                                                onClick={() => handleDelete(material.id)}
-                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Hapus material"
-                                              >
+                                              <button onClick={() => handleDelete(material.id)}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus material">
                                                 <Trash2 className="w-4 h-4" />
                                               </button>
                                             </div>
@@ -1224,6 +1290,31 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         <div className="text-center py-12 text-gray-500">
           Belum ada materi. Klik "Tambah Materi" untuk membuat materi baru.
         </div>
+      )}
+
+      {/* ✅ MODALS */}
+      {moveChapterData && (
+        <MoveChapterModal
+          {...moveChapterData}
+          onClose={() => setMoveChapterData(null)}
+          onSuccess={handleStructureSuccess}
+        />
+      )}
+
+      {moveUnitData && (
+        <MoveUnitModal
+          {...moveUnitData}
+          onClose={() => setMoveUnitData(null)}
+          onSuccess={handleStructureSuccess}
+        />
+      )}
+
+      {reorderData && (
+        <ReorderPanel
+          {...reorderData}
+          onClose={() => setReorderData(null)}
+          onSuccess={handleStructureSuccess}
+        />
       )}
     </div>
   );
