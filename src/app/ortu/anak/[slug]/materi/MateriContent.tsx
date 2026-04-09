@@ -294,14 +294,14 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all whitespace-nowrap border-2 ${
                 isActive
                   ? 'bg-[#5C4FE5] border-[#5C4FE5] text-white'
-                  : 'bg-white border-[#E5E3FF] text-[#374151] hover:border-[#5C4FE5]'
+                  : 'bg-white dark:bg-[#1E1A4A] border-[#E5E3FF] dark:border-[#2D2760] text-[#374151] dark:text-gray-300 hover:border-[#5C4FE5]'
               }`}
             >
               {getCategoryIcon(tab)}
               {getCategoryLabel(tab)}
               {count > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-[#EEEDFE] text-[#5C4FE5]'
+                  isActive ? 'bg-white/20 text-white' : 'bg-[#EEEDFE] dark:bg-[#2D2760] text-[#5C4FE5]'
                 }`}>{count}</span>
               )}
             </button>
@@ -311,7 +311,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
 
       {/* Chapter List */}
       {allChapterGroups.length === 0 ? (
-        <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-10 text-center">
+        <div className="bg-white dark:bg-[#1E1A4A] border-2 border-[#E5E3FF] dark:border-[#2D2760] rounded-xl p-10 text-center">
           <div className="text-4xl mb-3">📚</div>
           <p className="text-[#7B78A8]">Belum ada materi {getCategoryLabel(activeTab)}.</p>
         </div>
@@ -321,7 +321,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
             const key = `${levelName}-${chapterTitle}`
             const isOpen = openChapters.has(key)
             return (
-              <div key={key} className="bg-white border-2 border-[#5C4FE5] rounded-xl overflow-hidden">
+              <div key={key} className="bg-white dark:bg-[#1E1A4A] border-2 border-[#5C4FE5] rounded-xl overflow-hidden">
 
                 {/* Chapter Header — mirip portal tutor */}
                 <button
@@ -331,7 +331,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                     else next.add(key)
                     setOpenChapters(next)
                   }}
-                  className="w-full px-5 py-4 flex items-center gap-3 bg-gradient-to-r from-purple-50 to-white hover:from-purple-100 transition-colors"
+                  className="w-full px-5 py-4 flex items-center gap-3 bg-gradient-to-r from-purple-50 to-white dark:from-[#2D2760] dark:to-[#1E1A4A] hover:from-purple-100 dark:hover:from-[#352E6B] transition-colors"
                 >
                   {isOpen
                     ? <ChevronDown className="w-5 h-5 text-[#5C4FE5] flex-shrink-0" />
@@ -359,7 +359,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                           {/* Unit Header */}
                           <button
                             onClick={() => !isUnitLocked && toggleUnit(unit.id)}
-                            className={`w-full px-5 py-3 flex items-center justify-between transition-colors ${isUnitLocked ? 'bg-gray-50 opacity-60 cursor-not-allowed' : 'bg-[#F7F6FF] hover:bg-[#EEEDFE]'}`}
+                            className={`w-full px-5 py-3 flex items-center justify-between transition-colors ${isUnitLocked ? 'bg-gray-50 dark:bg-[#151030] opacity-60 cursor-not-allowed' : 'bg-[#F7F6FF] dark:bg-[#151030] hover:bg-[#EEEDFE] dark:hover:bg-[#2D2760]'}`}
                           >
                             <div className="flex items-center gap-2">
                               {isUnitLocked
@@ -368,18 +368,18 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                                 ? <ChevronDown className="w-4 h-4 text-[#7B78A8]" />
                                 : <ChevronRight className="w-4 h-4 text-[#7B78A8]" />
                               }
-                              <span className={`font-semibold text-sm ${isUnitLocked ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.name}</span>
-                              {isUnitLocked && <span className="text-[10px] text-gray-400">Belum dibuka oleh tutor</span>}
+                              <span className={`font-semibold text-sm ${isUnitLocked ? 'text-gray-400 dark:text-gray-600' : 'text-[#1A1640] dark:text-white'}`}>{unit.name}</span>
+                              {isUnitLocked && <span className="text-[10px] text-gray-400 dark:text-gray-600">Belum dibuka oleh tutor</span>}
                             </div>
                             <span className="text-xs text-[#7B78A8]">{unit.materials.length} materi</span>
                           </button>
 
                           {/* Lessons + Materials */}
                           {isUnitOpen && !isUnitLocked && (
-                            <div className="bg-white">
+                            <div className="bg-white dark:bg-[#1E1A4A]">
                               {Array.from(lessonGroups.entries()).map(([lessonTitle, materials]) => (
                                 <div key={lessonTitle} className="px-5 py-3 border-b border-[#E5E3FF] last:border-b-0">
-                                  <p className="text-sm font-medium text-[#374151] mb-2">{lessonTitle}</p>
+                                  <p className="text-sm font-medium text-[#374151] dark:text-gray-300 mb-2">{lessonTitle}</p>
                                   <div className="flex flex-wrap gap-2 pl-2">
                                     {materials.map(material => {
                                       const isClickable = material.student_content_url ||
@@ -406,7 +406,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                                                 {material.title}
                                               </button>
                                             ) : material.category === 'live_zoom' && material.gdrive_url && !isGoogleUrl(material.gdrive_url) ? (
-                                              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-xs font-semibold cursor-not-allowed">
+                                              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-[#2D2760] text-gray-400 dark:text-gray-500 rounded-lg text-xs font-semibold cursor-not-allowed">
                                                 {getCategoryIcon(material.category)}
                                                 Segera Hadir
                                               </span>
@@ -420,7 +420,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                                               </Link>
                                             ) : null
                                           ) : (
-                                            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-xs font-semibold">
+                                            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-[#2D2760] text-gray-400 dark:text-gray-500 rounded-lg text-xs font-semibold">
                                               {getCategoryIcon(material.category)}
                                               {material.title}
                                             </span>
@@ -448,9 +448,9 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
     {/* ✅ Google Drive / PDF Modal */}
     {pdfModal.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-bold text-gray-900 truncate">{pdfModal.title}</h2>
+        <div className="bg-white dark:bg-[#1E1A4A] rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2D2760]">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate">{pdfModal.title}</h2>
             <button onClick={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] })}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
               <X className="w-5 h-5" />
@@ -472,9 +472,9 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
     {/* Loading overlay */}
     {pdfModal.open && pdfModal.loading && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-        <div className="bg-white rounded-2xl p-8 text-center">
+        <div className="bg-white dark:bg-[#1E1A4A] rounded-2xl p-8 text-center">
           <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
-          <p className="text-gray-600 font-medium">Memuat materi...</p>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Memuat materi...</p>
         </div>
       </div>
     )}
@@ -482,10 +482,10 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
     {/* ✅ Google Embed Modal */}
     {embedModal.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+        <div className="bg-white dark:bg-[#1E1A4A] rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
           {/* Modal Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-bold text-gray-900 truncate">{embedModal.title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2D2760]">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate">{embedModal.title}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setEmbedModal({ open: false, url: '', title: '', loading: false })}
@@ -503,7 +503,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
-                  <p className="text-gray-600 font-medium">Memuat materi...</p>
+                  <p className="text-gray-600 dark:text-gray-400 font-medium">Memuat materi...</p>
                 </div>
               </div>
             ) : (
