@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2, Eye, EyeOff, MoreVertical, ArrowUpDown, FolderOutput } from 'lucide-react';
+import { BookOpen, Video, FileText, Headphones, Trash2, Edit, ExternalLink, ChevronDown, ChevronRight, Library, Book, FileCheck, GraduationCap, Award, Star, Target, Lightbulb, Brain, Bookmark, BookMarked, Layers, Upload, LayoutList, FileImage, Loader2, Eye, EyeOff, MoreVertical, ArrowUpDown, FolderOutput, Copy } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import MoveChapterModal from './MoveChapterModal';
 import MoveUnitModal from './MoveUnitModal';
 import ReorderPanel from './ReorderPanel';
+import DuplicateCloneModal from './DuplicateCloneModal';
 
 // Available icons for chapters and units
 const ICON_OPTIONS = [
@@ -183,6 +184,15 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
 
   const [reorderData, setReorderData] = useState<{
     mode: 'units' | 'lessons'; parentId: string; parentName: string; parentBadge?: string;
+  } | null>(null);
+
+  // ✅ Duplicate/Clone modal state
+  const [duplicateCloneData, setDuplicateCloneData] = useState<{
+    mode: 'duplicate' | 'clone';
+    materialId?: string; materialTitle?: string;
+    sourceChapterTitle?: string; sourceUnitName?: string; sourceLessonName?: string;
+    chapterId?: string; chapterTitle?: string; unitCount?: number; lessonCount?: number;
+    currentLevelId: string; currentLevelName: string;
   } | null>(null);
 
   const supabase = createClient();
@@ -810,6 +820,7 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
     setMoveChapterData(null);
     setMoveUnitData(null);
     setReorderData(null);
+    setDuplicateCloneData(null);
     fetchMaterials();
   };
 
@@ -1067,6 +1078,19 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                               icon: <Trash2 className="w-4 h-4" />,
                               danger: true,
                               onClick: () => handleDeleteChapter(chapterGroup.chapterId, chapterGroup.chapterTitle, unitCount, lessonCount),
+                            },
+                            {
+                              label: 'Clone ke level lain',
+                              icon: <Copy className="w-4 h-4" />,
+                              onClick: () => setDuplicateCloneData({
+                                mode: 'clone',
+                                chapterId: chapterGroup.chapterId,
+                                chapterTitle: chapterGroup.chapterTitle,
+                                unitCount,
+                                lessonCount,
+                                currentLevelId: chapterGroup.levelId,
+                                currentLevelName: chapterGroup.levelName,
+                              }),
                             },
                           ]}
                         />
@@ -1424,6 +1448,21 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
                                                 </button>
                                               )}
                                               <button
+                                                onClick={() => setDuplicateCloneData({
+                                                  mode: 'duplicate',
+                                                  materialId: material.id,
+                                                  materialTitle: material.title,
+                                                  sourceChapterTitle: material.chapter_title || '',
+                                                  sourceUnitName: material.unit_name,
+                                                  sourceLessonName: material.lesson_name,
+                                                  currentLevelId: material.level_id,
+                                                  currentLevelName: material.level_name,
+                                                })}
+                                                className="p-2 text-[#5C4FE5] hover:bg-purple-50 rounded-lg transition-colors"
+                                                title="Duplikat ke level lain">
+                                                <Copy className="w-4 h-4" />
+                                              </button>
+                                              <button
                                                 onClick={() => handleTogglePublish(material.id, material.is_published)}
                                                 className={`p-2 rounded-lg transition-colors ${material.is_published ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
                                                 title={material.is_published ? 'Unpublish' : 'Publish'}>
@@ -1481,6 +1520,14 @@ export default function MaterialList({ category, onEdit, onEditContent }: Materi
         <ReorderPanel
           {...reorderData}
           onClose={() => setReorderData(null)}
+          onSuccess={handleStructureSuccess}
+        />
+      )}
+
+      {duplicateCloneData && (
+        <DuplicateCloneModal
+          {...duplicateCloneData}
+          onClose={() => setDuplicateCloneData(null)}
           onSuccess={handleStructureSuccess}
         />
       )}

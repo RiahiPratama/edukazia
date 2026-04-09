@@ -48,6 +48,10 @@ export async function POST(request: NextRequest) {
         return await deleteUnit(supabase, body);
       case 'bulk_publish':
         return await bulkPublish(supabase, body);
+      case 'duplicate_material':
+        return await duplicateMaterial(supabase, body);
+      case 'clone_chapter':
+        return await cloneChapter(supabase, body);
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -630,5 +634,347 @@ async function bulkPublish(supabase: any, body: any) {
   return NextResponse.json({
     success: true,
     message: `${material_ids.length} material berhasil ${action}`,
+  });
+}
+
+// ============================================================
+// 8. DUPLICATE MATERIAL — copy material + file ke level lain
+// ============================================================
+async function duplicateMaterial(supabase: any, body: any) {
+  const { material_id, target_level_id } = body;
+
+  if (!material_id || !target_level_id) {
+    return NextResponse.json({ error: 'material_id dan target_level_id wajib diisi' }, { status: 400 });
+  }
+
+  // 1. Get source material + content
+  const { data: material } = await supabase
+    .from('materials')
+    .select('id, title, category, position, is_published, lesson_id')
+    .eq('id', material_id)
+    .single();
+
+  if (!material) return NextResponse.json({ error: 'Material tidak ditemukan' }, { status: 404 });
+
+  const { data: contents } = await supabase
+    .from('material_contents')
+    .select('*')
+    .eq('material_id', material_id);
+
+  const sourceContent = contents?.[0];
+
+  // 2. Get source hierarchy: lesson → unit → chapter
+  const { data: lesson } = await supabase
+    .from('lessons')
+    .select('id, lesson_name, position, unit_id')
+    .eq('id', material.lesson_id)
+    .single();
+
+  if (!lesson) return NextResponse.json({ error: 'Source lesson tidak ditemukan' }, { status: 404 });
+
+  const { data: unit } = await supabase
+    .from('units')
+    .select('id, unit_name, position, chapter_id, level_id')
+    .eq('id', lesson.unit_id)
+    .single();
+
+  if (!unit) return NextResponse.json({ error: 'Source unit tidak ditemukan' }, { status: 404 });
+
+  const { data: chapter } = await supabase
+    .from('chapters')
+    .select('id, chapter_title')
+    .eq('id', unit.chapter_id)
+    .single();
+
+  if (!chapter) return NextResponse.json({ error: 'Source chapter tidak ditemukan' }, { status: 404 });
+
+  // 3. Find-or-create chapter di target level
+  let targetChapterId: string;
+  const { data: existingChapter } = await supabase
+    .from('chapters')
+    .select('id')
+    .eq('level_id', target_level_id)
+    .eq('chapter_title', chapter.chapter_title)
+    .maybeSingle();
+
+  if (existingChapter) {
+    targetChapterId = existingChapter.id;
+  } else {
+    const { data: maxCh } = await supabase
+      .from('chapters')
+      .select('chapter_number, order_number')
+      .eq('level_id', target_level_id)
+      .order('chapter_number', { ascending: false })
+      .limit(1);
+
+    const { data: newChapter, error: chErr } = await supabase
+      .from('chapters')
+      .insert({
+        level_id: target_level_id,
+        chapter_title: chapter.chapter_title,
+        chapter_number: (maxCh?.[0]?.chapter_number || 0) + 1,
+        order_number: (maxCh?.[0]?.order_number || 0) + 1,
+      })
+      .select()
+      .single();
+
+    if (chErr) return NextResponse.json({ error: 'Gagal buat chapter', details: chErr.message }, { status: 500 });
+    targetChapterId = newChapter.id;
+  }
+
+  // 4. Find-or-create unit di target chapter
+  let targetUnitId: string;
+  const { data: existingUnit } = await supabase
+    .from('units')
+    .select('id')
+    .eq('chapter_id', targetChapterId)
+    .eq('unit_name', unit.unit_name)
+    .maybeSingle();
+
+  if (existingUnit) {
+    targetUnitId = existingUnit.id;
+  } else {
+    const { data: newUnit, error: uErr } = await supabase
+      .from('units')
+      .insert({
+        level_id: target_level_id,
+        chapter_id: targetChapterId,
+        unit_name: unit.unit_name,
+        unit_number: 0,
+        position: unit.position || 1,
+      })
+      .select()
+      .single();
+
+    if (uErr) return NextResponse.json({ error: 'Gagal buat unit', details: uErr.message }, { status: 500 });
+    targetUnitId = newUnit.id;
+  }
+
+  // 5. Find-or-create lesson di target unit
+  let targetLessonId: string;
+  const { data: existingLesson } = await supabase
+    .from('lessons')
+    .select('id')
+    .eq('unit_id', targetUnitId)
+    .eq('lesson_name', lesson.lesson_name)
+    .maybeSingle();
+
+  if (existingLesson) {
+    targetLessonId = existingLesson.id;
+  } else {
+    const { data: newLesson, error: lErr } = await supabase
+      .from('lessons')
+      .insert({
+        unit_id: targetUnitId,
+        lesson_name: lesson.lesson_name,
+        position: lesson.position || 1,
+      })
+      .select()
+      .single();
+
+    if (lErr) return NextResponse.json({ error: 'Gagal buat lesson', details: lErr.message }, { status: 500 });
+    targetLessonId = newLesson.id;
+  }
+
+  // 6. Copy file di storage (download + re-upload)
+  let newStoragePath: string | null = null;
+  let storageBucket: string | null = sourceContent?.storage_bucket || null;
+
+  if (sourceContent?.storage_path && sourceContent?.storage_bucket) {
+    const { data: fileData, error: dlErr } = await supabase.storage
+      .from(sourceContent.storage_bucket)
+      .download(sourceContent.storage_path);
+
+    if (dlErr) {
+      console.warn('⚠️ Gagal download source file:', dlErr.message);
+    } else if (fileData) {
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 8);
+      const ext = sourceContent.storage_path.split('.').pop() || 'jsx';
+      const folder = sourceContent.storage_path.split('/')[0] || 'bacaan';
+      newStoragePath = `${folder}/${timestamp}-${random}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from(sourceContent.storage_bucket)
+        .upload(newStoragePath, fileData);
+
+      if (upErr) {
+        console.warn('⚠️ Gagal upload copy file:', upErr.message);
+        newStoragePath = null;
+      }
+    }
+  }
+
+  // 7. Create new material
+  const { data: newMaterial, error: mErr } = await supabase
+    .from('materials')
+    .insert({
+      title: material.title,
+      category: material.category,
+      lesson_id: targetLessonId,
+      position: material.position || 1,
+      is_published: false, // default draft
+    })
+    .select()
+    .single();
+
+  if (mErr) return NextResponse.json({ error: 'Gagal buat material', details: mErr.message }, { status: 500 });
+
+  // 8. Create material_contents
+  await supabase
+    .from('material_contents')
+    .insert({
+      material_id: newMaterial.id,
+      content_type: sourceContent?.content_type || 'component',
+      content_url: sourceContent?.content_url || null,
+      storage_bucket: storageBucket,
+      storage_path: newStoragePath,
+      canva_url: sourceContent?.canva_url || null,
+      student_content_url: sourceContent?.student_content_url || null,
+      slides_url: sourceContent?.slides_url || null,
+    });
+
+  // Get target level name
+  const { data: targetLevel } = await supabase
+    .from('levels')
+    .select('name')
+    .eq('id', target_level_id)
+    .single();
+
+  console.log(`✅ Material "${material.title}" diduplikat ke ${targetLevel?.name}`);
+
+  return NextResponse.json({
+    success: true,
+    message: `Material "${material.title}" berhasil diduplikat ke ${targetLevel?.name || 'level tujuan'}${newStoragePath ? ' (file ikut ter-copy)' : ''}`,
+  });
+}
+
+// ============================================================
+// 9. CLONE CHAPTER — copy struktur (chapter/unit/lesson) tanpa file
+// ============================================================
+async function cloneChapter(supabase: any, body: any) {
+  const { chapter_id, target_level_id } = body;
+
+  if (!chapter_id || !target_level_id) {
+    return NextResponse.json({ error: 'chapter_id dan target_level_id wajib diisi' }, { status: 400 });
+  }
+
+  // 1. Get source chapter
+  const { data: chapter } = await supabase
+    .from('chapters')
+    .select('id, chapter_title, level_id, icon')
+    .eq('id', chapter_id)
+    .single();
+
+  if (!chapter) return NextResponse.json({ error: 'Chapter tidak ditemukan' }, { status: 404 });
+
+  if (chapter.level_id === target_level_id) {
+    return NextResponse.json({ error: 'Tidak bisa clone ke level yang sama' }, { status: 400 });
+  }
+
+  // 2. Check if chapter already exists in target level
+  const { data: existingChapter } = await supabase
+    .from('chapters')
+    .select('id')
+    .eq('level_id', target_level_id)
+    .eq('chapter_title', chapter.chapter_title)
+    .maybeSingle();
+
+  if (existingChapter) {
+    return NextResponse.json({
+      error: `Chapter "${chapter.chapter_title}" sudah ada di level tujuan`,
+    }, { status: 400 });
+  }
+
+  // 3. Get max chapter_number and order_number
+  const { data: maxCh } = await supabase
+    .from('chapters')
+    .select('chapter_number, order_number')
+    .eq('level_id', target_level_id)
+    .order('chapter_number', { ascending: false })
+    .limit(1);
+
+  // 4. Create chapter in target level
+  const { data: newChapter, error: chErr } = await supabase
+    .from('chapters')
+    .insert({
+      level_id: target_level_id,
+      chapter_title: chapter.chapter_title,
+      chapter_number: (maxCh?.[0]?.chapter_number || 0) + 1,
+      order_number: (maxCh?.[0]?.order_number || 0) + 1,
+      icon: chapter.icon || null,
+    })
+    .select()
+    .single();
+
+  if (chErr) return NextResponse.json({ error: 'Gagal buat chapter', details: chErr.message }, { status: 500 });
+
+  // 5. Get source units
+  const { data: sourceUnits } = await supabase
+    .from('units')
+    .select('id, unit_name, position, icon')
+    .eq('chapter_id', chapter_id)
+    .order('position');
+
+  let totalUnits = 0;
+  let totalLessons = 0;
+
+  // 6. Clone units + lessons
+  for (const srcUnit of (sourceUnits || [])) {
+    const { data: newUnit, error: uErr } = await supabase
+      .from('units')
+      .insert({
+        level_id: target_level_id,
+        chapter_id: newChapter.id,
+        unit_name: srcUnit.unit_name,
+        unit_number: 0,
+        position: srcUnit.position || 1,
+        icon: srcUnit.icon || null,
+      })
+      .select()
+      .single();
+
+    if (uErr) {
+      console.warn('⚠️ Gagal clone unit:', srcUnit.unit_name, uErr.message);
+      continue;
+    }
+    totalUnits++;
+
+    // Get source lessons for this unit
+    const { data: sourceLessons } = await supabase
+      .from('lessons')
+      .select('id, lesson_name, position')
+      .eq('unit_id', srcUnit.id)
+      .order('position');
+
+    for (const srcLesson of (sourceLessons || [])) {
+      const { error: lErr } = await supabase
+        .from('lessons')
+        .insert({
+          unit_id: newUnit.id,
+          lesson_name: srcLesson.lesson_name,
+          position: srcLesson.position || 1,
+        });
+
+      if (lErr) {
+        console.warn('⚠️ Gagal clone lesson:', srcLesson.lesson_name, lErr.message);
+      } else {
+        totalLessons++;
+      }
+    }
+  }
+
+  // Get target level name
+  const { data: targetLevel } = await supabase
+    .from('levels')
+    .select('name')
+    .eq('id', target_level_id)
+    .single();
+
+  console.log(`✅ Chapter "${chapter.chapter_title}" di-clone ke ${targetLevel?.name}: ${totalUnits} unit, ${totalLessons} lesson`);
+
+  return NextResponse.json({
+    success: true,
+    message: `Struktur "${chapter.chapter_title}" berhasil di-clone ke ${targetLevel?.name || 'level tujuan'} (${totalUnits} unit, ${totalLessons} lesson, tanpa materi/file)`,
   });
 }
