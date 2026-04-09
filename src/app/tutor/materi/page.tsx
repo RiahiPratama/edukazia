@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Video, FileText, BookOpen, Headphones,
   ChevronDown, ChevronRight, ExternalLink,
-  Clock, Lock, Loader2, X, Crown, Users, Building2
+  Clock, Lock, Loader2, X, Crown, Users, Building2,
+  ZoomIn, ZoomOut, Maximize2, RotateCcw
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -66,6 +67,19 @@ export default function TutorMateriPage() {
   const [embedModal, setEmbedModal] = useState<{
     open: boolean; url: string; title: string; loading: boolean
   }>({ open: false, url: '', title: '', loading: false })
+
+  // ✅ Zoom & Fullscreen
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const embedModalRef = useRef<HTMLDivElement>(null)
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.15, 2.5))
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.15, 0.4))
+  const handleZoomReset = () => setZoomLevel(1)
+  const handleFullscreen = () => {
+    const el = embedModalRef.current
+    if (!el) return
+    if (document.fullscreenElement) document.exitFullscreen()
+    else el.requestFullscreen()
+  }
 
   useEffect(() => { loadAll() }, [])
 
@@ -553,23 +567,42 @@ export default function TutorMateriPage() {
         </div>
       )}
 
-      {/* Embed Modal */}
+      {/* Embed Modal — with Zoom & Fullscreen */}
       {embedModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+          <div ref={embedModalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-bold text-gray-900 truncate">{embedModal.title}</h2>
-              <button onClick={() => setEmbedModal({ open: false, url: '', title: '', loading: false })}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={handleZoomOut} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Zoom Out">
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-semibold text-gray-500 min-w-[40px] text-center">{Math.round(zoomLevel * 100)}%</span>
+                <button onClick={handleZoomIn} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Zoom In">
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                {zoomLevel !== 1 && (
+                  <button onClick={handleZoomReset} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Reset Zoom">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button onClick={handleFullscreen} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Fullscreen">
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => { setEmbedModal({ open: false, url: '', title: '', loading: false }); setZoomLevel(1); }}
+                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-hidden rounded-b-2xl">
+            <div className="flex-1 overflow-auto rounded-b-2xl">
               {embedModal.loading
                 ? <div className="flex items-center justify-center h-full">
                     <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5]" />
                   </div>
-                : <iframe src={embedModal.url} className="w-full h-full border-0" title={embedModal.title} allowFullScreen />}
+                : <div style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center', width: `${100 / zoomLevel}%`, height: `${100 / zoomLevel}%` }}>
+                    <iframe src={embedModal.url} className="w-full h-full border-0" title={embedModal.title} allowFullScreen />
+                  </div>}
             </div>
           </div>
         </div>

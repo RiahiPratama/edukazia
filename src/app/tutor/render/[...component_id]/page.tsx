@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import CEFRRenderer from '@/app/ortu/anak/[slug]/materi/render/[...component_id]/CEFRRenderer'
+import IframeViewer from '@/components/IframeViewer'
 
 function isUUID(str: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
@@ -109,10 +110,10 @@ export default async function TutorRenderPage({
 </html>`
 
   return (
-    <iframe
+    <IframeViewer
       srcDoc={htmlDoc}
-      className="w-full h-screen border-0"
       sandbox="allow-scripts"
+      title={componentName}
     />
   )
 }

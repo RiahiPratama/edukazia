@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { BookOpen, Video, FileText, Headphones, ChevronDown, ChevronRight, CheckCircle2, X, Loader2, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { BookOpen, Video, FileText, Headphones, ChevronDown, ChevronRight, CheckCircle2, X, Loader2, ExternalLink, Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 
 type Material = {
@@ -63,6 +63,30 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
     title: string;
     loading: boolean;
   }>({ open: false, url: '', title: '', loading: false })
+
+  // ✅ Zoom & Fullscreen state
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const pdfModalRef = useRef<HTMLDivElement>(null)
+  const embedModalRef = useRef<HTMLDivElement>(null)
+
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.15, 2.5))
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.15, 0.4))
+  const handleZoomReset = () => setZoomLevel(1)
+
+  const handleFullscreen = (ref: React.RefObject<HTMLDivElement | null>) => {
+    const el = ref.current
+    if (!el) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      el.requestFullscreen()
+    }
+  }
+
+  // Reset zoom saat modal ditutup
+  useEffect(() => {
+    if (!pdfModal.open && !embedModal.open) setZoomLevel(1)
+  }, [pdfModal.open, embedModal.open])
 
   // Buka semua chapter by default saat load
   useEffect(() => {
@@ -460,24 +484,43 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
       )}
     </div>
 
-    {/* ✅ Google Drive / PDF Modal */}
+    {/* ✅ Google Drive / PDF Modal — with Zoom & Fullscreen */}
     {pdfModal.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+        <div ref={pdfModalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-bold text-gray-900 truncate">{pdfModal.title}</h2>
-            <button onClick={() => setPdfModal({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] })}
-              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={handleZoomOut} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Zoom Out">
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-semibold text-gray-500 min-w-[40px] text-center">{Math.round(zoomLevel * 100)}%</span>
+              <button onClick={handleZoomIn} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Zoom In">
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              {zoomLevel !== 1 && (
+                <button onClick={handleZoomReset} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Reset Zoom">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button onClick={() => handleFullscreen(pdfModalRef)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Fullscreen">
+                <Maximize2 className="w-4 h-4" />
+              </button>
+              <button onClick={() => { setPdfModal({ open: false, url: '', title: '', loading: false, type: 'google', slideUrls: [] }); setZoomLevel(1); }}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden rounded-b-2xl">
+          <div className="flex-1 overflow-auto rounded-b-2xl">
             {pdfModal.loading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
               </div>
             ) : (
-              <iframe src={pdfModal.url} className="w-full h-full border-0" title={pdfModal.title} />
+              <div style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center', width: `${100 / zoomLevel}%`, height: `${100 / zoomLevel}%` }}>
+                <iframe src={pdfModal.url} className="w-full h-full border-0" title={pdfModal.title} />
+              </div>
             )}
           </div>
         </div>
@@ -494,26 +537,38 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
       </div>
     )}
 
-    {/* ✅ Google Embed Modal */}
+    {/* ✅ Google Embed Modal — with Zoom & Fullscreen */}
     {embedModal.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+        <div ref={embedModalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
           {/* Modal Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-bold text-gray-900 truncate">{embedModal.title}</h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setEmbedModal({ open: false, url: '', title: '', loading: false })}
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Tutup"
-              >
+            <div className="flex items-center gap-1">
+              <button onClick={handleZoomOut} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Zoom Out">
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-semibold text-gray-500 min-w-[40px] text-center">{Math.round(zoomLevel * 100)}%</span>
+              <button onClick={handleZoomIn} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Zoom In">
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              {zoomLevel !== 1 && (
+                <button onClick={handleZoomReset} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Reset Zoom">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button onClick={() => handleFullscreen(embedModalRef)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Fullscreen">
+                <Maximize2 className="w-4 h-4" />
+              </button>
+              <button onClick={() => { setEmbedModal({ open: false, url: '', title: '', loading: false }); setZoomLevel(1); }}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" title="Tutup">
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
 
           {/* Modal Content */}
-          <div className="flex-1 overflow-hidden rounded-b-2xl">
+          <div className="flex-1 overflow-auto rounded-b-2xl">
             {embedModal.loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
@@ -522,12 +577,14 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                 </div>
               </div>
             ) : (
-              <iframe
-                src={embedModal.url}
-                className="w-full h-full border-0"
-                allow="autoplay"
-                title={embedModal.title}
-              />
+              <div style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center', width: `${100 / zoomLevel}%`, height: `${100 / zoomLevel}%` }}>
+                <iframe
+                  src={embedModal.url}
+                  className="w-full h-full border-0"
+                  allow="autoplay"
+                  title={embedModal.title}
+                />
+              </div>
             )}
           </div>
         </div>
