@@ -77,7 +77,55 @@ export async function POST(request: NextRequest) {
     // 1. Create or get Chapter
     let actualChapterId: string | null = chapterId;
     
-    if (chapterId === 'NEW') {
+    if (chapterId === 'FIND_OR_CREATE') {
+      // ✅ MULTI-LEVEL MODE: cari chapter by nama di level ini, create kalau belum ada
+      if (chapterName && chapterName.trim()) {
+        console.log('🔍 Find-or-create Chapter:', chapterName, 'in level:', levelId);
+
+        const { data: existingChapter } = await supabase
+          .from('chapters')
+          .select('id')
+          .eq('level_id', levelId)
+          .eq('chapter_title', chapterName.trim())
+          .limit(1)
+          .maybeSingle();
+
+        if (existingChapter) {
+          actualChapterId = existingChapter.id;
+          console.log('✅ Found existing chapter:', actualChapterId);
+        } else {
+          // Create new chapter
+          const { data: maxRows } = await supabase
+            .from('chapters')
+            .select('chapter_number, order_number')
+            .eq('level_id', levelId)
+            .order('chapter_number', { ascending: false })
+            .limit(1);
+
+          const nextChapterNumber = (maxRows?.[0]?.chapter_number || 0) + 1;
+          const nextOrderNumber = (maxRows?.[0]?.order_number || 0) + 1;
+
+          const { data: newChapter, error: chapterError } = await supabase
+            .from('chapters')
+            .insert({
+              level_id: levelId,
+              chapter_title: chapterName.trim(),
+              chapter_number: nextChapterNumber,
+              order_number: nextOrderNumber,
+            })
+            .select()
+            .single();
+
+          if (chapterError) {
+            console.error('Chapter creation error:', chapterError);
+            return NextResponse.json({ error: 'Failed to create chapter', details: chapterError.message }, { status: 500 });
+          }
+
+          actualChapterId = newChapter.id;
+          console.log('✅ Chapter created (find-or-create):', actualChapterId);
+        }
+      }
+    } else if (chapterId === 'NEW') {
       if (chapterName && chapterName.trim()) {
         // Create NEW chapter with provided name
         console.log('🆕 Creating new Chapter:', chapterName);
@@ -167,7 +215,44 @@ export async function POST(request: NextRequest) {
 
     // 2. Create or get Unit
     let actualUnitId: string | null = unitId;
-    if (unitId === 'NEW' && unitName) {
+
+    if (unitId === 'FIND_OR_CREATE' && unitName) {
+      // ✅ MULTI-LEVEL MODE: cari unit by nama di chapter ini, create kalau belum ada
+      console.log('🔍 Find-or-create Unit:', unitName, 'in chapter:', actualChapterId);
+
+      const { data: existingUnit } = await supabase
+        .from('units')
+        .select('id')
+        .eq('chapter_id', actualChapterId)
+        .eq('unit_name', unitName.trim())
+        .limit(1)
+        .maybeSingle();
+
+      if (existingUnit) {
+        actualUnitId = existingUnit.id;
+        console.log('✅ Found existing unit:', actualUnitId);
+      } else {
+        const { data: newUnit, error: unitError } = await supabase
+          .from('units')
+          .insert({
+            level_id: levelId,
+            chapter_id: actualChapterId || null,
+            unit_name: unitName.trim(),
+            unit_number: 0,
+            position: unitPositionNew,
+          })
+          .select()
+          .single();
+
+        if (unitError) {
+          console.error('Unit creation error:', unitError);
+          return NextResponse.json({ error: 'Failed to create unit', details: unitError.message }, { status: 500 });
+        }
+
+        actualUnitId = newUnit.id;
+        console.log('✅ Unit created (find-or-create):', actualUnitId);
+      }
+    } else if (unitId === 'NEW' && unitName) {
       console.log('🆕 Creating new Unit:', unitName);
 
       const { data: newUnit, error: unitError } = await supabase
@@ -204,7 +289,42 @@ export async function POST(request: NextRequest) {
     let actualLessonId: string | null = lessonId;
     let newlyCreatedLessonId: string | null = null; // ✅ track untuk rollback kalau gagal
 
-    if (lessonId === 'NEW' && lessonName) {
+    if (lessonId === 'FIND_OR_CREATE' && lessonName) {
+      // ✅ MULTI-LEVEL MODE: cari lesson by nama di unit ini, create kalau belum ada
+      console.log('🔍 Find-or-create Lesson:', lessonName, 'in unit:', actualUnitId);
+
+      const { data: existingLesson } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('unit_id', actualUnitId)
+        .eq('lesson_name', lessonName.trim())
+        .limit(1)
+        .maybeSingle();
+
+      if (existingLesson) {
+        actualLessonId = existingLesson.id;
+        console.log('✅ Found existing lesson:', actualLessonId);
+      } else {
+        const { data: newLesson, error: lessonError } = await supabase
+          .from('lessons')
+          .insert({
+            unit_id: actualUnitId,
+            lesson_name: lessonName.trim(),
+            position: lessonPositionNew,
+          })
+          .select()
+          .single();
+
+        if (lessonError) {
+          console.error('Lesson creation error:', lessonError);
+          return NextResponse.json({ error: 'Failed to create lesson', details: lessonError.message }, { status: 500 });
+        }
+
+        actualLessonId = newLesson.id;
+        newlyCreatedLessonId = newLesson.id;
+        console.log('✅ Lesson created (find-or-create):', actualLessonId);
+      }
+    } else if (lessonId === 'NEW' && lessonName) {
       console.log('🆕 Creating new Lesson:', lessonName);
 
       const { data: newLesson, error: lessonError } = await supabase
