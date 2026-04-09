@@ -54,50 +54,54 @@ export default function PreviewModal({ materialId, materialTitle, storageBucket,
   <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet" />
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; margin: 0; background: #fff; color: #1a1a1a; }
-    .error-box { background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 16px; color: #991B1B; font-size: 14px; }
+    .error-box { background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 16px; color: #991B1B; font-size: 14px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" data-type="module">
-    const { useState, useEffect, useRef, useMemo, useCallback, Fragment } = React;
+  <script>
+    window.onload = function() {
+      const { useState, useEffect, useRef, useMemo, useCallback, Fragment, createElement } = React;
 
-    try {
-      // Wrap source in a function to extract default export
-      const componentSource = ${JSON.stringify(source)};
+      try {
+        var componentSource = ${JSON.stringify(source)};
 
-      // Remove import/export statements for browser compatibility
-      let cleanSource = componentSource
-        .replace(/^import\\s+.*?from\\s+['"].*?['"];?\\s*$/gm, '')
-        .replace(/^import\\s+['"].*?['"];?\\s*$/gm, '')
-        .replace(/^export\\s+default\\s+/gm, 'const __DefaultComponent__ = ')
-        .replace(/^export\\s+/gm, 'const __export__ = ');
+        // Remove import/export statements for browser compatibility
+        var cleanSource = componentSource
+          .replace(/^import\\s+.*?from\\s+['"].*?['"];?\\s*$/gm, '')
+          .replace(/^import\\s+['"].*?['"];?\\s*$/gm, '')
+          .replace(/^export\\s+default\\s+/gm, 'var __DefaultComponent__ = ')
+          .replace(/^export\\s+/gm, 'var __export__ = ');
 
-      // If no default component found, wrap entire source as component
-      if (!cleanSource.includes('__DefaultComponent__')) {
-        // Try to find a function component declaration
-        const funcMatch = cleanSource.match(/(?:function|const)\\s+(\\w+)\\s*(?:=|\\()/);
-        if (funcMatch) {
-          cleanSource += '\\nconst __DefaultComponent__ = ' + funcMatch[1] + ';';
-        } else {
-          cleanSource = 'const __DefaultComponent__ = () => <div>' + cleanSource.replace(/</g, '&lt;') + '</div>';
+        // If no default component found, try to detect component name
+        if (cleanSource.indexOf('__DefaultComponent__') === -1) {
+          var funcMatch = cleanSource.match(/(?:function|const|var|let)\\s+(\\w+)\\s*(?:=\\s*(?:\\(|function)|\\()/);
+          if (funcMatch) {
+            cleanSource += '\\nvar __DefaultComponent__ = ' + funcMatch[1] + ';';
+          }
         }
+
+        cleanSource += '\\nreturn __DefaultComponent__;';
+
+        // Transpile JSX → JS using Babel
+        var transpiled = Babel.transform(cleanSource, {
+          presets: ['react'],
+          filename: 'component.jsx',
+        }).code;
+
+        // Execute transpiled code
+        var factory = new Function('React', 'useState', 'useEffect', 'useRef', 'useMemo', 'useCallback', 'Fragment', 'createElement', transpiled);
+        var Component = factory(React, useState, useEffect, useRef, useMemo, useCallback, Fragment, createElement);
+
+        if (typeof Component === 'function') {
+          ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Component));
+        } else {
+          document.getElementById('root').innerHTML = '<div class="error-box">Component tidak ditemukan. File mungkin bukan React component.</div>';
+        }
+      } catch (err) {
+        document.getElementById('root').innerHTML = '<div class="error-box"><strong>Render Error:</strong>\\n' + err.message + '</div>';
       }
-
-      const evalFunc = new Function('React', 'useState', 'useEffect', 'useRef', 'useMemo', 'useCallback', 'Fragment',
-        cleanSource + '\\nreturn __DefaultComponent__;'
-      );
-
-      const Component = evalFunc(React, useState, useEffect, useRef, useMemo, useCallback, Fragment);
-
-      if (typeof Component === 'function') {
-        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Component));
-      } else {
-        document.getElementById('root').innerHTML = '<div class="error-box">Component tidak ditemukan. File mungkin bukan React component.</div>';
-      }
-    } catch (err) {
-      document.getElementById('root').innerHTML = '<div class="error-box"><strong>Render Error:</strong><br/>' + err.message + '</div>';
-    }
+    };
   </script>
 </body>
 </html>`;
