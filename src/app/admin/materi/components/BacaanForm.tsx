@@ -468,7 +468,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-900 mb-2">Chapter *</label>
-                      <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); setSelectedUnit(''); setSelectedLesson(''); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required
+                      <select value={selectedChapter} onChange={(e) => { setSelectedChapter(e.target.value); setSelectedUnit(e.target.value === 'NEW' ? 'NEW' : ''); setSelectedLesson(e.target.value === 'NEW' ? 'NEW' : ''); if (e.target.value !== 'NEW') fetchUnits(e.target.value); }} required
                         className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
                         <option value="">Pilih Chapter</option>
                         <option value="NEW">+ Buat Chapter Baru</option>
@@ -479,7 +479,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                     {selectedChapter && (
                       <div>
                         <label className="block text-sm font-semibold text-gray-900 mb-2">Unit *</label>
-                        <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); setSelectedLesson(''); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required
+                        <select value={selectedUnit} onChange={(e) => { setSelectedUnit(e.target.value); setSelectedLesson(e.target.value === 'NEW' ? 'NEW' : ''); if (e.target.value !== 'NEW') fetchLessons(e.target.value); }} required
                           className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium">
                           <option value="">Pilih Unit</option>
                           <option value="NEW">+ Buat Unit Baru</option>
