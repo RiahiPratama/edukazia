@@ -268,6 +268,18 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const allLevelsHaveFiles = () => selectedLevels.every(id => !!jsxFiles[id]);
   const filledCount = sortedSelectedLevels.filter(l => !!jsxFiles[l.id]).length;
 
+  // ✅ Auto-fill lesson position saat unit existing dipilih di multi-level mode
+  useEffect(() => {
+    if (!isMultiLevel || !newChapterTitle || !newUnitName) return;
+    const matchedUnits = levelStructures.flatMap(ls =>
+      ls.chapters
+        .filter(ch => ch.title.toLowerCase() === newChapterTitle.toLowerCase())
+        .flatMap(ch => ch.units.filter(u => u.name.toLowerCase() === newUnitName.toLowerCase()))
+    );
+    const maxLessonCount = Math.max(0, ...matchedUnits.map(u => u.lessonCount));
+    if (maxLessonCount > 0) setNewLessonPosition(maxLessonCount + 1);
+  }, [newUnitName, newChapterTitle, isMultiLevel]);
+
   // ✅ Drag-drop state & handler
   const [isDragging, setIsDragging] = useState(false);
 
@@ -620,42 +632,93 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                       <span className="w-6 h-6 flex items-center justify-center bg-[#5C4FE5] text-white text-xs font-bold rounded-full">1</span>
                       <span className="text-sm font-bold text-gray-900">Nama struktur (berlaku untuk semua level)</span>
                     </div>
-                    <p className="text-xs text-gray-500 mb-4">Jika chapter/unit/lesson dengan nama ini sudah ada di suatu level, akan dipakai yang existing. Jika belum, dibuat otomatis.</p>
+                    <p className="text-xs text-gray-500 mb-4">Pilih dari existing atau ketik nama baru. Jika belum ada di suatu level, dibuat otomatis.</p>
 
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Nama Chapter *</label>
-                        <input type="text" value={newChapterTitle} onChange={(e) => setNewChapterTitle(e.target.value)}
-                          placeholder="Contoh: Parts of Speech" required
-                          className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="sm:col-span-2">
-                          <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Nama Unit *</label>
-                          <input type="text" value={newUnitName} onChange={(e) => setNewUnitName(e.target.value)}
-                            placeholder="Contoh: Nouns" required
-                            className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                    {(() => {
+                      // Compute suggestions from levelStructures
+                      const uniqueChapters = [...new Set(levelStructures.flatMap(ls => ls.chapters.map(ch => ch.title)))];
+
+                      const matchedUnits = levelStructures.flatMap(ls =>
+                        ls.chapters
+                          .filter(ch => ch.title.toLowerCase() === newChapterTitle.toLowerCase())
+                          .flatMap(ch => ch.units)
+                      );
+                      const uniqueUnits = [...new Set(matchedUnits.map(u => u.name))];
+
+                      // Get max lesson position for selected unit
+                      const matchedUnitData = matchedUnits.filter(u => u.name.toLowerCase() === newUnitName.toLowerCase());
+                      const maxLessonCount = Math.max(0, ...matchedUnitData.map(u => u.lessonCount));
+
+                      // Collect unique lesson names from matched units
+                      // We need to fetch lessons for the matched units — but we already have lastLesson info
+                      // For full lesson list, we'd need another query. For now, show lastLesson as hint.
+                      const lastLessonHint = matchedUnitData.find(u => u.lastLesson)?.lastLesson || null;
+
+                      return (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Nama Chapter *</label>
+                            <input type="text" list="chapter-suggestions" value={newChapterTitle}
+                              onChange={(e) => { setNewChapterTitle(e.target.value); setNewUnitName(''); setNewLessonName(''); setNewLessonPosition(1); }}
+                              placeholder="Ketik atau pilih chapter..." required
+                              className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                            <datalist id="chapter-suggestions">
+                              {uniqueChapters.map(name => <option key={name} value={name} />)}
+                            </datalist>
+                            {newChapterTitle && uniqueChapters.some(c => c.toLowerCase() === newChapterTitle.toLowerCase()) && (
+                              <p className="text-xs text-green-600 mt-1 font-semibold">✅ Chapter existing — akan dipakai</p>
+                            )}
+                            {newChapterTitle && !uniqueChapters.some(c => c.toLowerCase() === newChapterTitle.toLowerCase()) && (
+                              <p className="text-xs text-blue-600 mt-1 font-semibold">🆕 Chapter baru — akan dibuat di semua level</p>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Nama Unit *</label>
+                              <input type="text" list="unit-suggestions" value={newUnitName}
+                                onChange={(e) => { setNewUnitName(e.target.value); setNewLessonName(''); setNewLessonPosition(1); }}
+                                placeholder="Ketik atau pilih unit..." required
+                                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                              <datalist id="unit-suggestions">
+                                {uniqueUnits.map(name => <option key={name} value={name} />)}
+                              </datalist>
+                              {newUnitName && uniqueUnits.some(u => u.toLowerCase() === newUnitName.toLowerCase()) && (
+                                <p className="text-xs text-green-600 mt-1 font-semibold">✅ Unit existing — akan dipakai</p>
+                              )}
+                              {newUnitName && !uniqueUnits.some(u => u.toLowerCase() === newUnitName.toLowerCase()) && newChapterTitle && (
+                                <p className="text-xs text-blue-600 mt-1 font-semibold">🆕 Unit baru</p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Urutan Unit</label>
+                              <input type="number" value={newUnitPosition} onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)} min="1"
+                                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Nama Lesson *</label>
+                              <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)}
+                                placeholder="Contoh: Collective Nouns" required
+                                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                              {lastLessonHint && newUnitName && (
+                                <p className="text-xs text-gray-500 mt-1">Lesson terakhir: <span className="font-semibold text-gray-700">{lastLessonHint}</span></p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Posisi Lesson</label>
+                              <input type="number" value={newLessonPosition} onChange={(e) => setNewLessonPosition(parseInt(e.target.value) || 1)} min="1"
+                                className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
+                              {maxLessonCount > 0 && newUnitName && (
+                                <p className="text-xs text-gray-400 mt-1">Unit ini punya {maxLessonCount} lesson</p>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Urutan Unit</label>
-                          <input type="number" value={newUnitPosition} onChange={(e) => setNewUnitPosition(parseInt(e.target.value) || 1)} min="1"
-                            className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="sm:col-span-2">
-                          <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Nama Lesson *</label>
-                          <input type="text" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)}
-                            placeholder="Contoh: Collective Nouns" required
-                            className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-[#7B78A8] mb-1">Posisi Lesson</label>
-                          <input type="number" value={newLessonPosition} onChange={(e) => setNewLessonPosition(parseInt(e.target.value) || 1)} min="1"
-                            className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] bg-white text-gray-900 font-medium"/>
-                        </div>
-                      </div>
-                    </div>
+                      );
+                    })()}
                   </div>
 
                   <div
