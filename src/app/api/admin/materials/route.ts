@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           .from('chapters')
           .select('id')
           .eq('level_id', levelId)
-          .eq('chapter_title', chapterName.trim())
+          .ilike('chapter_title', chapterName.trim())
           .limit(1)
           .maybeSingle();
 
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
         .from('units')
         .select('id')
         .eq('chapter_id', actualChapterId)
-        .eq('unit_name', unitName.trim())
+        .ilike('unit_name', unitName.trim())
         .limit(1)
         .maybeSingle();
 
@@ -297,7 +297,7 @@ export async function POST(request: NextRequest) {
         .from('lessons')
         .select('id')
         .eq('unit_id', actualUnitId)
-        .eq('lesson_name', lessonName.trim())
+        .ilike('lesson_name', lessonName.trim())
         .limit(1)
         .maybeSingle();
 

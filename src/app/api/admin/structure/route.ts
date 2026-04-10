@@ -694,7 +694,7 @@ async function duplicateMaterial(supabase: any, body: any) {
     .from('chapters')
     .select('id')
     .eq('level_id', target_level_id)
-    .eq('chapter_title', chapter.chapter_title)
+    .ilike('chapter_title', chapter.chapter_title)
     .maybeSingle();
 
   if (existingChapter) {
@@ -728,7 +728,7 @@ async function duplicateMaterial(supabase: any, body: any) {
     .from('units')
     .select('id')
     .eq('chapter_id', targetChapterId)
-    .eq('unit_name', unit.unit_name)
+    .ilike('unit_name', unit.unit_name)
     .maybeSingle();
 
   if (existingUnit) {
@@ -756,7 +756,7 @@ async function duplicateMaterial(supabase: any, body: any) {
     .from('lessons')
     .select('id')
     .eq('unit_id', targetUnitId)
-    .eq('lesson_name', lesson.lesson_name)
+    .ilike('lesson_name', lesson.lesson_name)
     .maybeSingle();
 
   if (existingLesson) {
@@ -877,7 +877,7 @@ async function cloneChapter(supabase: any, body: any) {
     .from('chapters')
     .select('id')
     .eq('level_id', target_level_id)
-    .eq('chapter_title', chapter.chapter_title)
+    .ilike('chapter_title', chapter.chapter_title)
     .maybeSingle();
 
   if (existingChapter) {
