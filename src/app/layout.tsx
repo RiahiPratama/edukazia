@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Sora, Plus_Jakarta_Sans } from 'next/font/google'
 import NextTopLoader from 'nextjs-toploader'
+import RegisterSW from '@/components/RegisterSW'
 import './globals.css'
 
 const sora = Sora({
@@ -47,6 +48,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <NextTopLoader color="#5C4FE5" height={3} showSpinner={false} />
+        <RegisterSW />
         {children}
       </body>
     </html>
