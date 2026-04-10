@@ -73,6 +73,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
       units: {
         id: string;
         name: string;
+        position: number;
         lessonCount: number;
         lastLesson: string | null;
       }[];
@@ -153,6 +154,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
               units: chUnits.map(u => ({
                 id: u.id,
                 name: u.unit_name,
+                position: u.position || 1,
                 lessonCount: lessonsByUnit[u.id]?.count || 0,
                 lastLesson: lessonsByUnit[u.id]?.last || null,
               })),
@@ -268,7 +270,7 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
   const allLevelsHaveFiles = () => selectedLevels.every(id => !!jsxFiles[id]);
   const filledCount = sortedSelectedLevels.filter(l => !!jsxFiles[l.id]).length;
 
-  // ✅ Auto-fill lesson position saat unit existing dipilih di multi-level mode
+  // ✅ Auto-fill unit position + lesson position saat existing dipilih di multi-level mode
   useEffect(() => {
     if (!isMultiLevel || !newChapterTitle || !newUnitName) return;
     const matchedUnits = levelStructures.flatMap(ls =>
@@ -276,6 +278,11 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
         .filter(ch => ch.title.toLowerCase() === newChapterTitle.toLowerCase())
         .flatMap(ch => ch.units.filter(u => u.name.toLowerCase() === newUnitName.toLowerCase()))
     );
+    // Auto-fill unit position from existing
+    if (matchedUnits.length > 0) {
+      setNewUnitPosition(matchedUnits[0].position || 1);
+    }
+    // Auto-fill lesson position
     const maxLessonCount = Math.max(0, ...matchedUnits.map(u => u.lessonCount));
     if (maxLessonCount > 0) setNewLessonPosition(maxLessonCount + 1);
   }, [newUnitName, newChapterTitle, isMultiLevel]);
@@ -635,15 +642,27 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                     <p className="text-xs text-gray-500 mb-4">Pilih dari existing atau ketik nama baru. Jika belum ada di suatu level, dibuat otomatis.</p>
 
                     {(() => {
-                      // Compute suggestions from levelStructures
-                      const uniqueChapters = [...new Set(levelStructures.flatMap(ls => ls.chapters.map(ch => ch.title)))];
+                      // Compute suggestions — case-insensitive dedup
+                      const seenChapters = new Set<string>();
+                      const uniqueChapters = levelStructures.flatMap(ls => ls.chapters.map(ch => ch.title)).filter(name => {
+                        const lower = name.toLowerCase();
+                        if (seenChapters.has(lower)) return false;
+                        seenChapters.add(lower);
+                        return true;
+                      });
 
                       const matchedUnits = levelStructures.flatMap(ls =>
                         ls.chapters
                           .filter(ch => ch.title.toLowerCase() === newChapterTitle.toLowerCase())
                           .flatMap(ch => ch.units)
                       );
-                      const uniqueUnits = [...new Set(matchedUnits.map(u => u.name))];
+                      const seenUnits = new Set<string>();
+                      const uniqueUnits = matchedUnits.filter(u => {
+                        const lower = u.name.toLowerCase();
+                        if (seenUnits.has(lower)) return false;
+                        seenUnits.add(lower);
+                        return true;
+                      });
 
                       // Get max lesson position for selected unit
                       const matchedUnitData = matchedUnits.filter(u => u.name.toLowerCase() === newUnitName.toLowerCase());
@@ -681,12 +700,12 @@ export default function BacaanForm({ onSave, onCancel, editData }: BacaanFormPro
                                 placeholder="Ketik atau pilih unit..." required
                                 className="w-full px-3 py-2.5 border-2 border-[#E5E3FF] rounded-lg focus:ring-2 focus:ring-[#5C4FE5] focus:border-[#5C4FE5] bg-white text-gray-900 font-medium"/>
                               <datalist id="unit-suggestions">
-                                {uniqueUnits.map(name => <option key={name} value={name} />)}
+                                {uniqueUnits.map(u => <option key={u.name} value={u.name} />)}
                               </datalist>
-                              {newUnitName && uniqueUnits.some(u => u.toLowerCase() === newUnitName.toLowerCase()) && (
+                              {newUnitName && uniqueUnits.some(u => u.name.toLowerCase() === newUnitName.toLowerCase()) && (
                                 <p className="text-xs text-green-600 mt-1 font-semibold">✅ Unit existing — akan dipakai</p>
                               )}
-                              {newUnitName && !uniqueUnits.some(u => u.toLowerCase() === newUnitName.toLowerCase()) && newChapterTitle && (
+                              {newUnitName && !uniqueUnits.some(u => u.name.toLowerCase() === newUnitName.toLowerCase()) && newChapterTitle && (
                                 <p className="text-xs text-blue-600 mt-1 font-semibold">🆕 Unit baru</p>
                               )}
                             </div>
