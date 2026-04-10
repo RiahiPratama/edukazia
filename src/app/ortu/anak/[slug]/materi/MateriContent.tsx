@@ -22,6 +22,7 @@ type Unit = {
   id: string
   name: string
   chapter_title: string | null
+  chapter_order: number
   sort_order: number
   materials: Material[]
 }
@@ -189,11 +190,15 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
   const allChapterGroups: {
     levelName: string
     levelId: string
+    levelSortOrder: number
     chapterTitle: string
+    chapterOrder: number
     units: Unit[]
   }[] = []
 
   levelsData.forEach(level => {
+    const levelSortOrder = levelsData.indexOf(level)
+
     const filteredUnits = level.units.map(u => ({
       ...u,
       materials: u.materials.filter(m => m.category === activeTab)
@@ -206,18 +211,26 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
       ? level.units.filter(u => u.materials.some(m => m.category === activeTab))
       : filteredUnits
 
-    const chapterMap = new Map<string, Unit[]>()
+    const chapterMap = new Map<string, { units: Unit[]; order: number }>()
     allUnitsForTab.forEach(u => {
       const unitWithFiltered = { ...u, materials: u.materials.filter(m => m.category === activeTab) }
       if (unitWithFiltered.materials.length === 0) return
       const key = u.chapter_title || 'Tanpa Chapter'
-      if (!chapterMap.has(key)) chapterMap.set(key, [])
-      chapterMap.get(key)!.push(unitWithFiltered)
+      if (!chapterMap.has(key)) chapterMap.set(key, { units: [], order: u.chapter_order || 0 })
+      chapterMap.get(key)!.units.push(unitWithFiltered)
     })
 
-    chapterMap.forEach((units, chapterTitle) => {
-      allChapterGroups.push({ levelName: level.level_name, levelId: level.level_id, chapterTitle, units })
+    chapterMap.forEach(({ units, order }, chapterTitle) => {
+      // Sort units within chapter by position
+      units.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      allChapterGroups.push({ levelName: level.level_name, levelId: level.level_id, levelSortOrder, chapterTitle, chapterOrder: order, units })
     })
+  })
+
+  // ✅ Sort: level terendah dulu, lalu chapter by order_number
+  allChapterGroups.sort((a, b) => {
+    if (a.levelSortOrder !== b.levelSortOrder) return a.levelSortOrder - b.levelSortOrder
+    return (a.chapterOrder || 0) - (b.chapterOrder || 0)
   })
 
   return (

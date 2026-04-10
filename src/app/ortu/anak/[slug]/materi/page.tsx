@@ -135,8 +135,9 @@ export default async function MateriPage({
   const chapterIds = units.map(u => u.chapter_id).filter((id): id is string => !!id)
   const { data: chapters } = await supabase
     .from('chapters')
-    .select('id, chapter_title, level_id')
+    .select('id, chapter_title, level_id, order_number')
     .in('id', chapterIds)
+    .order('order_number')
 
   // 7. Get all lessons for these units
   const unitIds = units.map(u => u.id)
@@ -276,6 +277,7 @@ export default async function MateriPage({
         id: unit.id,
         name: unit.unit_name,
         chapter_title: chapter?.chapter_title || null,
+        chapter_order: chapter?.order_number || 0,
         sort_order: unit.position,
         materials: unitMaterials
       }
