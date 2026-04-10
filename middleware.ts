@@ -5,7 +5,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 const PROTECTED_PREFIXES = ['/admin', '/tutor', '/siswa', '/ortu']
 const AUTH_ONLY_ROUTES   = ['/login']
 
+// Bot User-Agent patterns — skip Supabase queries for these
+const BOT_PATTERNS = /bot|crawler|spider|crawling|googlebot|bingbot|yandex|baidu|slurp|duckduck|facebookexternalhit|twitterbot|linkedinbot|semrush|ahref|mj12bot|dotbot|petalbot|bytespider/i
+
 export async function middleware(request: NextRequest) {
+  // ── Early return untuk bot/crawler — hemat CPU ──
+  const userAgent = request.headers.get('user-agent') ?? ''
+  if (BOT_PATTERNS.test(userAgent)) {
+    return new NextResponse('Not allowed', { status: 403 })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

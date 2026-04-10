@@ -1,0 +1,17 @@
+# EduKazia — app.edukazia.com (private portal)
+# Domain ini adalah portal internal (admin/tutor/ortu/siswa)
+# Tidak ada halaman publik yang perlu di-index
+
+User-agent: *
+Disallow: /admin
+Disallow: /tutor
+Disallow: /siswa
+Disallow: /ortu
+Disallow: /api
+Disallow: /login
+
+# Landing page edukazia.com terpisah di project lain
+# Jadi block semua di domain ini
+Disallow: /
+
+# Sitemap tidak diperlukan untuk portal private
