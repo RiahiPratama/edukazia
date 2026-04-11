@@ -200,9 +200,6 @@ export default function AdminAktivitasPage() {
     setPeakHours(hours)
 
     // Top pages
-    const pageCounts: Record<string, number> = {}
-    weekData?.forEach(a => { pageCounts[a.page ?? ''] = (pageCounts[a.page ?? ''] ?? 0) + 1 })
-    // weekData doesn't have page, need separate query
     const { data: pageData } = await supabase
       .from('user_activity')
       .select('page')
