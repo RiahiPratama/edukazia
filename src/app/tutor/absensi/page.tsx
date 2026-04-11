@@ -156,7 +156,24 @@ function ModalLaporan({
 
       if (!enrollments || enrollments.length === 0) { setLoading(false); return }
 
-      const studentIds = enrollments.map((e: any) => e.student_id)
+      const allStudentIds = enrollments.map((e: any) => e.student_id)
+
+      // Cek absensi: filter siswa yang tidak hadir
+      const { data: attendances } = await supabase
+        .from('attendances')
+        .select('student_id, status')
+        .eq('session_id', sesi.id)
+        .in('student_id', allStudentIds)
+
+      const tidakHadirIds = new Set(
+        (attendances ?? []).filter((a: any) => a.status === 'tidak_hadir').map((a: any) => a.student_id)
+      )
+
+      // Hanya siswa yang hadir atau belum diabsen
+      const studentIds = allStudentIds.filter((id: string) => !tidakHadirIds.has(id))
+
+      if (studentIds.length === 0) { setLoading(false); return }
+
       const { data: students } = await supabase
         .from('students').select('id, profile_id').in('id', studentIds)
 

@@ -132,7 +132,7 @@ export default async function AdminDashboard() {
         <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1640]">Laporan Tutor</h2>
-            <Link href="/admin/absensi" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
+            <Link href="/admin/laporan" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
               Lihat semua →
             </Link>
           </div>
@@ -172,7 +172,7 @@ export default async function AdminDashboard() {
                       )}
                     </div>
                     <Link
-                      href={`/admin/absensi`}
+                      href={`/admin/laporan`}
                       className="flex-shrink-0 text-[#C4BFFF] hover:text-[#5C4FE5] transition-colors mt-0.5"
                     >
                       <FileText size={13}/>
@@ -182,7 +182,7 @@ export default async function AdminDashboard() {
               })}
             </div>
           )}
-          <Link href="/admin/absensi"
+          <Link href="/admin/laporan"
             className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold">
             <ClipboardList size={14}/>
             Lihat Semua Laporan

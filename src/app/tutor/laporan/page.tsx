@@ -7,13 +7,11 @@ import BilingualReport from '@/components/shared/BilingualReport'
 import { LaporanEditor } from '@/components/shared/LaporanEditor'
 
 const STATUS_COLOR: Record<string, string> = {
-  hadir: 'bg-green-100 text-green-700',
-  izin:  'bg-blue-100 text-blue-700',
-  sakit: 'bg-yellow-100 text-yellow-700',
-  alpha: 'bg-red-100 text-red-700',
+  hadir:       'bg-green-100 text-green-700',
+  tidak_hadir: 'bg-red-100 text-red-700',
 }
 const STATUS_LABEL: Record<string, string> = {
-  hadir: 'Hadir', izin: 'Izin', sakit: 'Sakit', alpha: 'Alpha'
+  hadir: 'Hadir', tidak_hadir: 'Tidak Hadir'
 }
 const AVATAR_COLORS = [
   { bg: '#EEEDFE', text: '#3C3489' },
@@ -296,11 +294,10 @@ export default function TutorLaporanPage() {
       const totalSesi    = sessiRelevan.length
 
       // Hitung absensi hanya dari sesi relevan
-      const hadir  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'hadir').length
-      const izin   = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'izin').length
-      const sakit  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'sakit').length
-      const alpha  = sessiRelevan.filter((s: any) => !siswaAtt[s.id] && s.status === 'completed').length
+      const hadir       = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'hadir').length
+      const tidakHadir  = sessiRelevan.filter((s: any) => siswaAtt[s.id]?.status === 'tidak_hadir').length
       const completedCount = sessiRelevan.filter((s: any) => s.status === 'completed').length
+      const belumDiisi  = completedCount - hadir - tidakHadir
       // Kehadiran % = hadir / sesi yang sudah terjadi (untuk teks)
       const pctHadir = completedCount > 0 ? Math.round((hadir / completedCount) * 100) : 0
       // Progress bar = sesi completed / total sesi sejak enrolled (untuk bar visual)
@@ -330,7 +327,7 @@ export default function TutorLaporanPage() {
         studentId: e.student_id, nama,
         sessionOffset: sessionDone,
         sessionTotal:  e.sessions_total,
-        totalSesi, hadir, izin, sakit, alpha, pctHadir, progressPct, completedCount, detailSesi,
+        totalSesi, hadir, tidakHadir, belumDiisi, pctHadir, progressPct, completedCount, detailSesi,
       }
     })
 
@@ -708,7 +705,7 @@ export default function TutorLaporanPage() {
                 {laporanData.map((siswa: any, idx: number) => {
                   const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
                   const isOpen      = expandedSiswa[siswa.studentId] ?? false
-                  const laporanBelum = siswa.detailSesi.filter((s: any) => s.sessionStatus === 'completed' && s.absenStatus && !s.hasReport).length
+                  const laporanBelum = siswa.detailSesi.filter((s: any) => s.sessionStatus === 'completed' && s.absenStatus === 'hadir' && !s.hasReport).length
 
                   return (
                     <div key={siswa.studentId} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
@@ -736,9 +733,10 @@ export default function TutorLaporanPage() {
                         </div>
                         <div className="flex gap-2 flex-wrap mb-3">
                           <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-green-50 text-green-700">✓ {siswa.hadir} Hadir</span>
-                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700">{siswa.izin} Izin</span>
-                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700">{siswa.sakit} Sakit</span>
-                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-700">{siswa.alpha} Alpha</span>
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-700">{siswa.tidakHadir} Tidak Hadir</span>
+                          {siswa.belumDiisi > 0 && (
+                            <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-stone-100 text-stone-600">⊘ {siswa.belumDiisi} belum diabsen</span>
+                          )}
                           {laporanBelum > 0 && (
                             <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700">✏ {laporanBelum} belum diisi</span>
                           )}
