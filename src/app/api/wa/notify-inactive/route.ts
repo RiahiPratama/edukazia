@@ -13,13 +13,21 @@ import { sendWhatsApp, formatPhoneID } from '@/lib/fonnte'
 
 const NOTIF_TYPE = 'wa_reminder_portal'
 
-function buildMessage(parentName: string, studentNames: string[], isDiriSendiri: boolean): string {
+function buildMessage(parentName: string, studentNames: string[], isDiriSendiri: boolean, isAlsoDiriSendiri: boolean): string {
   const firstName = parentName.split(' ')[0] || 'Kakak'
 
+  // Case 3: Ortu + Diri Sendiri (contoh: Siti Fatimah)
+  if (isAlsoDiriSendiri && studentNames.length > 0) {
+    const namaAnak = studentNames.join(', ')
+    return `Halo Kak ${firstName} 👋\nPortal EduKazia untuk ${namaAnak} dan Kakak sendiri sudah aktif!\n\nKakak bisa:\n✅ Pantau jadwal & laporan belajar\n✅ Lihat progress setiap sesi\n✅ Materi belajar untuk ${namaAnak} dan Kakak sendiri sudah bisa dipelajari secara mandiri di rumah\n\nLogin di 👉 app.edukazia.com\n\nKalau ada kendala login, langsung chat admin di sini.\n\nTerima kasih 🙏`
+  }
+
+  // Case 2: Diri Sendiri saja (contoh: Rinna, Julaiha)
   if (isDiriSendiri || studentNames.length === 0) {
     return `Halo Kak ${firstName} 👋\nPortal EduKazia sudah aktif!\n\nKakak bisa:\n✅ Pantau jadwal & laporan belajar\n✅ Lihat progress setiap sesi\n✅ Materi belajar sudah bisa dipelajari secara mandiri di rumah\n\nLogin di 👉 app.edukazia.com\n\nKalau ada kendala login, langsung chat admin di sini.\n\nTerima kasih 🙏`
   }
 
+  // Case 1: Ortu biasa (contoh: Darma, Mariyana)
   const namaAnak = studentNames.join(', ')
   return `Halo Kak ${firstName} 👋\nPortal EduKazia untuk ${namaAnak} sudah aktif!\n\nKakak bisa:\n✅ Pantau jadwal & laporan belajar\n✅ Lihat progress setiap sesi\n✅ Materi belajar untuk ${namaAnak} sudah bisa dipelajari secara mandiri di rumah\n\nLogin di 👉 app.edukazia.com\n\nKalau ada kendala login, langsung chat admin di sini.\n\nTerima kasih 🙏`
 }
@@ -85,7 +93,7 @@ export async function POST(req: Request) {
     // 5. Ambil data siswa untuk setiap ortu
     const { data: allStudents } = await supabase
       .from('students')
-      .select('id, profile_id, parent_profile_id')
+      .select('id, profile_id, parent_profile_id, relation_phone')
       .in('parent_profile_id', inactiveIds)
 
     const studentProfileIds = [...new Set((allStudents ?? []).map(s => s.profile_id).filter(Boolean))]
@@ -106,21 +114,21 @@ export async function POST(req: Request) {
         continue
       }
 
-      // Cari nomor WA
-      const phone = prof.phone
+      // Cari anak-anak dari ortu ini + nomor WA (fallback ke relation_phone)
+      const children = (allStudents ?? []).filter(s => s.parent_profile_id === prof.id)
+      const phone = prof.phone || children.find(c => c.relation_phone)?.relation_phone
       if (!phone) {
         results.push({ name: prof.full_name, sent: false, reason: 'Tidak ada nomor HP' })
         continue
       }
 
-      // Cari anak-anak dari ortu ini
-      const children = (allStudents ?? []).filter(s => s.parent_profile_id === prof.id)
-      const isDiriSendiri = children.length === 1 && children[0].profile_id === prof.id
-      const childNames = isDiriSendiri
-        ? []
-        : children.map(c => studentNameMap[c.profile_id] ?? '').filter(Boolean)
+      const hasSelfAsStudent = children.some(c => c.profile_id === prof.id)
+      const realChildren = children.filter(c => c.profile_id !== prof.id)
+      const isDiriSendiri = hasSelfAsStudent && realChildren.length === 0
+      const isAlsoDiriSendiri = hasSelfAsStudent && realChildren.length > 0
+      const childNames = realChildren.map(c => studentNameMap[c.profile_id] ?? '').filter(Boolean)
 
-      const message = buildMessage(prof.full_name, childNames, isDiriSendiri)
+      const message = buildMessage(prof.full_name, childNames, isDiriSendiri, isAlsoDiriSendiri)
 
       const res = await sendWhatsApp({
         target: formatPhoneID(phone),
@@ -139,6 +147,7 @@ export async function POST(req: Request) {
             parentName: prof.full_name,
             studentNames: childNames,
             isDiriSendiri,
+            isAlsoDiriSendiri,
           },
           status: res.status ? 'sent' : 'failed',
           response: res.detail ?? null,
