@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import {
   CalendarDays, GraduationCap, Users, BookOpen,
-  Coins, DollarSign, UserPlus, FileText, ClipboardList,
+  Coins, DollarSign, UserPlus, FileText, ClipboardList, MessageCircle,
 } from 'lucide-react'
 import SesiHariIniAdminClient from './SesiHariIniAdminClient'
 import AnnouncementSection from './AnnouncementSection'
@@ -112,14 +112,14 @@ export default async function AdminDashboard() {
 
   const belumTutorProfIds = (belumTutors ?? []).map(t => t.profile_id).filter(Boolean)
   const { data: belumTutorProfiles } = belumTutorProfIds.length > 0
-    ? await supabase.from('profiles').select('id, full_name').in('id', belumTutorProfIds)
+    ? await supabase.from('profiles').select('id, full_name, phone').in('id', belumTutorProfIds)
     : { data: [] }
 
   const bProfMap = Object.fromEntries((belumProfiles ?? []).map(p => [p.id, p.full_name]))
   const bStudentMap = Object.fromEntries((belumStudents ?? []).map(s => [s.id, bProfMap[s.profile_id] ?? 'Siswa']))
-  const bTutorProfMap = Object.fromEntries((belumTutorProfiles ?? []).map(p => [p.id, p.full_name]))
-  const bTutorMap = Object.fromEntries((belumTutors ?? []).map(t => [t.id, bTutorProfMap[t.profile_id] ?? 'Tutor']))
-  const bCgMap = Object.fromEntries((belumCgs ?? []).map(c => [c.id, { label: c.label, tutorName: bTutorMap[c.tutor_id] ?? 'Tutor' }]))
+  const bTutorProfMap = Object.fromEntries((belumTutorProfiles ?? []).map(p => [p.id, { name: p.full_name, phone: p.phone }]))
+  const bTutorMap = Object.fromEntries((belumTutors ?? []).map(t => [t.id, bTutorProfMap[t.profile_id] ?? { name: 'Tutor', phone: '' }]))
+  const bCgMap = Object.fromEntries((belumCgs ?? []).map(c => [c.id, { label: c.label, tutorName: bTutorMap[c.tutor_id]?.name ?? 'Tutor', tutorPhone: bTutorMap[c.tutor_id]?.phone ?? '' }]))
 
   const laporanBelumDiisi = belumDiisiRaw.map(b => {
     const sesi = (recentCompleted ?? []).find(s => s.id === b.session_id)
@@ -130,6 +130,7 @@ export default async function AdminDashboard() {
       studentName: bStudentMap[b.student_id] ?? 'Siswa',
       kelasLabel: cg?.label ?? '—',
       tutorName: cg?.tutorName ?? 'Tutor',
+      tutorPhone: cg?.tutorPhone ?? '',
       scheduledAt: sesi?.scheduled_at ?? '',
     }
   }).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
@@ -143,6 +144,11 @@ export default async function AdminDashboard() {
       hour: '2-digit', minute: '2-digit',
       timeZone: 'Asia/Jayapura',
     })
+  }
+  function formatPhoneID(phone: string): string {
+    let clean = phone.replace(/[^0-9]/g, '')
+    if (clean.startsWith('0')) clean = '62' + clean.slice(1)
+    return clean
   }
 
   return (
@@ -240,6 +246,13 @@ export default async function AdminDashboard() {
                         Tutor: {item.tutorName} · {formatDateTime(item.scheduledAt)}
                       </div>
                     </div>
+                    {item.tutorPhone && (
+                      <a href={`https://wa.me/${formatPhoneID(item.tutorPhone)}?text=${encodeURIComponent(`Halo Kak ${item.tutorName.split(' ')[0]}, laporan belajar untuk kelas ${item.kelasLabel} (${item.studentName}) tanggal ${formatDateTime(item.scheduledAt)} belum diisi. Mohon segera dilengkapi di portal ya. Terima kasih 🙏`)}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[10px] px-2 py-1 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition-colors flex-shrink-0 mt-0.5">
+                        <MessageCircle size={10}/> WA
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
