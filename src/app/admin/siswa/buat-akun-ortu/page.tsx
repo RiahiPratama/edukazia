@@ -10,6 +10,7 @@ interface OrtuTanpaAkun {
   relationName:  string
   relationRole:  string
   relationEmail: string
+  relationPhone: string
   sudahDibuat:   boolean
   error?:        string
 }
@@ -38,7 +39,7 @@ export default function BuatAkunOrtuPage() {
     // (berarti ortu belum punya akun)
     const { data: students } = await supabase
       .from('students')
-      .select('id, profile_id, parent_profile_id, relation_name, relation_role, relation_email')
+      .select('id, profile_id, parent_profile_id, relation_name, relation_role, relation_email, relation_phone')
       .is('parent_profile_id', null)
       .not('relation_email', 'is', null)
       .neq('relation_email', '')
@@ -60,6 +61,7 @@ export default function BuatAkunOrtuPage() {
       relationName:  s.relation_name ?? '—',
       relationRole:  s.relation_role ?? 'Orang Tua',
       relationEmail: s.relation_email,
+      relationPhone: s.relation_phone ?? '',
       sudahDibuat:   false,
     })))
     setLoading(false)
@@ -79,6 +81,7 @@ export default function BuatAkunOrtuPage() {
         role:       'parent',
         full_name:  ortu.relationName,
         student_id: ortu.studentId,
+        phone:      ortu.relationPhone,
       }),
     })
     const data = await res.json()

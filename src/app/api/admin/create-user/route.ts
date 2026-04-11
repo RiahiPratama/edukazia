@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 // Role 'parent' → buat user auth + profile + link ke student.parent_profile_id
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, role, full_name, student_id } = await req.json()
+    const { email, password, role, full_name, student_id, phone } = await req.json()
 
     if (!email || !password) {
       return NextResponse.json({ error: 'email dan password wajib diisi' }, { status: 400 })
@@ -80,22 +80,27 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (!existingProfile) {
-      // Upsert profile (trigger mungkin sudah buat dengan nama default,
-      // pakai upsert agar full_name yang benar ter-update)
       const { error: profileErr } = await supabase.from('profiles').upsert({
         id:        authUserId,
         full_name: full_name?.trim() || 'Orang Tua',
         role:      'student',
         email:     cleanEmail,
+        phone:     phone?.trim() || null,
       }, { onConflict: 'id' })
       if (profileErr) {
         return NextResponse.json({ error: profileErr.message }, { status: 500 })
       }
     } else {
-      // Update email di profile jika belum ada
-      await supabase.from('profiles')
-        .update({ email: cleanEmail })
-        .eq('id', authUserId)
+      // Update email + phone (hanya kalau phone masih kosong)
+      const updateData: any = { email: cleanEmail }
+      if (phone?.trim()) {
+        const { data: currentProfile } = await supabase
+          .from('profiles').select('phone').eq('id', authUserId).single()
+        if (!currentProfile?.phone) {
+          updateData.phone = phone.trim()
+        }
+      }
+      await supabase.from('profiles').update(updateData).eq('id', authUserId)
     }
 
     // 3. Link ke student jika student_id diberikan

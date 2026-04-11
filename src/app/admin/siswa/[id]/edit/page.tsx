@@ -33,6 +33,15 @@ export default function SiswaEditPage() {
   const [parentError,       setParentError]       = useState('')
   const [parentSuccess,     setParentSuccess]     = useState('')
 
+  // Student own account state (untuk siswa yang punya akun sendiri, seperti Faya)
+  const [studentHasAuth,    setStudentHasAuth]    = useState(false)
+  const [studentEmail,      setStudentEmail]      = useState('')
+  const [studentPassword,   setStudentPassword]   = useState('')
+  const [showStudentPass,   setShowStudentPass]   = useState(false)
+  const [savingStudent,     setSavingStudent]     = useState(false)
+  const [studentError,      setStudentError]      = useState('')
+  const [studentSuccess,    setStudentSuccess]    = useState('')
+
   const [form, setForm] = useState({
     full_name:      '',
     phone:          '',
@@ -132,6 +141,18 @@ export default function SiswaEditPage() {
     }
 
     setLoading(false)
+
+    // Cek apakah siswa punya akun sendiri (bukan Diri Sendiri)
+    if (student.profile_id !== student.parent_profile_id && profile?.email) {
+      try {
+        const checkRes = await fetch(`/api/admin/create-user?profile_id=${student.profile_id}`)
+        const checkData = await checkRes.json()
+        if (checkData.has_auth) {
+          setStudentHasAuth(true)
+          setStudentEmail(profile.email)
+        }
+      } catch {}
+    }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
@@ -247,6 +268,33 @@ export default function SiswaEditPage() {
       setParentError(err.message)
     }
     setSavingParent(false)
+  }
+
+  async function handleResetStudentPassword() {
+    if (!studentPassword.trim()) { setStudentError('Password baru wajib diisi.'); return }
+    if (studentPassword.length < 6) { setStudentError('Password minimal 6 karakter.'); return }
+    setSavingStudent(true); setStudentError(''); setStudentSuccess('')
+
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile_id: profileId,
+          password:   studentPassword,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Gagal reset password')
+
+      setStudentSuccess('Password siswa berhasil direset!')
+      setStudentPassword('')
+      setTimeout(() => setStudentSuccess(''), 3000)
+    } catch (err: any) {
+      setStudentError(err.message)
+    }
+    setSavingStudent(false)
   }
 
   if (loading) {
@@ -475,6 +523,48 @@ export default function SiswaEditPage() {
         </div>
 
         {/* ENROLLMENT & LEVEL MANAGER */}
+        {studentHasAuth && profileId !== parentProfileId && (
+        <div className="bg-white rounded-2xl border border-[#E5E3FF] p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <UserCheck size={16} className="text-blue-600 flex-shrink-0"/>
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Akun Siswa (Login Mandiri)</p>
+          </div>
+
+          <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <UserCheck size={16} className="text-blue-600 flex-shrink-0"/>
+            <div>
+              <p className="text-xs font-bold text-blue-700">Akun siswa aktif</p>
+              <p className="text-xs text-blue-600 mt-0.5">{studentEmail}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Reset Password Siswa</label>
+            <div className="relative">
+              <input
+                type={showStudentPass ? 'text' : 'password'}
+                value={studentPassword}
+                onChange={e => setStudentPassword(e.target.value)}
+                placeholder="Password baru (min. 6 karakter)"
+                className={inputCls}
+              />
+              <button type="button" onClick={() => setShowStudentPass(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7B78A8] hover:text-[#5C4FE5]">
+                {showStudentPass ? <EyeOff size={15}/> : <Eye size={15}/>}
+              </button>
+            </div>
+          </div>
+
+          {studentError   && <p className="text-xs text-red-600 font-semibold">{studentError}</p>}
+          {studentSuccess && <p className="text-xs text-green-600 font-semibold">✅ {studentSuccess}</p>}
+
+          <button type="button" onClick={handleResetStudentPassword} disabled={savingStudent}
+            className="w-full py-2.5 border border-blue-500 text-blue-600 font-bold rounded-xl text-sm hover:bg-blue-50 transition disabled:opacity-60">
+            {savingStudent ? 'Menyimpan...' : 'Reset Password Siswa'}
+          </button>
+        </div>
+        )}
+
         <EnrollmentLevelManager studentId={siswaId} />
 
         {/* CATATAN */}
