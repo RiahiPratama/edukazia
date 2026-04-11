@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, Check, MessageCircle } from 'lucide-react'
+import { Pencil, X, Check, Send } from 'lucide-react'
 
 function getDurasiMenit(classTypeName: string, courseName: string): number {
   const type   = (classTypeName ?? '').toLowerCase()
@@ -105,7 +105,7 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
   const [saveErr,   setSaveErr]   = useState('')
   const [saveOk,    setSaveOk]    = useState(false)
   const [tutorMap,  setTutorMap]  = useState<Record<string, { name: string; phone: string }>>({})
-
+  const [sendingWA, setSendingWA] = useState<Record<string, 'loading' | 'sent' | 'failed'>>({})
   // Fetch tutor names & phones
   useEffect(() => {
     async function loadTutors() {
@@ -153,7 +153,26 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
     const tutorName = tutorMap[s.class_groups?.tutor_id]?.name?.split(' ')[0] ?? 'Tutor'
     const kelas = s.class_groups?.label ?? 'kelas'
     const jam = fmtTime(s.scheduled_at)
-    return encodeURIComponent(`Halo Kak ${tutorName}, sesi ${kelas} pukul ${jam} WIT sudah selesai. Mohon segera isi absensi di portal ya. Terima kasih 🙏`)
+    return `Halo Kak ${tutorName}, sesi ${kelas} pukul ${jam} WIT sudah selesai. Mohon segera isi absensi di portal ya. Terima kasih 🙏`
+  }
+
+  async function sendWATutor(s: any) {
+    const tutorId = s.class_groups?.tutor_id
+    const tutor = tutorId ? tutorMap[tutorId] : null
+    if (!tutor?.phone) return
+
+    setSendingWA(prev => ({ ...prev, [s.id]: 'loading' }))
+    try {
+      const res = await fetch('/api/wa/remind-tutor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: tutor.phone, message: buildWATutor(s) }),
+      })
+      const data = await res.json()
+      setSendingWA(prev => ({ ...prev, [s.id]: data.sent ? 'sent' : 'failed' }))
+    } catch {
+      setSendingWA(prev => ({ ...prev, [s.id]: 'failed' }))
+    }
   }
 
   function openEdit(s: any) {
@@ -369,11 +388,18 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
                 )}
                 {/* WA Tutor button — only for overdue scheduled sessions */}
                 {overdue && tutorPhone && (
-                  <a href={`https://wa.me/${tutorPhone}?text=${buildWATutor(s)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs px-2 py-1 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition-colors">
-                    <MessageCircle size={12}/> WA
-                  </a>
+                  sendingWA[s.id] === 'sent' ? (
+                    <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">Terkirim ✓</span>
+                  ) : sendingWA[s.id] === 'failed' ? (
+                    <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg">Gagal</span>
+                  ) : sendingWA[s.id] === 'loading' ? (
+                    <span className="text-[10px] text-[#7B78A8] px-2 py-1">Mengirim...</span>
+                  ) : (
+                    <button onClick={() => sendWATutor(s)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition-colors">
+                      <Send size={11}/> WA
+                    </button>
+                  )
                 )}
                 <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${statusColor[s.status] ?? 'bg-gray-50 text-gray-700'}`}>
                   {statusLabel[s.status] ?? s.status}
