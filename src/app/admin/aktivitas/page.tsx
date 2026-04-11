@@ -84,11 +84,12 @@ export default function AdminAktivitasPage() {
     const uniqueWeek = new Set(weekData?.map(d => d.user_id) ?? [])
     setAktifMingguIni(uniqueWeek.size)
 
-    // Tidak aktif: profiles (tutor/parent/student) yang TIDAK ada di weekData
+    // Tidak aktif: profiles yang BISA login (punya email) dan TIDAK ada di weekData
     const { data: allProfiles } = await supabase
       .from('profiles')
       .select('id')
       .in('role', ['parent', 'tutor', 'student'])
+      .not('email', 'is', null)
 
     const inactive = (allProfiles ?? []).filter(p => !uniqueWeek.has(p.id))
     setTidakAktif(inactive.length)
