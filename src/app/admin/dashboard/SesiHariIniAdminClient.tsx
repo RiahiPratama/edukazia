@@ -3,13 +3,18 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, Check } from 'lucide-react'
+import { Pencil, X, Check, MessageCircle } from 'lucide-react'
 
 function getDurasiMenit(classTypeName: string, courseName: string): number {
   const type   = (classTypeName ?? '').toLowerCase()
   const course = (courseName ?? '').toLowerCase()
   if (type.includes('privat') && !type.includes('semi') && course.includes('inggris')) return 45
   return 60
+}
+
+function isOverdue(scheduledAt: string, classTypeName: string, courseName: string): boolean {
+  const durasiMs = getDurasiMenit(classTypeName, courseName) * 60 * 1000
+  return Date.now() > new Date(scheduledAt).getTime() + durasiMs
 }
 
 function CountdownBadge({ scheduledAt, classTypeName, courseName, status }: {
@@ -28,7 +33,6 @@ function CountdownBadge({ scheduledAt, classTypeName, courseName, status }: {
     return () => clearInterval(interval)
   }, [scheduledAt, status])
 
-  // Holiday — countdown berhenti
   if (status === 'holiday') {
     return (
       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-teal-50 text-teal-700 border border-teal-200 w-fit flex items-center gap-1">
@@ -37,11 +41,18 @@ function CountdownBadge({ scheduledAt, classTypeName, courseName, status }: {
     )
   }
 
-  // Rescheduled — countdown berhenti, tampilkan badge khusus
   if (status === 'rescheduled') {
     return (
       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 border border-amber-200 w-fit flex items-center gap-1">
         🔄 Dijadwal Ulang
+      </span>
+    )
+  }
+
+  if (status === 'completed') {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 w-fit">
+        ✓ Sudah Diabsen
       </span>
     )
   }
@@ -52,8 +63,8 @@ function CountdownBadge({ scheduledAt, classTypeName, courseName, status }: {
 
   if (diffMs < -durasiMs) {
     return (
-      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-stone-100 text-stone-500 w-fit">
-        ✓ Telah dilaksanakan
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-red-100 text-red-700 w-fit animate-pulse">
+        ⚠ Belum Diabsen
       </span>
     )
   }
@@ -93,6 +104,38 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
   const [saving,    setSaving]    = useState(false)
   const [saveErr,   setSaveErr]   = useState('')
   const [saveOk,    setSaveOk]    = useState(false)
+  const [tutorMap,  setTutorMap]  = useState<Record<string, { name: string; phone: string }>>({})
+
+  // Fetch tutor names & phones
+  useEffect(() => {
+    async function loadTutors() {
+      const tutorIds = [...new Set(sesiList.map(s => s.class_groups?.tutor_id).filter(Boolean))]
+      if (tutorIds.length === 0) return
+
+      const { data: tutors } = await supabase
+        .from('tutors').select('id, profile_id').in('id', tutorIds)
+
+      const profileIds = (tutors ?? []).map(t => t.profile_id).filter(Boolean)
+      const { data: profiles } = profileIds.length > 0
+        ? await supabase.from('profiles').select('id, full_name, phone').in('id', profileIds)
+        : { data: [] }
+
+      const profMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]))
+      const map: Record<string, { name: string; phone: string }> = {}
+      ;(tutors ?? []).forEach(t => {
+        const prof = profMap[t.profile_id]
+        if (prof) map[t.id] = { name: prof.full_name ?? 'Tutor', phone: prof.phone ?? '' }
+      })
+      setTutorMap(map)
+    }
+    loadTutors()
+  }, [sesiList, supabase])
+
+  // Auto-refresh status setiap 30 detik
+  useEffect(() => {
+    const interval = setInterval(() => setSesiList(prev => [...prev]), 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   function fmtTime(iso: string) {
     return new Date(iso).toLocaleTimeString('id-ID', {
@@ -100,8 +143,20 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
     })
   }
 
+  function formatPhoneID(phone: string): string {
+    let clean = phone.replace(/[^0-9]/g, '')
+    if (clean.startsWith('0')) clean = '62' + clean.slice(1)
+    return clean
+  }
+
+  function buildWATutor(s: any): string {
+    const tutorName = tutorMap[s.class_groups?.tutor_id]?.name?.split(' ')[0] ?? 'Tutor'
+    const kelas = s.class_groups?.label ?? 'kelas'
+    const jam = fmtTime(s.scheduled_at)
+    return encodeURIComponent(`Halo Kak ${tutorName}, sesi ${kelas} pukul ${jam} WIT sudah selesai. Mohon segera isi absensi di portal ya. Terima kasih 🙏`)
+  }
+
   function openEdit(s: any) {
-    // Convert UTC → WIT untuk input
     const dt     = new Date(s.scheduled_at)
     const witStr = dt.toLocaleString('en-CA', { timeZone: 'Asia/Jayapura', hour12: false })
     const [datePart, timePart] = witStr.split(', ')
@@ -129,7 +184,6 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
     setSaving(false)
     if (error) { setSaveErr(error.message); return }
 
-    // Update local state
     setSesiList(prev => prev.map(s => s.id === editSesi.id
       ? { ...s, scheduled_at: newScheduledAt, zoom_link: fZoom || null, status: fStatus }
       : s
@@ -169,6 +223,16 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
       </div>
     )
   }
+
+  // Summary counts
+  const activeSesi = sesiList.filter(s => !['rescheduled', 'holiday', 'cancelled'].includes(s.status))
+  const sudahAbsen = activeSesi.filter(s => s.status === 'completed').length
+  const belumAbsen = activeSesi.filter(s => {
+    if (s.status !== 'scheduled') return false
+    const ctName = s.class_groups?.class_types?.name ?? ''
+    const cName  = s.class_groups?.courses?.name ?? ''
+    return isOverdue(s.scheduled_at, ctName, cName)
+  }).length
 
   return (
     <>
@@ -235,21 +299,43 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
         </div>
       )}
 
+      {/* Summary Bar */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <span className="text-xs font-semibold text-[#1A1640]">{activeSesi.length} sesi hari ini</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-green-50 text-green-700">{sudahAbsen} sudah diabsen</span>
+        {belumAbsen > 0 && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700 animate-pulse">{belumAbsen} belum diabsen!</span>
+        )}
+      </div>
+
       <div className="space-y-3">
         {sesiList.map((s: any) => {
           const classTypeName = s.class_groups?.class_types?.name ?? ''
           const courseName    = s.class_groups?.courses?.name ?? ''
           const isRescheduled = s.status === 'rescheduled'
           const isHoliday     = s.status === 'holiday'
+          const tutorId       = s.class_groups?.tutor_id
+          const tutor         = tutorId ? tutorMap[tutorId] : null
+          const overdue       = s.status === 'scheduled' && isOverdue(s.scheduled_at, classTypeName, courseName)
+          const tutorPhone    = tutor?.phone ? formatPhoneID(tutor.phone) : ''
+
           return (
             <div key={s.id}
               className={`flex items-center gap-3 p-3 rounded-xl transition-colors border ${
+                overdue       ? 'border-red-200 bg-red-50/40' :
                 isHoliday     ? 'border-teal-200 bg-teal-50/40' :
                 isRescheduled ? 'border-amber-200 bg-amber-50/40' :
+                s.status === 'completed' ? 'border-green-200 bg-green-50/20' :
                 'border-[#F0EFFF] hover:bg-[#F7F6FF]'
               }`}>
               <div className="w-12 text-center flex-shrink-0">
-                <div className={`text-sm font-bold ${isHoliday ? 'text-teal-600' : isRescheduled ? 'text-amber-600' : 'text-[#5C4FE5]'}`}>{fmtTime(s.scheduled_at)}</div>
+                <div className={`text-sm font-bold ${
+                  overdue       ? 'text-red-600' :
+                  isHoliday     ? 'text-teal-600' :
+                  isRescheduled ? 'text-amber-600' :
+                  s.status === 'completed' ? 'text-green-600' :
+                  'text-[#5C4FE5]'
+                }`}>{fmtTime(s.scheduled_at)}</div>
                 <div className="text-[10px] text-[#7B78A8]">WIT</div>
               </div>
               <div className="flex-1 min-w-0">
@@ -257,13 +343,16 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
                   <div className="text-sm font-semibold text-[#1A1640] truncate">
                     {s.class_groups?.label ?? '—'}
                   </div>
-                  {!s.class_groups?.tutor_id && (
+                  {!tutorId && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-red-100 text-red-600 flex-shrink-0">
                       ⚠ Tanpa Tutor
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-[#7B78A8] mb-1">{courseName}</div>
+                <div className="text-xs text-[#7B78A8]">
+                  {courseName}
+                  {tutor && <span className="ml-1">· {tutor.name}</span>}
+                </div>
                 <CountdownBadge
                   scheduledAt={s.scheduled_at}
                   classTypeName={classTypeName}
@@ -276,6 +365,14 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
                   <a href={s.zoom_link} target="_blank" rel="noopener noreferrer"
                     className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg font-semibold hover:bg-blue-100 transition-colors">
                     Zoom
+                  </a>
+                )}
+                {/* WA Tutor button — only for overdue scheduled sessions */}
+                {overdue && tutorPhone && (
+                  <a href={`https://wa.me/${tutorPhone}?text=${buildWATutor(s)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs px-2 py-1 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition-colors">
+                    <MessageCircle size={12}/> WA
                   </a>
                 )}
                 <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${statusColor[s.status] ?? 'bg-gray-50 text-gray-700'}`}>

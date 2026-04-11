@@ -303,9 +303,9 @@ export default function TutorLaporanPage() {
       // Progress bar = sesi completed / total sesi sejak enrolled (untuk bar visual)
       const progressPct = sessiRelevan.length > 0 ? Math.round((completedCount / sessiRelevan.length) * 100) : 0
 
-      // FIX progress: session_start_offset + hadir, cap at sessions_total
+      // FIX progress: session_start_offset + semua sesi completed yang sudah diabsen (hadir + tidak hadir)
       const sessionDone = Math.min(
-        (e.session_start_offset ?? 1) + hadir,
+        (e.session_start_offset ?? 1) + hadir + tidakHadir,
         e.sessions_total ?? 8
       )
 
@@ -722,7 +722,7 @@ export default function TutorLaporanPage() {
                           <div className="text-right flex-shrink-0">
                             <div className="text-lg font-black text-[#5C4FE5]">{siswa.pctHadir}%</div>
                             <div className="text-[10px] text-[#7B78A8]">
-                              {siswa.hadir}/{siswa.completedCount ?? siswa.totalSesi} sesi selesai
+                              {siswa.hadir} hadir dari {siswa.completedCount ?? siswa.totalSesi} pertemuan
                             </div>
                             {(siswa.totalSesi - (siswa.completedCount ?? siswa.totalSesi)) > 0 && (
                               <div className="text-[10px] text-amber-500 font-semibold">
@@ -784,13 +784,13 @@ export default function TutorLaporanPage() {
                                     ) : (
                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Belum diabsen</span>
                                     )}
-                                    {sesi.sessionStatus === 'completed' && sesi.absenStatus && !isEditing && (
+                                    {sesi.sessionStatus === 'completed' && sesi.absenStatus === 'hadir' && !isEditing && (
                                       <button onClick={() => hasReport ? toggleSesi(key) : startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu, recordingUrl: sesi.recordingUrl })}
                                         className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
                                         {hasReport ? <><FileText size={11}/>{isSesiOpen ? 'Tutup' : 'Lihat'}</> : <><Pencil size={11}/>Isi</>}
                                       </button>
                                     )}
-                                    {sesi.sessionStatus === 'completed' && hasReport && isSesiOpen && !isEditing && (
+                                    {sesi.sessionStatus === 'completed' && sesi.absenStatus === 'hadir' && hasReport && isSesiOpen && !isEditing && (
                                       <button onClick={() => startEdit(key, { materi: sesi.materi, perkembangan: sesi.perkembangan, saranSiswa: sesi.saranSiswa, saranOrtu: sesi.saranOrtu, recordingUrl: sesi.recordingUrl })}
                                         className="flex items-center gap-1 text-[10px] font-semibold text-[#5C4FE5] hover:underline">
                                         <Pencil size={11}/> Edit
