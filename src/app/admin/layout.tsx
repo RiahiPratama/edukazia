@@ -5,13 +5,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import AutoActivityTracker from '@/components/AutoActivityTracker'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, FolderOpen, Globe, LogOut, Menu, Globe2,
-  ClipboardList, Archive, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText, Library, Wallet, Bell
+  ClipboardList, Building2, ChevronDown, ChevronRight, TrendingUp, TrendingDown, FileText, Library, Wallet, Bell, Activity
 } from 'lucide-react'
 
-// Nav structure dengan sub-menu
 const navGroups = [
   { group: 'Utama', items: [
     { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -31,17 +31,18 @@ const navGroups = [
     { href: '/admin/bimbel',  label: 'Bimbel (B2B)',   icon: Building2, children: [
       { href: '/admin/subscription', label: 'Subscription B2B', icon: CreditCard },
     ]},
+    { href: '/admin/keuangan', label: 'Keuangan', icon: Wallet, children: [
+      { href: '/admin/keuangan/pendapatan',  label: 'Pendapatan',  icon: TrendingUp },
+      { href: '/admin/keuangan/pengeluaran', label: 'Pengeluaran', icon: TrendingDown },
+    ]},
   ]},
   { group: 'Konten', items: [
     { href: '/admin/pustaka', label: 'Pustaka', icon: Library },
   ]},
-  { group: 'Keuangan', items: [
-    { href: '/admin/keuangan',             label: 'Ringkasan',    icon: Wallet },
-    { href: '/admin/keuangan/pendapatan',  label: 'Pendapatan',   icon: TrendingUp },
-    { href: '/admin/keuangan/pengeluaran', label: 'Pengeluaran',  icon: TrendingDown },
-  ]},
   { group: 'Sistem', items: [
-    { href: '/admin/notifikasi', label: 'Notifikasi WA', icon: Bell },
+    { href: '/admin/aktivitas', label: 'Monitoring', icon: Activity, children: [
+      { href: '/admin/notifikasi', label: 'Notifikasi WA', icon: Bell },
+    ]},
     { href: '/admin/konten',     label: 'Konten Landing', icon: Globe },
   ]},
 ]
@@ -60,6 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   function isActive(href: string) {
     if (href === '/admin/dashboard') return pathname === '/admin/dashboard'
     if (href === '/admin/keuangan') return pathname === '/admin/keuangan'
+    if (href === '/admin/aktivitas') return pathname === '/admin/aktivitas'
     return pathname.startsWith(href)
   }
 
@@ -67,6 +69,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [expanded, setExpanded] = useState<Record<string, boolean>>({
       '/admin/tutor': pathname.startsWith('/admin/tutor') || pathname.startsWith('/admin/absensi') || pathname.startsWith('/admin/laporan'),
       '/admin/bimbel': pathname.startsWith('/admin/bimbel') || pathname.startsWith('/admin/subscription'),
+      '/admin/keuangan': pathname.startsWith('/admin/keuangan'),
+      '/admin/aktivitas': pathname.startsWith('/admin/aktivitas') || pathname.startsWith('/admin/notifikasi'),
     })
 
     function toggleExpand(href: string) {
@@ -196,7 +200,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
             style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#5C4FE5' }}>A</div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <AutoActivityTracker />
+          {children}
+        </main>
       </div>
     </div>
   )

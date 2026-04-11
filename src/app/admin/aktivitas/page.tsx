@@ -1,0 +1,319 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import {
+  Activity, Users, Clock, AlertTriangle, Filter, RefreshCw,
+  ChevronLeft, ChevronRight, UserCheck, UserX, BarChart3
+} from 'lucide-react'
+
+const ROLE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  admin:   { label: 'Admin',  color: '#5C4FE5', bg: '#EEEDFE' },
+  tutor:   { label: 'Tutor',  color: '#0C447C', bg: '#E6F1FB' },
+  parent:  { label: 'Ortu',   color: '#3B6D11', bg: '#EAF3DE' },
+  student: { label: 'Siswa',  color: '#92400E', bg: '#FEF3C7' },
+}
+
+const PER_PAGE = 20
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jayapura',
+  })
+}
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('id-ID', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
+  })
+}
+function fmtDateFull(iso: string) {
+  return new Date(iso).toLocaleDateString('id-ID', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jayapura',
+  })
+}
+
+export default function AdminAktivitasPage() {
+  const supabase = createClient()
+
+  const [logs, setLogs]         = useState<any[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [page, setPage]         = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+
+  // Stats
+  const [loginHariIni, setLoginHariIni]       = useState(0)
+  const [aktifMingguIni, setAktifMingguIni]   = useState(0)
+  const [tidakAktif, setTidakAktif]           = useState(0)
+  const [topPages, setTopPages]               = useState<{ page: string; count: number }[]>([])
+
+  // Filters
+  const [filterRole, setFilterRole]       = useState('')
+  const [filterUser, setFilterUser]       = useState('')
+  const [filterFrom, setFilterFrom]       = useState('')
+  const [filterTo, setFilterTo]           = useState('')
+
+  // Users lookup
+  const [userNames, setUserNames] = useState<Record<string, string>>({})
+
+  useEffect(() => { fetchStats(); fetchUserNames() }, [])
+  useEffect(() => { fetchLogs() }, [page, filterRole, filterUser, filterFrom, filterTo])
+
+  async function fetchUserNames() {
+    const { data } = await supabase.from('profiles').select('id, full_name, role')
+    if (!data) return
+    const map: Record<string, string> = {}
+    data.forEach(p => { map[p.id] = p.full_name ?? p.id.slice(0, 8) })
+    setUserNames(map)
+  }
+
+  async function fetchStats() {
+    const todayWIT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
+    const startToday = `${todayWIT}T00:00:00+09:00`
+    const endToday = `${todayWIT}T23:59:59+09:00`
+
+    // Login hari ini (unique users)
+    const { data: todayData } = await supabase
+      .from('user_activity')
+      .select('user_id')
+      .gte('created_at', startToday)
+      .lte('created_at', endToday)
+
+    const uniqueToday = new Set(todayData?.map(d => d.user_id) ?? [])
+    setLoginHariIni(uniqueToday.size)
+
+    // Aktif minggu ini (unique users dalam 7 hari terakhir)
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const { data: weekData } = await supabase
+      .from('user_activity')
+      .select('user_id')
+      .gte('created_at', weekAgo.toISOString())
+
+    const uniqueWeek = new Set(weekData?.map(d => d.user_id) ?? [])
+    setAktifMingguIni(uniqueWeek.size)
+
+    // User tidak aktif >7 hari: profiles yang TIDAK ada di weekData
+    const { data: allProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['parent', 'tutor', 'student'])
+
+    const activeIds = uniqueWeek
+    const inactive = (allProfiles ?? []).filter(p => !activeIds.has(p.id))
+    setTidakAktif(inactive.length)
+
+    // Top pages
+    const { data: allActivity } = await supabase
+      .from('user_activity')
+      .select('page')
+      .gte('created_at', weekAgo.toISOString())
+
+    if (allActivity) {
+      const pageCounts: Record<string, number> = {}
+      allActivity.forEach(a => {
+        pageCounts[a.page] = (pageCounts[a.page] ?? 0) + 1
+      })
+      const sorted = Object.entries(pageCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([page, count]) => ({ page, count }))
+      setTopPages(sorted)
+    }
+  }
+
+  async function fetchLogs() {
+    setLoading(true)
+
+    let query = supabase
+      .from('user_activity')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range((page - 1) * PER_PAGE, page * PER_PAGE - 1)
+
+    if (filterRole) query = query.eq('user_role', filterRole)
+    if (filterUser) query = query.ilike('user_id', `%${filterUser}%`)
+    if (filterFrom) query = query.gte('created_at', filterFrom + 'T00:00:00+09:00')
+    if (filterTo)   query = query.lte('created_at', filterTo + 'T23:59:59+09:00')
+
+    const { data, count } = await query
+    setLogs(data ?? [])
+    setTotalCount(count ?? 0)
+    setLoading(false)
+  }
+
+  function resetFilters() {
+    setFilterRole('')
+    setFilterUser('')
+    setFilterFrom('')
+    setFilterTo('')
+    setPage(1)
+  }
+
+  const totalPages = Math.ceil(totalCount / PER_PAGE)
+  const hasFilters = filterRole || filterUser || filterFrom || filterTo
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h1 className="text-2xl font-black text-[#1A1640] font-['Sora']">Aktivitas User</h1>
+        <p className="text-sm text-[#7B78A8] mt-1">Monitor siapa yang login dan buka halaman apa</p>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {[
+          { num: loginHariIni,   label: 'Login Hari Ini',     icon: <UserCheck size={16} />, color: '#5C4FE5', bg: '#EEEDFE' },
+          { num: aktifMingguIni, label: 'Aktif Minggu Ini',   icon: <Users size={16} />,     color: '#166534', bg: '#DCFCE7' },
+          { num: tidakAktif,     label: 'Tidak Aktif (>7hr)', icon: <UserX size={16} />,     color: '#991B1B', bg: '#FEE2E2' },
+          { num: totalCount,     label: 'Total Log',          icon: <Activity size={16} />,  color: '#92400E', bg: '#FEF3C7' },
+        ].map((s, i) => (
+          <div key={i} className="bg-white border border-[#E5E3FF] rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.bg, color: s.color }}>
+                {s.icon}
+              </div>
+            </div>
+            <div className="text-2xl font-black" style={{ color: s.color }}>{s.num}</div>
+            <div className="text-xs text-[#7B78A8] font-semibold mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Top Pages + Peak Hours */}
+      {topPages.length > 0 && (
+        <div className="bg-white border border-[#E5E3FF] rounded-2xl p-4 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 size={14} className="text-[#5C4FE5]" />
+            <p className="text-xs font-bold text-[#7B78A8] uppercase tracking-wide">Halaman Paling Sering Dibuka (7 Hari)</p>
+          </div>
+          <div className="space-y-2">
+            {topPages.map((tp, i) => {
+              const maxCount = topPages[0].count
+              const pct = Math.round((tp.count / maxCount) * 100)
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-36 lg:w-48 text-xs font-semibold text-[#1A1640] truncate">{tp.page}</div>
+                  <div className="flex-1 h-5 bg-[#F0EFFF] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-[#5C4FE5] transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-xs font-bold text-[#5C4FE5] w-10 text-right">{tp.count}x</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="bg-white border border-[#E5E3FF] rounded-2xl px-4 py-3 mb-4 flex items-center gap-3 flex-wrap">
+        <Filter size={14} className="text-[#7B78A8]" />
+        <select value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(1) }}
+          className="px-2.5 py-1.5 border border-[#E5E3FF] rounded-lg text-xs text-[#1A1640] bg-white focus:outline-none focus:border-[#5C4FE5]">
+          <option value="">Semua Role</option>
+          <option value="admin">Admin</option>
+          <option value="tutor">Tutor</option>
+          <option value="parent">Ortu</option>
+          <option value="student">Siswa</option>
+        </select>
+        <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(1) }}
+          className="px-2.5 py-1.5 border border-[#E5E3FF] rounded-lg text-xs text-[#1A1640] focus:outline-none focus:border-[#5C4FE5]" />
+        <span className="text-xs text-[#7B78A8]">s/d</span>
+        <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }}
+          className="px-2.5 py-1.5 border border-[#E5E3FF] rounded-lg text-xs text-[#1A1640] focus:outline-none focus:border-[#5C4FE5]" />
+        {hasFilters && (
+          <button onClick={resetFilters}
+            className="px-3 py-1.5 border border-[#E5E3FF] text-[#7B78A8] text-xs font-bold rounded-lg hover:bg-[#F0EFFF] transition">
+            Reset
+          </button>
+        )}
+        <button onClick={() => { fetchStats(); fetchLogs() }}
+          className="ml-auto px-3 py-1.5 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition flex items-center gap-1.5">
+          <RefreshCw size={12} /> Refresh
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white border border-[#E5E3FF] rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-sm text-[#7B78A8]">Memuat data...</div>
+        ) : logs.length === 0 ? (
+          <div className="p-12 text-center text-sm text-[#7B78A8]">
+            <Activity size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2" />
+            Belum ada data aktivitas
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-[#E5E3FF] bg-[#F7F6FF]">
+                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">User</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Role</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Halaman</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Aksi</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Waktu</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Device</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0EFFF]">
+                  {logs.map((log: any) => {
+                    const roleMeta = ROLE_LABELS[log.user_role] ?? { label: log.user_role, color: '#666', bg: '#f0f0f0' }
+                    const name = userNames[log.user_id] ?? log.user_id?.slice(0, 8) ?? '—'
+                    const w = log.metadata?.w
+                    const device = w ? (w < 768 ? 'Mobile' : w < 1024 ? 'Tablet' : 'Desktop') : '—'
+
+                    return (
+                      <tr key={log.id} className="hover:bg-[#F7F6FF] transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                              style={{ background: roleMeta.color }}>
+                              {name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-semibold text-[#1A1640] truncate max-w-[120px]">{name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            style={{ background: roleMeta.bg, color: roleMeta.color }}>
+                            {roleMeta.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-[#1A1640] font-mono max-w-[200px] truncate">{log.page}</td>
+                        <td className="px-4 py-3 text-xs text-[#7B78A8]">{log.action}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-[#1A1640]">{fmtDate(log.created_at)}</div>
+                          <div className="text-[10px] text-[#9B97B2]">{fmtTime(log.created_at)} WIT</div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-[#7B78A8]">{device}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5E3FF]">
+              <p className="text-xs text-[#7B78A8]">
+                {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, totalCount)} dari {totalCount}
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  className="p-1.5 rounded-lg border border-[#E5E3FF] hover:bg-[#F0EFFF] disabled:opacity-30 transition">
+                  <ChevronLeft size={14} className="text-[#7B78A8]" />
+                </button>
+                <span className="text-xs font-semibold text-[#5C4FE5]">{page} / {totalPages || 1}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                  className="p-1.5 rounded-lg border border-[#E5E3FF] hover:bg-[#F0EFFF] disabled:opacity-30 transition">
+                  <ChevronRight size={14} className="text-[#7B78A8]" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
