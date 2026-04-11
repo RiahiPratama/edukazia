@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 
 const ROLE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  admin:   { label: 'Admin',  color: '#5C4FE5', bg: '#EEEDFE' },
   tutor:   { label: 'Tutor',  color: '#0C447C', bg: '#E6F1FB' },
   parent:  { label: 'Ortu',   color: '#3B6D11', bg: '#EAF3DE' },
   student: { label: 'Siswa',  color: '#92400E', bg: '#FEF3C7' },
@@ -26,12 +25,6 @@ function fmtTime(iso: string) {
     hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
   })
 }
-function fmtDateFull(iso: string) {
-  return new Date(iso).toLocaleDateString('id-ID', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jayapura',
-  })
-}
 
 export default function AdminAktivitasPage() {
   const supabase = createClient()
@@ -41,26 +34,22 @@ export default function AdminAktivitasPage() {
   const [page, setPage]         = useState(1)
   const [totalCount, setTotalCount] = useState(0)
 
-  // Stats
   const [loginHariIni, setLoginHariIni]       = useState(0)
   const [aktifMingguIni, setAktifMingguIni]   = useState(0)
   const [tidakAktif, setTidakAktif]           = useState(0)
   const [topPages, setTopPages]               = useState<{ page: string; count: number }[]>([])
 
-  // Filters
   const [filterRole, setFilterRole]       = useState('')
-  const [filterUser, setFilterUser]       = useState('')
   const [filterFrom, setFilterFrom]       = useState('')
   const [filterTo, setFilterTo]           = useState('')
 
-  // Users lookup
   const [userNames, setUserNames] = useState<Record<string, string>>({})
 
   useEffect(() => { fetchStats(); fetchUserNames() }, [])
-  useEffect(() => { fetchLogs() }, [page, filterRole, filterUser, filterFrom, filterTo])
+  useEffect(() => { fetchLogs() }, [page, filterRole, filterFrom, filterTo])
 
   async function fetchUserNames() {
-    const { data } = await supabase.from('profiles').select('id, full_name, role')
+    const { data } = await supabase.from('profiles').select('id, full_name, role').neq('role', 'admin')
     if (!data) return
     const map: Record<string, string> = {}
     data.forEach(p => { map[p.id] = p.full_name ?? p.id.slice(0, 8) })
@@ -72,41 +61,43 @@ export default function AdminAktivitasPage() {
     const startToday = `${todayWIT}T00:00:00+09:00`
     const endToday = `${todayWIT}T23:59:59+09:00`
 
-    // Login hari ini (unique users)
+    // Login hari ini (unique users, exclude admin)
     const { data: todayData } = await supabase
       .from('user_activity')
       .select('user_id')
+      .neq('user_role', 'admin')
       .gte('created_at', startToday)
       .lte('created_at', endToday)
 
     const uniqueToday = new Set(todayData?.map(d => d.user_id) ?? [])
     setLoginHariIni(uniqueToday.size)
 
-    // Aktif minggu ini (unique users dalam 7 hari terakhir)
+    // Aktif minggu ini (exclude admin)
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
     const { data: weekData } = await supabase
       .from('user_activity')
       .select('user_id')
+      .neq('user_role', 'admin')
       .gte('created_at', weekAgo.toISOString())
 
     const uniqueWeek = new Set(weekData?.map(d => d.user_id) ?? [])
     setAktifMingguIni(uniqueWeek.size)
 
-    // User tidak aktif >7 hari: profiles yang TIDAK ada di weekData
+    // Tidak aktif: profiles (tutor/parent/student) yang TIDAK ada di weekData
     const { data: allProfiles } = await supabase
       .from('profiles')
       .select('id')
       .in('role', ['parent', 'tutor', 'student'])
 
-    const activeIds = uniqueWeek
-    const inactive = (allProfiles ?? []).filter(p => !activeIds.has(p.id))
+    const inactive = (allProfiles ?? []).filter(p => !uniqueWeek.has(p.id))
     setTidakAktif(inactive.length)
 
-    // Top pages
+    // Top pages (exclude admin)
     const { data: allActivity } = await supabase
       .from('user_activity')
       .select('page')
+      .neq('user_role', 'admin')
       .gte('created_at', weekAgo.toISOString())
 
     if (allActivity) {
@@ -128,11 +119,11 @@ export default function AdminAktivitasPage() {
     let query = supabase
       .from('user_activity')
       .select('*', { count: 'exact' })
+      .neq('user_role', 'admin')
       .order('created_at', { ascending: false })
       .range((page - 1) * PER_PAGE, page * PER_PAGE - 1)
 
     if (filterRole) query = query.eq('user_role', filterRole)
-    if (filterUser) query = query.ilike('user_id', `%${filterUser}%`)
     if (filterFrom) query = query.gte('created_at', filterFrom + 'T00:00:00+09:00')
     if (filterTo)   query = query.lte('created_at', filterTo + 'T23:59:59+09:00')
 
@@ -144,14 +135,13 @@ export default function AdminAktivitasPage() {
 
   function resetFilters() {
     setFilterRole('')
-    setFilterUser('')
     setFilterFrom('')
     setFilterTo('')
     setPage(1)
   }
 
   const totalPages = Math.ceil(totalCount / PER_PAGE)
-  const hasFilters = filterRole || filterUser || filterFrom || filterTo
+  const hasFilters = filterRole || filterFrom || filterTo
 
   return (
     <div>
@@ -180,7 +170,7 @@ export default function AdminAktivitasPage() {
         ))}
       </div>
 
-      {/* Top Pages + Peak Hours */}
+      {/* Top Pages */}
       {topPages.length > 0 && (
         <div className="bg-white border border-[#E5E3FF] rounded-2xl p-4 mb-5">
           <div className="flex items-center gap-2 mb-3">
@@ -211,7 +201,6 @@ export default function AdminAktivitasPage() {
         <select value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(1) }}
           className="px-2.5 py-1.5 border border-[#E5E3FF] rounded-lg text-xs text-[#1A1640] bg-white focus:outline-none focus:border-[#5C4FE5]">
           <option value="">Semua Role</option>
-          <option value="admin">Admin</option>
           <option value="tutor">Tutor</option>
           <option value="parent">Ortu</option>
           <option value="student">Siswa</option>
@@ -251,7 +240,6 @@ export default function AdminAktivitasPage() {
                     <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">User</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Role</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Halaman</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Aksi</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Waktu</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Device</th>
                   </tr>
@@ -281,7 +269,6 @@ export default function AdminAktivitasPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-[#1A1640] font-mono max-w-[200px] truncate">{log.page}</td>
-                        <td className="px-4 py-3 text-xs text-[#7B78A8]">{log.action}</td>
                         <td className="px-4 py-3">
                           <div className="text-xs text-[#1A1640]">{fmtDate(log.created_at)}</div>
                           <div className="text-[10px] text-[#9B97B2]">{fmtTime(log.created_at)} WIT</div>

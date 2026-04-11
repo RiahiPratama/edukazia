@@ -5,7 +5,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import AutoActivityTracker from '@/components/AutoActivityTracker'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, FolderOpen, Globe, LogOut, Menu, Globe2,
@@ -201,7 +200,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#5C4FE5' }}>A</div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <AutoActivityTracker />
           {children}
         </main>
       </div>
