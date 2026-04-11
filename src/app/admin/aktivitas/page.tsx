@@ -38,7 +38,8 @@ export default function AdminAktivitasPage() {
   const [aktifMingguIni, setAktifMingguIni]   = useState(0)
   const [tidakAktif, setTidakAktif]           = useState(0)
   const [topPages, setTopPages]               = useState<{ page: string; count: number }[]>([])
-
+  const [inactiveUsers, setInactiveUsers]     = useState<{ id: string; name: string; role: string; lastSeen: string | null }[]>([])
+  const [showInactive, setShowInactive]       = useState(false)
   const [filterRole, setFilterRole]       = useState('')
   const [filterFrom, setFilterFrom]       = useState('')
   const [filterTo, setFilterTo]           = useState('')
@@ -87,12 +88,41 @@ export default function AdminAktivitasPage() {
     // Tidak aktif: profiles yang BISA login (punya email) dan TIDAK ada di weekData
     const { data: allProfiles } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, full_name, role')
       .in('role', ['parent', 'tutor', 'student'])
       .not('email', 'is', null)
 
-    const inactive = (allProfiles ?? []).filter(p => !uniqueWeek.has(p.id))
-    setTidakAktif(inactive.length)
+    const inactiveProfiles = (allProfiles ?? []).filter(p => !uniqueWeek.has(p.id))
+    setTidakAktif(inactiveProfiles.length)
+
+    // Fetch last seen untuk inactive users
+    if (inactiveProfiles.length > 0) {
+      const inactiveIds = inactiveProfiles.map(p => p.id)
+      const { data: lastActivities } = await supabase
+        .from('user_activity')
+        .select('user_id, created_at')
+        .in('user_id', inactiveIds)
+        .order('created_at', { ascending: false })
+
+      const lastSeenMap: Record<string, string> = {}
+      lastActivities?.forEach(a => {
+        if (!lastSeenMap[a.user_id]) lastSeenMap[a.user_id] = a.created_at
+      })
+
+      setInactiveUsers(
+        inactiveProfiles.map(p => ({
+          id: p.id,
+          name: p.full_name ?? p.id.slice(0, 8),
+          role: p.role,
+          lastSeen: lastSeenMap[p.id] ?? null,
+        })).sort((a, b) => {
+          if (!a.lastSeen && !b.lastSeen) return 0
+          if (!a.lastSeen) return -1
+          if (!b.lastSeen) return 1
+          return 0
+        })
+      )
+    }
 
     // Top pages (exclude admin)
     const { data: allActivity } = await supabase
@@ -154,22 +184,83 @@ export default function AdminAktivitasPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {[
-          { num: loginHariIni,   label: 'Login Hari Ini',     icon: <UserCheck size={16} />, color: '#5C4FE5', bg: '#EEEDFE' },
-          { num: aktifMingguIni, label: 'Aktif Minggu Ini',   icon: <Users size={16} />,     color: '#166534', bg: '#DCFCE7' },
-          { num: tidakAktif,     label: 'Tidak Aktif (>7hr)', icon: <UserX size={16} />,     color: '#991B1B', bg: '#FEE2E2' },
-          { num: totalCount,     label: 'Total Log',          icon: <Activity size={16} />,  color: '#92400E', bg: '#FEF3C7' },
+          { num: loginHariIni,   label: 'Login Hari Ini',     icon: <UserCheck size={16} />, color: '#5C4FE5', bg: '#EEEDFE', clickable: false },
+          { num: aktifMingguIni, label: 'Aktif Minggu Ini',   icon: <Users size={16} />,     color: '#166534', bg: '#DCFCE7', clickable: false },
+          { num: tidakAktif,     label: 'Tidak Aktif (>7hr)', icon: <UserX size={16} />,     color: '#991B1B', bg: '#FEE2E2', clickable: true },
+          { num: totalCount,     label: 'Total Log',          icon: <Activity size={16} />,  color: '#92400E', bg: '#FEF3C7', clickable: false },
         ].map((s, i) => (
-          <div key={i} className="bg-white border border-[#E5E3FF] rounded-2xl p-4">
+          <div
+            key={i}
+            onClick={s.clickable ? () => setShowInactive(!showInactive) : undefined}
+            className={`bg-white border rounded-2xl p-4 ${s.clickable ? 'cursor-pointer hover:border-[#991B1B] transition-colors' : ''}`}
+            style={{ borderColor: s.clickable && showInactive ? '#991B1B' : '#E5E3FF' }}
+          >
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.bg, color: s.color }}>
                 {s.icon}
               </div>
             </div>
             <div className="text-2xl font-black" style={{ color: s.color }}>{s.num}</div>
-            <div className="text-xs text-[#7B78A8] font-semibold mt-0.5">{s.label}</div>
+            <div className="text-xs text-[#7B78A8] font-semibold mt-0.5">
+              {s.label}
+              {s.clickable && <span className="ml-1 text-[10px]">— klik untuk detail</span>}
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Daftar User Tidak Aktif */}
+      {showInactive && inactiveUsers.length > 0 && (
+        <div className="bg-white border border-[#FEE2E2] rounded-2xl p-4 mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <UserX size={14} className="text-[#991B1B]" />
+              <p className="text-xs font-bold text-[#991B1B] uppercase tracking-wide">User Tidak Aktif {'>'} 7 Hari</p>
+            </div>
+            <button onClick={() => setShowInactive(false)} className="text-xs text-[#7B78A8] hover:text-[#991B1B] transition">
+              Tutup
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-[#FEE2E2]">
+                  <th className="px-3 py-2 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Nama</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Role</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Terakhir Aktif</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#FEF3C7]">
+                {inactiveUsers.map(u => {
+                  const roleMeta = ROLE_LABELS[u.role] ?? { label: u.role, color: '#666', bg: '#f0f0f0' }
+                  return (
+                    <tr key={u.id} className="hover:bg-[#FFF8F8] transition-colors">
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0"
+                            style={{ background: roleMeta.color }}>
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-xs font-semibold text-[#1A1640]">{u.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style={{ background: roleMeta.bg, color: roleMeta.color }}>
+                          {roleMeta.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-[#7B78A8]">
+                        {u.lastSeen ? fmtDate(u.lastSeen) : 'Belum pernah login'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Top Pages */}
       {topPages.length > 0 && (
