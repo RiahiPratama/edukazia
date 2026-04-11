@@ -107,6 +107,21 @@ export async function POST(req: NextRequest) {
       if (linkErr) {
         return NextResponse.json({ error: linkErr.message }, { status: 500 })
       }
+
+      // 4. Sync relation_phone → profiles.phone (kalau masih kosong)
+      const { data: profile } = await supabase
+        .from('profiles').select('phone').eq('id', authUserId).single()
+
+      if (!profile?.phone) {
+        const { data: student } = await supabase
+          .from('students').select('relation_phone').eq('id', student_id).single()
+
+        if (student?.relation_phone) {
+          await supabase.from('profiles')
+            .update({ phone: student.relation_phone })
+            .eq('id', authUserId)
+        }
+      }
     }
 
     return NextResponse.json({ ok: true, profile_id: authUserId })
