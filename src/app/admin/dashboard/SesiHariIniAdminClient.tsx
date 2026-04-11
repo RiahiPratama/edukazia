@@ -153,7 +153,7 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
     const tutorName = tutorMap[s.class_groups?.tutor_id]?.name?.split(' ')[0] ?? 'Tutor'
     const kelas = s.class_groups?.label ?? 'kelas'
     const jam = fmtTime(s.scheduled_at)
-    return `Halo Kak ${tutorName}, sesi ${kelas} pukul ${jam} WIT sudah selesai. Mohon segera isi absensi di portal ya. Terima kasih 🙏`
+    return `📋 *Reminder Absensi*\n\nHalo Kak ${tutorName} 👋\n\nSesi *${kelas}* pukul ${jam} WIT\nsudah selesai, namun absensi\nbelum diisi.\n\nMohon segera dilengkapi\ndi portal ya 🙏\n\n🔗 app.edukazia.com/tutor/absensi\n\n\nTerima kasih!`
   }
 
   async function sendWATutor(s: any) {
@@ -166,7 +166,12 @@ export default function SesiHariIniAdminClient({ sesiHariIni: initialSesi }: { s
       const res = await fetch('/api/wa/remind-tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: tutor.phone, message: buildWATutor(s) }),
+        body: JSON.stringify({
+          phone: tutor.phone,
+          message: buildWATutor(s),
+          type: 'wa_remind_tutor_absensi',
+          context: { tutorName: tutor.name, kelasLabel: s.class_groups?.label },
+        }),
       })
       const data = await res.json()
       setSendingWA(prev => ({ ...prev, [s.id]: data.sent ? 'sent' : 'failed' }))

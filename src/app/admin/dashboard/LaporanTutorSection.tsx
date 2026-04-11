@@ -36,13 +36,25 @@ export default function LaporanTutorSection({
     setSendingWA(prev => ({ ...prev, [key]: 'loading' }))
 
     const firstName = item.tutorName.split(' ')[0]
-    const message = `Halo Kak ${firstName}, laporan belajar untuk kelas ${item.kelasLabel} (${item.studentName}) tanggal ${fmtDateTime(item.scheduledAt)} belum diisi. Mohon segera dilengkapi di portal ya. Terima kasih 🙏`
+    const tgl = new Date(item.scheduledAt).toLocaleDateString('id-ID', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura',
+    })
+    const jam = new Date(item.scheduledAt).toLocaleTimeString('id-ID', {
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
+    })
+
+    const message = `📝 *Reminder Laporan Belajar*\n\nHalo Kak ${firstName} 👋\n\nLaporan belajar untuk kelas\n*${item.kelasLabel}*\npada ${tgl}, pukul ${jam} WIT\nbelum diisi.\n\nMohon segera dilengkapi\ndi portal ya 🙏\n\n🔗 app.edukazia.com/tutor/laporan\n\n\nTerima kasih!`
 
     try {
       const res = await fetch('/api/wa/remind-tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: item.tutorPhone, message }),
+        body: JSON.stringify({
+          phone: item.tutorPhone,
+          message,
+          type: 'wa_remind_tutor_laporan',
+          context: { tutorName: item.tutorName, kelasLabel: item.kelasLabel, studentName: item.studentName },
+        }),
       })
       const data = await res.json()
       setSendingWA(prev => ({ ...prev, [key]: data.sent ? 'sent' : 'failed' }))
