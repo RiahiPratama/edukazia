@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import SiswaLayoutClient from './SiswaLayoutClient'
+import AutoActivityTracker from '@/components/AutoActivityTracker'
 import { getActiveChild } from '@/lib/siswa/helpers'
 
 export default async function SiswaLayout({ children }: { children: React.ReactNode }) {
@@ -70,6 +71,7 @@ export default async function SiswaLayout({ children }: { children: React.ReactN
       activeChild={activeChild}
       isParent={isParent}
     >
+      <AutoActivityTracker />
       {children}
     </SiswaLayoutClient>
   )

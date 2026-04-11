@@ -10,6 +10,7 @@ import {
   Users, GraduationCap, Menu, X, ArrowLeftRight, ArrowLeft,
   Sun, Moon,
 } from 'lucide-react'
+import AutoActivityTracker from '@/components/AutoActivityTracker'
 import { OrtuProvider, type OrtuContextType, type ChildInfo, type OrtuProfile } from './context'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 
@@ -630,6 +631,7 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
 
           {/* Page content */}
           <main className="ortu-content flex-1 overflow-y-auto">
+            <AutoActivityTracker />
             {children}
           </main>
         </div>

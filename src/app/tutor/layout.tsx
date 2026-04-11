@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import AutoActivityTracker from '@/components/AutoActivityTracker'
 import {
   LayoutDashboard, CalendarDays, BookOpen,
   FolderOpen, Coins, LogOut, Menu,
@@ -210,7 +211,10 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
             <TutorAvatar size={32}/>
           </Link>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <AutoActivityTracker />
+          {children}
+        </main>
       </div>
     </div>
   )
