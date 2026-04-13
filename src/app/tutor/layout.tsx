@@ -164,6 +164,7 @@ export default function TutorLayout({ children }: { children: React.ReactNode })
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
           <Logo variant="default" size="sm" href="/tutor/dashboard" badge="Tutor"/>
         </div>
+        <NavContent/>
       </div>
 
       {/* Sidebar Mobile Overlay */}
