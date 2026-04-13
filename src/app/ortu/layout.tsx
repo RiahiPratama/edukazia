@@ -267,21 +267,11 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
           {/* Branding */}
           <div className="flex-shrink-0 px-4 pt-5 pb-3" style={{ borderBottom: `1px solid ${divider}` }}>
             <div className="flex items-center justify-between mb-2.5">
-              <Link
+              <Logo
+                variant={isAnakMode ? 'white' : 'default'}
+                size="sm"
                 href={isAnakMode ? `/ortu/anak/${activeStudentId}` : '/ortu/dashboard'}
-                className="flex items-center gap-2">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-                  style={{
-                    background: isAnakMode ? 'rgba(255,255,255,0.15)' : '#E6B800',
-                    color: isAnakMode ? '#fff' : '#412402',
-                  }}>E</div>
-                <span
-                  className="text-sm font-bold"
-                  style={{ color: isAnakMode ? '#fff' : 'var(--ortu-text)', fontFamily: "'Sora', sans-serif" }}>
-                  EduKazia
-                </span>
-              </Link>
+              />
               <button
                 onClick={() => setSidebarOpen(false)}
                 className="lg:hidden p-1 rounded-md"
