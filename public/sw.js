@@ -1,6 +1,6 @@
 // EduKazia Service Worker — PWA + Web Push Notifications
 
-const CACHE_NAME = 'edukazia-v1'
+const CACHE_NAME = 'edukazia-v2'
 const OFFLINE_URL = '/offline.html'
 
 // ── Install: cache offline fallback page ──

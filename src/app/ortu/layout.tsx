@@ -11,6 +11,7 @@ import {
   Sun, Moon,
 } from 'lucide-react'
 import AutoActivityTracker from '@/components/AutoActivityTracker'
+import { Logo } from '@/components/ui/Logo'
 import { OrtuProvider, type OrtuContextType, type ChildInfo, type OrtuProfile } from './context'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 
@@ -615,17 +616,8 @@ export default function OrtuLayout({ children }: { children: React.ReactNode }) 
             )}
 
             {/* Logo EduKazia di kanan */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <div
-                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
-                style={{ background: '#5C4FE5', color: '#fff', fontFamily: "'Sora', sans-serif" }}>
-                E
-              </div>
-              <span
-                className="text-[12px] font-bold hidden sm:block"
-                style={{ fontFamily: "'Sora', sans-serif", color: 'var(--ortu-text)' }}>
-                edu<span style={{ color: '#E6B800' }}>kazia</span>
-              </span>
+            <div className="flex items-center flex-shrink-0">
+              <Logo variant="default" size="sm" href="/ortu/dashboard" showWordmark={false}/>
             </div>
           </div>
 

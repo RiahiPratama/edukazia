@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Sora, Plus_Jakarta_Sans } from 'next/font/google'
+import { Sora, Plus_Jakarta_Sans, Nunito } from 'next/font/google'
 import NextTopLoader from 'nextjs-toploader'
 import RegisterSW from '@/components/RegisterSW'
 import './globals.css'
@@ -12,6 +12,14 @@ const sora = Sora({
 const plusJakarta = Plus_Jakarta_Sans({
   variable: '--font-plus-jakarta',
   subsets: ['latin'],
+})
+
+// Khusus untuk Logo wordmark — JANGAN dipakai di UI lain
+const nunito = Nunito({
+  variable: '--font-nunito',
+  subsets: ['latin'],
+  weight: ['900'],
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -44,7 +52,7 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body
-        className={`${sora.variable} ${plusJakarta.variable} antialiased`}
+        className={`${sora.variable} ${plusJakarta.variable} ${nunito.variable} antialiased`}
         suppressHydrationWarning
       >
         <NextTopLoader color="#5C4FE5" height={3} showSpinner={false} />

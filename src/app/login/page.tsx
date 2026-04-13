@@ -118,7 +118,17 @@ function LoginForm() {
   return (
     <div className="bg-white rounded-2xl shadow-xl w-full max-w-[400px] overflow-hidden border border-[#E5E3FF]">
       <div className="bg-gradient-to-br from-[#3D34C4] to-[#5C4FE5] px-7 py-6 text-center">
-        <h1 className="font-bold text-2xl text-white">edu<span className="text-[#FFCC00]">kazia</span></h1>
+        {/* E-Bar Mark + Wordmark */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
+          <svg width="36" height="29" viewBox="0 0 88 72" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <rect x="0" y="0"  width="84" height="18" rx="9" fill="#E6B800"/>
+            <rect x="0" y="27" width="59" height="18" rx="9" fill="rgba(255,255,255,0.90)"/>
+            <rect x="0" y="54" width="34" height="18" rx="9" fill="rgba(255,255,255,0.45)"/>
+          </svg>
+          <span style={{ fontFamily: "var(--font-nunito,'Nunito',sans-serif)", fontWeight: 900, fontSize: 28, letterSpacing: '-0.04em', lineHeight: 1 }}>
+            <span style={{ color: 'rgba(255,255,255,0.92)' }}>edu</span><span style={{ color: '#E6B800' }}>kazia</span>
+          </span>
+        </div>
         <p className="text-xs text-white/70 tracking-widest uppercase mt-1">
           {mode === 'forgot' ? 'Reset Password' : 'Portal Pengguna'}
         </p>

@@ -9,6 +9,7 @@ import {
   User, LogOut, Menu, MessageCircle, ChevronDown, AlertCircle, Bell
 } from 'lucide-react'
 import { getInitials, isStudentFullyExpired } from '@/lib/siswa/helpers'
+import { Logo } from '@/components/ui/Logo'
 
 interface Profile {
   id: string
@@ -171,12 +172,7 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
         style={{ width: '240px', minWidth: '240px', height: '100vh', background: '#5C4FE5', borderRight: '1.5px solid #4338CA' }}
       >
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 20px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
-          <Link href="/siswa/dashboard" className="flex items-center gap-2.5">
-            <span className="text-[18px] font-black text-white tracking-tight">EduKazia</span>
-            <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
-              {isParent ? 'Ortu' : 'Siswa'}
-            </span>
-          </Link>
+          <Logo variant="white" size="sm" href="/siswa/dashboard" badge={isParent ? 'Ortu' : 'Siswa'}/>
         </div>
         <div className="flex flex-col flex-1 overflow-hidden">
           <NavContent {...navProps} />
@@ -194,12 +190,7 @@ export default function SiswaLayoutClient({ profile, childrenList, activeChild, 
         style={{ width: '240px', background: '#5C4FE5', borderRight: '1.5px solid #4338CA', transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
       >
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 20px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
-          <Link href="/siswa/dashboard" className="flex items-center gap-2.5">
-            <span className="text-[18px] font-black text-white tracking-tight">EduKazia</span>
-            <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
-              {isParent ? 'Ortu' : 'Siswa'}
-            </span>
-          </Link>
+          <Logo variant="white" size="sm" href="/siswa/dashboard" badge={isParent ? 'Ortu' : 'Siswa'}/>
         </div>
         <div className="flex flex-col flex-1 overflow-hidden">
           <NavContent {...navProps} onClose={() => setSidebarOpen(false)} />

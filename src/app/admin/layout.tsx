@@ -5,6 +5,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { Logo } from '@/components/ui/Logo'
 import {
   LayoutDashboard, CalendarDays, GraduationCap, Users, BookOpen,
   Layers, CreditCard, FolderOpen, Globe, LogOut, Menu, Globe2,
@@ -154,16 +155,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  function Logo() {
-    return (
-      <Link href="/admin/dashboard" className="flex items-center gap-2.5 no-underline" style={{textDecoration:'none'}}>
-        <img src="/edukazia-logo-warna.png" alt="EduKazia"
-          style={{ height: '32px', width: 'auto', objectFit: 'contain' }}/>
-        <span style={{ fontSize: '11px', background: '#5C4FE5', color: 'white', padding: '2px 8px', borderRadius: '999px', fontWeight: 600, flexShrink: 0 }}>
-          Admin
-        </span>
-      </Link>
-    )
+  function SidebarLogo() {
+    return <Logo variant="default" size="sm" href="/admin/dashboard" badge="Admin"/>
   }
 
   return (
@@ -171,7 +164,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="admin-sidebar-wrap hidden lg:flex"
         style={{ width: '256px', minWidth: '256px', height: '100vh', backgroundColor: 'white', borderRight: '1.5px solid #E5E3FF', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
-          <Logo/>
+          <SidebarLogo/>
         </div>
         <NavContent/>
       </div>
@@ -181,7 +174,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="fixed top-0 left-0 h-full z-30 flex flex-col lg:hidden transition-transform duration-300"
         style={{ width: '256px', backgroundColor: 'white', borderRight: '1.5px solid #E5E3FF', transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}>
         <div style={{ height: '64px', display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #E5E3FF', flexShrink: 0 }}>
-          <Logo/>
+          <SidebarLogo/>
         </div>
         <NavContent onClose={() => setSidebarOpen(false)}/>
       </div>
