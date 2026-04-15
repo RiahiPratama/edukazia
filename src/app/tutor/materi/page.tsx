@@ -27,8 +27,10 @@ type Material = {
   unit_name: string
   unit_position: number
   chapter_title: string | null
+  chapter_order: number
   level_name: string
   level_id: string
+  level_sort_order: number
   content_url: string | null
   canva_url: string | null
   slides_url: string | null
@@ -139,8 +141,9 @@ export default function TutorMateriPage() {
     // Get levels
     const { data: levels } = await supabase
       .from('levels')
-      .select('id, name')
+      .select('id, name, sort_order')
       .in('id', levelIds)
+      .order('sort_order')
 
     // Get units
     const { data: units } = await supabase
@@ -154,7 +157,7 @@ export default function TutorMateriPage() {
 
     // Get chapters
     const { data: chapters } = chapterIds.length > 0
-      ? await supabase.from('chapters').select('id, chapter_title').in('id', chapterIds)
+      ? await supabase.from('chapters').select('id, chapter_title, order_number').in('id', chapterIds).order('order_number')
       : { data: [] }
 
     // Get lessons
@@ -254,8 +257,10 @@ export default function TutorMateriPage() {
         unit_name: unit?.unit_name || '',
         unit_position: unit?.position || 0,
         chapter_title: chapter?.chapter_title || null,
+        chapter_order: (chapter as any)?.order_number || 0,
         level_name: level?.name || '',
         level_id: unit?.level_id || '',
+        level_sort_order: (level as any)?.sort_order || 0,
         content_url: (content as any)?.content_url || null,
         canva_url: (content as any)?.canva_url || null,
         slides_url: (content as any)?.slides_url || null,
@@ -361,11 +366,10 @@ export default function TutorMateriPage() {
   type ChapterGroup = { level: string; chapter: string | null; units: UnitGroup[] }
   const groups: ChapterGroup[] = []
 
-  // Sort: level → chapter → unit position → lesson position
+  // Sort: level sort_order → chapter order_number → unit position → lesson position
   const sorted = [...tabMaterials].sort((a, b) => {
-    if (a.level_name !== b.level_name) return a.level_name.localeCompare(b.level_name)
-    if ((a.chapter_title || '') !== (b.chapter_title || ''))
-      return (a.chapter_title || '').localeCompare(b.chapter_title || '')
+    if (a.level_sort_order !== b.level_sort_order) return a.level_sort_order - b.level_sort_order
+    if (a.chapter_order !== b.chapter_order) return a.chapter_order - b.chapter_order
     if (a.unit_position !== b.unit_position) return a.unit_position - b.unit_position
     return a.lesson_position - b.lesson_position
   })
@@ -579,12 +583,17 @@ export default function TutorMateriPage() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden rounded-b-2xl">
+            <div className="flex-1 overflow-hidden rounded-b-2xl relative">
               {embedModal.loading
                 ? <div className="flex items-center justify-center h-full">
                     <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5]" />
                   </div>
-                : <iframe src={embedModal.url} className="w-full h-full border-0" title={embedModal.title} allowFullScreen />}
+                : <>
+                    <iframe src={embedModal.url} className="w-full h-full border-0" title={embedModal.title} allowFullScreen />
+                    {/* ✅ Block Google pop-out button */}
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-transparent z-10"
+                      onClick={(e) => e.preventDefault()} />
+                  </>}
             </div>
           </div>
         </div>

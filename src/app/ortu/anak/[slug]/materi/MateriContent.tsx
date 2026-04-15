@@ -105,7 +105,26 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
   }
 
   // ✅ Buka PDF/Slides via signed URL
+  // ✅ Transform Google Drive URL ke preview mode (no toolbar, no download)
+  const toGDrivePreview = (url: string): string => {
+    // https://drive.google.com/file/d/xxx/view?usp=sharing → /preview
+    const match = url.match(/\/file\/d\/([^/]+)/)
+    if (match) return `https://drive.google.com/file/d/${match[1]}/preview`
+    return url
+  }
+
+  const isGDriveUrl = (url: string): boolean => {
+    return url.includes('drive.google.com/file/')
+  }
+
   const openPDF = async (pdfStoragePath: string, title: string) => {
+    // ✅ Google Drive URL → buka langsung di preview mode (no API call needed)
+    if (isGDriveUrl(pdfStoragePath)) {
+      const previewUrl = toGDrivePreview(pdfStoragePath)
+      setPdfModal({ open: true, url: previewUrl, title, loading: false, type: 'google', slideUrls: [] })
+      return
+    }
+
     setPdfModal({ open: true, url: '', title, loading: true, type: 'pdf', slideUrls: [] })
     try {
       const res = await fetch('/api/materials/pdf-url', {
@@ -501,13 +520,20 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-hidden rounded-b-2xl">
+          <div className="flex-1 overflow-hidden rounded-b-2xl relative">
             {pdfModal.loading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-10 h-10 animate-spin text-[#5C4FE5] mx-auto mb-3" />
               </div>
             ) : (
-              <iframe src={pdfModal.url} className="w-full h-full border-0" title={pdfModal.title} />
+              <>
+                <iframe src={pdfModal.url} className="w-full h-full border-0" title={pdfModal.title} sandbox="allow-scripts allow-same-origin" />
+                {/* ✅ Block Google pop-out "Lepas" button di pojok kanan atas */}
+                {pdfModal.type === 'google' && (
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-transparent z-10" style={{ pointerEvents: 'auto' }}
+                    onClick={(e) => e.preventDefault()} />
+                )}
+              </>
             )}
           </div>
         </div>
@@ -543,7 +569,7 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
           </div>
 
           {/* Modal Content */}
-          <div className="flex-1 overflow-hidden rounded-b-2xl">
+          <div className="flex-1 overflow-hidden rounded-b-2xl relative">
             {embedModal.loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
@@ -552,12 +578,17 @@ export default function MateriContent({ levelsData, studentName, studentSlug, un
                 </div>
               </div>
             ) : (
-              <iframe
-                src={embedModal.url}
-                className="w-full h-full border-0"
-                allow="autoplay"
-                title={embedModal.title}
-              />
+              <>
+                <iframe
+                  src={embedModal.url}
+                  className="w-full h-full border-0"
+                  allow="autoplay"
+                  title={embedModal.title}
+                />
+                {/* ✅ Block Google pop-out button */}
+                <div className="absolute top-0 right-0 w-16 h-16 bg-transparent z-10"
+                  onClick={(e) => e.preventDefault()} />
+              </>
             )}
           </div>
         </div>
