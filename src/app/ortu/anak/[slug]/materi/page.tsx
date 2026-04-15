@@ -139,6 +139,24 @@ export default async function MateriPage({
     .in('id', chapterIds)
     .order('order_number')
 
+  // ✅ Compute global position for each unit (level sort_order → chapter order_number → unit position)
+  const levelOrderMap: Record<string, number> = {}
+  levels?.forEach((l: any) => { levelOrderMap[l.id] = l.sort_order ?? 0 })
+  const chapterOrderMap: Record<string, number> = {}
+  chapters?.forEach((c: any) => { chapterOrderMap[c.id] = (levelOrderMap[c.level_id] ?? 0) * 1000 + (c.order_number ?? 0) })
+
+  const sortedUnitsGlobal = [...units].sort((a, b) => {
+    const la = levelOrderMap[a.level_id] ?? 0
+    const lb = levelOrderMap[b.level_id] ?? 0
+    if (la !== lb) return la - lb
+    const ca = a.chapter_id ? (chapterOrderMap[a.chapter_id] ?? 0) : 999
+    const cb = b.chapter_id ? (chapterOrderMap[b.chapter_id] ?? 0) : 999
+    if (ca !== cb) return ca - cb
+    return (a.position ?? 0) - (b.position ?? 0)
+  })
+  const globalPosMap: Record<string, number> = {}
+  sortedUnitsGlobal.forEach((u, idx) => { globalPosMap[u.id] = idx + 1 })
+
   // 7. Get all lessons for these units
   const unitIds = units.map(u => u.id)
   const { data: lessons } = await supabase
@@ -278,7 +296,7 @@ export default async function MateriPage({
         name: unit.unit_name,
         chapter_title: chapter?.chapter_title || null,
         chapter_order: chapter?.order_number || 0,
-        sort_order: unit.position,
+        sort_order: globalPosMap[unit.id] || unit.position,
         materials: unitMaterials
       }
     })

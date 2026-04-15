@@ -129,7 +129,7 @@ export default function KelasDetailPage() {
   const [classType,        setClassType]        = useState<string>('')
   const [classCurrentUnit, setClassCurrentUnit] = useState<number>(1)
   const [studentProgress,  setStudentProgress]  = useState<Record<string, number>>({})
-  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number; chapter_id: string | null; level_id: string}[]>([])
+  const [units,            setUnits]            = useState<{id: string; unit_name: string; position: number; globalPos: number; chapter_id: string | null; level_id: string}[]>([])
   const [chapters,         setChapters]         = useState<{id: string; chapter_title: string; order_number: number; level_id: string}[]>([])
   const [openChapters,     setOpenChapters]     = useState<Set<string>>(new Set())
   const [savingProgress,   setSavingProgress]   = useState(false)
@@ -237,7 +237,9 @@ export default function KelasDetailPage() {
         if (ca !== cb) return ca - cb
         return (a.position ?? 0) - (b.position ?? 0)
       })
-      setUnits(sorted)
+      // ✅ Add globalPos (1-based sequential index) — unique across all chapters
+      const withGlobalPos = sorted.map((u, idx) => ({ ...u, globalPos: idx + 1 }))
+      setUnits(withGlobalPos)
 
       // Fetch lessons untuk semua unit
       const unitIds = sorted.map(unit => unit.id)
@@ -370,9 +372,9 @@ export default function KelasDetailPage() {
   async function revertStudentTo(studentId: string, unitPos: number, lessonPos: number) {
     const currentUnit = studentProgress[studentId] ?? 1
     const currentLesson = studentLessonProgress[studentId] ?? 1
-    const unitName = units.find(u => u.position === unitPos)?.unit_name ?? `Unit ${unitPos}`
+    const unitName = units.find(u => u.globalPos === unitPos)?.unit_name ?? `Unit ${unitPos}`
     const lessonName = lessons.find(l => {
-      const u = units.find(u => u.position === unitPos)
+      const u = units.find(u => u.globalPos === unitPos)
       return u && l.unit_id === u.id && l.position === lessonPos
     })?.lesson_name ?? `Lesson ${lessonPos}`
     confirmAction(`Kembalikan progress ke "${unitName}" — ${lessonName}?`, async () => {
@@ -387,7 +389,7 @@ export default function KelasDetailPage() {
   }
 
   async function revertClassTo(unitPos: number, lessonPos: number) {
-    const unitName = units.find(u => u.position === unitPos)?.unit_name ?? `Unit ${unitPos}`
+    const unitName = units.find(u => u.globalPos === unitPos)?.unit_name ?? `Unit ${unitPos}`
     confirmAction(`Kembalikan progress kelas ke "${unitName}" — Lesson ${lessonPos}?`, async () => {
       setSavingProgress(true)
       await supabase.from('class_groups').update({ current_unit_position: unitPos, current_lesson_position: lessonPos }).eq('id', kelasId)
@@ -402,7 +404,7 @@ export default function KelasDetailPage() {
     const currentUnit = studentProgress[studentId] ?? 1
     const currentLesson = studentLessonProgress[studentId] ?? 1
     if (unitPos === currentUnit && lessonPos === currentLesson) return
-    const unitName = units.find(u => u.position === unitPos)?.unit_name ?? `Unit ${unitPos}`
+    const unitName = units.find(u => u.globalPos === unitPos)?.unit_name ?? `Unit ${unitPos}`
     confirmAction(`Pindahkan progress ke "${unitName}" — Lesson ${lessonPos}?`, async () => {
       setSavingProgress(true)
       await supabase.from('student_unit_progress')
@@ -995,8 +997,8 @@ export default function KelasDetailPage() {
                             {units.length > 0 && (() => {
                               const uPos = classType === 'Privat' ? (studentProgress[enr.student_id] ?? 1) : classCurrentUnit
                               const lPos = classType === 'Privat' ? (studentLessonProgress[enr.student_id] ?? 1) : classCurrentLesson
-                              const unitName = units.find(u => u.position === uPos)?.unit_name
-                              const activeUnit = units.find(u => u.position === uPos)
+                              const unitName = units.find(u => u.globalPos === uPos)?.unit_name
+                              const activeUnit = units.find(u => u.globalPos === uPos)
                               const lessonName = activeUnit ? lessons.find(l => l.unit_id === activeUnit.id && l.position === lPos)?.lesson_name : null
                               return unitName ? (
                                 <div className="text-[10px] text-[#7B78A8] mt-0.5">📖 {unitName}{lessonName ? ` — ${lessonName}` : ''}</div>
@@ -1267,9 +1269,9 @@ export default function KelasDetailPage() {
                 })
 
                 const renderUnit = (unit: typeof units[0]) => {
-                  const isDone   = unit.position < currentPos
-                  const isActive = unit.position === currentPos
-                  const isLocked = unit.position > currentPos
+                  const isDone   = unit.globalPos < currentPos
+                  const isActive = unit.globalPos === currentPos
+                  const isLocked = unit.globalPos > currentPos
                   const unitLessons = lessons.filter(l => l.unit_id === unit.id)
                   const isUnitOpen = openUnits.has(`${enr.student_id}_${unit.id}`)
                   const hasLessons = unitLessons.length > 0
@@ -1300,7 +1302,7 @@ export default function KelasDetailPage() {
                         <div className="flex items-center gap-2">
                           {isDone && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); revertStudentTo(enr.student_id, unit.position, 1) }}
+                              onClick={(e) => { e.stopPropagation(); revertStudentTo(enr.student_id, unit.globalPos, 1) }}
                               disabled={savingProgress}
                               className="text-[10px] px-2 py-0.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors font-semibold">
                               ↩ Kembali
@@ -1334,7 +1336,7 @@ export default function KelasDetailPage() {
                             const canRevert    = (isActive || isDone) && lessonDone
                             return (
                               <div key={lesson.id}
-                                onClick={() => canRevert && revertStudentTo(enr.student_id, unit.position, lesson.position)}
+                                onClick={() => canRevert && revertStudentTo(enr.student_id, unit.globalPos, lesson.position)}
                                 className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
                                 lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'} ${canRevert ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}`}>
                                 <div className="flex items-center gap-2">
@@ -1378,14 +1380,14 @@ export default function KelasDetailPage() {
                                   <div className="px-3 py-1.5 bg-[#F7F6FF] text-xs font-bold text-[#4A4580] sticky top-0">{u.unit_name}</div>
                                   {unitLessons.length > 0 ? unitLessons.map(l => (
                                     <button key={l.id}
-                                      onClick={() => jumpStudentTo(enr.student_id, u.position, l.position)}
-                                      className={`w-full text-left px-4 py-1.5 text-xs hover:bg-[#F0EFFF] transition-colors ${u.position === currentPos && l.position === currentLessonPos ? 'text-[#5C4FE5] font-bold bg-[#F0EFFF]' : 'text-[#1A1640]'}`}>
-                                      {l.lesson_name} {u.position === currentPos && l.position === currentLessonPos ? '← saat ini' : ''}
+                                      onClick={() => jumpStudentTo(enr.student_id, u.globalPos, l.position)}
+                                      className={`w-full text-left px-4 py-1.5 text-xs hover:bg-[#F0EFFF] transition-colors ${u.globalPos === currentPos && l.position === currentLessonPos ? 'text-[#5C4FE5] font-bold bg-[#F0EFFF]' : 'text-[#1A1640]'}`}>
+                                      {l.lesson_name} {u.globalPos === currentPos && l.position === currentLessonPos ? '← saat ini' : ''}
                                     </button>
                                   )) : (
                                     <button
-                                      onClick={() => jumpStudentTo(enr.student_id, u.position, 1)}
-                                      className={`w-full text-left px-4 py-1.5 text-xs hover:bg-[#F0EFFF] transition-colors ${u.position === currentPos ? 'text-[#5C4FE5] font-bold bg-[#F0EFFF]' : 'text-gray-400'}`}>
+                                      onClick={() => jumpStudentTo(enr.student_id, u.globalPos, 1)}
+                                      className={`w-full text-left px-4 py-1.5 text-xs hover:bg-[#F0EFFF] transition-colors ${u.globalPos === currentPos ? 'text-[#5C4FE5] font-bold bg-[#F0EFFF]' : 'text-gray-400'}`}>
                                       (tanpa lesson)
                                     </button>
                                   )}
@@ -1401,7 +1403,7 @@ export default function KelasDetailPage() {
                         const chapterUnits = chapterMap.get(chapter.id) ?? []
                         if (chapterUnits.length === 0) return null
                         const isChOpen = openChapters.has(chapter.id)
-                        const doneCh = chapterUnits.filter(u => u.position < currentPos).length
+                        const doneCh = chapterUnits.filter(u => u.globalPos < currentPos).length
 
                         return (
                           <div key={chapter.id} className="rounded-xl border border-[#E5E3FF] overflow-hidden">
@@ -1441,7 +1443,7 @@ export default function KelasDetailPage() {
                     if (!firstStudent) return null
                     const uPos = studentProgress[firstStudent.student_id] ?? 1
                     const lPos = studentLessonProgress[firstStudent.student_id] ?? 1
-                    const unitName = units.find(u => u.position === uPos)?.unit_name ?? `Unit ${uPos}`
+                    const unitName = units.find(u => u.globalPos === uPos)?.unit_name ?? `Unit ${uPos}`
                     return (
                       <button onClick={() => bulkSetProgress(uPos, lPos)} disabled={savingProgress}
                         className="text-[10px] px-3 py-1.5 bg-[#5C4FE5] text-white rounded-lg hover:bg-[#4a3ec7] disabled:opacity-40 font-bold">
@@ -1488,7 +1490,7 @@ export default function KelasDetailPage() {
                   const chapterUnits = units.filter(u => u.chapter_id === chapter.id)
                   if (chapterUnits.length === 0) return null
                   const isChOpen = openChapters.has(chapter.id)
-                  const doneCh = chapterUnits.filter(u => u.position < classCurrentUnit).length
+                  const doneCh = chapterUnits.filter(u => u.globalPos < classCurrentUnit).length
 
                   return (
                     <div key={chapter.id} className="rounded-xl border border-[#E5E3FF] overflow-hidden">
@@ -1512,9 +1514,9 @@ export default function KelasDetailPage() {
                       {isChOpen && (
                         <div className="p-2 space-y-1.5">
                           {chapterUnits.map(unit => {
-                            const isDone   = unit.position < classCurrentUnit
-                            const isActive = unit.position === classCurrentUnit
-                            const isLocked = unit.position > classCurrentUnit
+                            const isDone   = unit.globalPos < classCurrentUnit
+                            const isActive = unit.globalPos === classCurrentUnit
+                            const isLocked = unit.globalPos > classCurrentUnit
                             const unitLessons = lessons.filter(l => l.unit_id === unit.id)
                             const hasLessons = unitLessons.length > 0
                             const isUnitOpen = openUnits.has(`class_${unit.id}`)
@@ -1557,7 +1559,7 @@ export default function KelasDetailPage() {
                                       const canRevert    = (isActive || isDone) && lessonDone
                                       return (
                                         <div key={lesson.id}
-                                          onClick={() => canRevert && revertClassTo(unit.position, lesson.position)}
+                                          onClick={() => canRevert && revertClassTo(unit.globalPos, lesson.position)}
                                           className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
                                           lessonDone ? 'bg-green-50 text-[#1A1640]' : lessonActive ? 'bg-[#F0EFFF] text-[#1A1640] border border-[#5C4FE5]' : 'bg-gray-50 text-gray-400'} ${canRevert ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}`}>
                                           <div className="flex items-center gap-2">
@@ -1589,14 +1591,14 @@ export default function KelasDetailPage() {
 
                 {/* Fallback: units tanpa chapter */}
                 {units.filter(u => !u.chapter_id).map(unit => {
-                  const isDone   = unit.position < classCurrentUnit
-                  const isActive = unit.position === classCurrentUnit
+                  const isDone   = unit.globalPos < classCurrentUnit
+                  const isActive = unit.globalPos === classCurrentUnit
                   return (
-                    <div key={unit.id} onClick={() => { setClassCurrentUnit(unit.position); setClassCurrentLesson(1) }}
+                    <div key={unit.id} onClick={() => { setClassCurrentUnit(unit.globalPos); setClassCurrentLesson(1) }}
                       className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isDone ? 'bg-green-50 border-green-200' : isActive ? 'bg-purple-50 border-[#5C4FE5]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-2">
                         <span>{isDone ? '✅' : isActive ? '📖' : '🔒'}</span>
-                        <span className={`text-sm font-medium ${unit.position > classCurrentUnit ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
+                        <span className={`text-sm font-medium ${unit.globalPos > classCurrentUnit ? 'text-gray-400' : 'text-[#1A1640]'}`}>{unit.unit_name}</span>
                       </div>
                       {isActive && <span className="text-xs font-bold text-[#5C4FE5] bg-purple-100 px-2 py-0.5 rounded-full">Aktif</span>}
                     </div>
