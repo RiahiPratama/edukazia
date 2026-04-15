@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SesiHariIniClient from './SesiHariIniClient'
 import AnnouncementFetcher from '@/components/AnnouncementFetcher'
-import { CalendarDays, BookOpen, Users, Coins, ClipboardList, FileText } from 'lucide-react'
+import { CalendarDays, BookOpen, Users, Coins, ClipboardList, FileText, AlertTriangle } from 'lucide-react'
 
 function fmtTanggal() {
   return new Date().toLocaleDateString('id-ID', {
@@ -36,7 +36,6 @@ export default async function TutorDashboardPage() {
     .from('tutors').select('id').eq('profile_id', user.id).single()
 
   if (!tutor) redirect('/login')
-
   const tutorId = tutor.id
 
   // Kelas aktif
@@ -46,11 +45,10 @@ export default async function TutorDashboardPage() {
     .eq('tutor_id', tutorId)
     .eq('status', 'active')
 
-  const totalKelas  = kelasAktif?.length ?? 0
-  const totalSiswa  = (kelasAktif ?? []).reduce((acc, k) =>
+  const totalKelas = kelasAktif?.length ?? 0
+  const totalSiswa = (kelasAktif ?? []).reduce((acc, k) =>
     acc + (k.enrollments?.filter((e: any) => e.status === 'active').length ?? 0), 0)
 
-  // Gunakan noon WIT agar .getDay() tidak salah akibat UTC day boundary
   const todayWITStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const [y, m, d]   = todayWITStr.split('-').map(Number)
   const rawDay      = new Date(Date.UTC(y, m - 1, d, 3, 0, 0)).getUTCDay()
@@ -75,7 +73,6 @@ export default async function TutorDashboardPage() {
     .eq('tutor_id', tutorId)
     .gte('created_at', firstOfMonth)
     .eq('status', 'paid')
-
   const totalHonor = (honorBulanIni ?? []).reduce((a, h) => a + h.total, 0)
 
   function formatRp(n: number) {
@@ -84,9 +81,7 @@ export default async function TutorDashboardPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
   }
 
-  // Sesi hari ini WIT — range UTC yang tepat
-  // FIX: pakai offset +09:00 eksplisit — setDate() memakai timezone server (UTC)
-  const todayWIT = todayWITStr
+  // Sesi hari ini WIT
   const startUtc = `${todayWITStr}T00:00:00+09:00`
   const endUtc   = `${todayWITStr}T23:59:59+09:00`
 
@@ -101,10 +96,10 @@ export default async function TutorDashboardPage() {
     : { data: [] }
 
   // Sesi besok WIT
-  const tomorrowObj = new Date(todayWIT + 'T00:00:00+09:00')
+  const tomorrowObj = new Date(todayWITStr + 'T00:00:00+09:00')
   tomorrowObj.setDate(tomorrowObj.getDate() + 1)
   const tomorrowDate  = tomorrowObj.toLocaleDateString('en-CA')
-  const tomorrowStart = `${todayWIT}T15:00:00+00:00`
+  const tomorrowStart = `${todayWITStr}T15:00:00+00:00`
   const tomorrowEnd   = `${tomorrowDate}T14:59:59+00:00`
 
   const { data: sesiBesok } = cgIds.length > 0
@@ -116,6 +111,39 @@ export default async function TutorDashboardPage() {
         .lte('scheduled_at', tomorrowEnd)
         .order('scheduled_at')
     : { data: [] }
+
+  // ── Absensi yang belum diisi (3 hari terakhir) ──
+  // Sesi completed tapi tidak ada satupun record di tabel attendances
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400 * 1000).toISOString()
+  let absensiMissingSessions: { id: string; scheduled_at: string; kelasLabel: string }[] = []
+
+  if (cgIds.length > 0) {
+    const { data: recentCompleted } = await supabase
+      .from('sessions')
+      .select('id, scheduled_at, class_group_id, class_groups(label)')
+      .in('class_group_id', cgIds)
+      .eq('status', 'completed')
+      .gte('scheduled_at', threeDaysAgo)
+      .order('scheduled_at', { ascending: false })
+
+    const completedIds = (recentCompleted ?? []).map((s: any) => s.id)
+
+    if (completedIds.length > 0) {
+      const { data: existingAbs } = await supabase
+        .from('attendances')
+        .select('session_id')
+        .in('session_id', completedIds)
+
+      const hasAbsensi = new Set((existingAbs ?? []).map((a: any) => a.session_id))
+      absensiMissingSessions = (recentCompleted ?? [])
+        .filter((s: any) => !hasAbsensi.has(s.id))
+        .map((s: any) => ({
+          id: s.id,
+          scheduled_at: s.scheduled_at,
+          kelasLabel: (s.class_groups as any)?.label ?? '—',
+        }))
+    }
+  }
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Tutor'
 
@@ -131,6 +159,43 @@ export default async function TutorDashboardPage() {
         </h1>
         <p className="text-sm text-[#7B78A8] mt-1">{fmtTanggal()}</p>
       </div>
+
+      {/* ── ALERT: Absensi belum diisi ── */}
+      {absensiMissingSessions.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={16} className="text-amber-600"/>
+            </div>
+            <div>
+              <p className="font-bold text-amber-800 text-sm">
+                {absensiMissingSessions.length} sesi belum ada absensi
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">Segera isi agar progress siswa tercatat dengan benar</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {absensiMissingSessions.map(s => (
+              <a key={s.id} href="/tutor/absensi"
+                className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-100 hover:border-amber-300 transition-colors">
+                <div>
+                  <div className="text-sm font-semibold text-[#1A1640]">{s.kelasLabel}</div>
+                  <div className="text-xs text-amber-600 mt-0.5">
+                    {new Date(s.scheduled_at).toLocaleDateString('id-ID', {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                      hour: '2-digit', minute: '2-digit',
+                      timeZone: 'Asia/Jayapura',
+                    })}
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full flex-shrink-0">
+                  Isi Absensi →
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -178,16 +243,21 @@ export default async function TutorDashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[
-          { href: '/tutor/absensi',  label: 'Absensi',       icon: <ClipboardList size={20} strokeWidth={2}/>, bg: '#EEEDFE', color: '#5C4FE5' },
-          { href: '/tutor/jadwal',   label: 'Jadwal',        icon: <CalendarDays  size={20} strokeWidth={2}/>, bg: '#E1F5EE', color: '#1D9E75' },
-          { href: '/tutor/laporan',  label: 'Laporan Siswa', icon: <FileText      size={20} strokeWidth={2}/>, bg: '#E6F1FB', color: '#185FA5' },
-          { href: '/tutor/kelas',    label: 'Kelas & Siswa', icon: <BookOpen      size={20} strokeWidth={2}/>, bg: '#FAEEDA', color: '#BA7517' },
+          { href: '/tutor/absensi',  label: 'Absensi',       icon: <ClipboardList size={20} strokeWidth={2}/>, bg: '#EEEDFE', color: '#5C4FE5', badge: absensiMissingSessions.length },
+          { href: '/tutor/jadwal',   label: 'Jadwal',        icon: <CalendarDays  size={20} strokeWidth={2}/>, bg: '#E1F5EE', color: '#1D9E75', badge: 0 },
+          { href: '/tutor/laporan',  label: 'Laporan Siswa', icon: <FileText      size={20} strokeWidth={2}/>, bg: '#E6F1FB', color: '#185FA5', badge: 0 },
+          { href: '/tutor/kelas',    label: 'Kelas & Siswa', icon: <BookOpen      size={20} strokeWidth={2}/>, bg: '#FAEEDA', color: '#BA7517', badge: 0 },
         ].map((a, i) => (
           <a key={i} href={a.href}
-            className="bg-white rounded-2xl border border-[#E5E3FF] p-4 flex flex-col items-center gap-2 hover:border-[#5C4FE5] hover:bg-[#F7F6FF] transition-all group">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors"
+            className="relative bg-white rounded-2xl border border-[#E5E3FF] p-4 flex flex-col items-center gap-2 hover:border-[#5C4FE5] hover:bg-[#F7F6FF] transition-all group">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors relative"
               style={{ background: a.bg, color: a.color }}>
               {a.icon}
+              {a.badge > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                  {a.badge}
+                </span>
+              )}
             </div>
             <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5] text-center leading-tight transition-colors">
               {a.label}

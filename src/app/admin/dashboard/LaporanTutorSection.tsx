@@ -2,12 +2,20 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ClipboardList, FileText, MessageCircle, Send } from 'lucide-react'
+import { ClipboardList, FileText, Send, AlertTriangle } from 'lucide-react'
 
 interface BelumDiisiItem {
   sessionId: string
   studentId: string
   studentName: string
+  kelasLabel: string
+  tutorName: string
+  tutorPhone: string
+  scheduledAt: string
+}
+
+interface AbsensiMissingItem {
+  sessionId: string
   kelasLabel: string
   tutorName: string
   tutorPhone: string
@@ -25,16 +33,19 @@ function fmtDateTime(iso: string) {
 export default function LaporanTutorSection({
   laporanBelumDiisi,
   laporanTerbaru,
+  absensiMissing = [],
 }: {
   laporanBelumDiisi: BelumDiisiItem[]
   laporanTerbaru: any[]
+  absensiMissing?: AbsensiMissingItem[]
 }) {
+  const [activeTab, setActiveTab] = useState<'laporan' | 'absensi'>('laporan')
   const [sendingWA, setSendingWA] = useState<Record<string, 'loading' | 'sent' | 'failed'>>({})
 
+  // WA reminder untuk laporan (existing)
   async function sendReminder(item: BelumDiisiItem) {
-    const key = `${item.sessionId}-${item.studentId}`
+    const key = `laporan-${item.sessionId}-${item.studentId}`
     setSendingWA(prev => ({ ...prev, [key]: 'loading' }))
-
     const firstName = item.tutorName.split(' ')[0]
     const tgl = new Date(item.scheduledAt).toLocaleDateString('id-ID', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura',
@@ -42,16 +53,13 @@ export default function LaporanTutorSection({
     const jam = new Date(item.scheduledAt).toLocaleTimeString('id-ID', {
       hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
     })
-
     const message = `📝 *Reminder Laporan Belajar*\n\nHalo Kak ${firstName} 👋\n\nLaporan belajar untuk kelas\n*${item.kelasLabel}*\npada ${tgl}, pukul ${jam} WIT\nbelum diisi.\n\nMohon segera dilengkapi\ndi portal ya 🙏\n\n🔗 app.edukazia.com/tutor/laporan\n\n\nTerima kasih!`
-
     try {
       const res = await fetch('/api/wa/remind-tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: item.tutorPhone,
-          message,
+          phone: item.tutorPhone, message,
           type: 'wa_remind_tutor_laporan',
           context: { tutorName: item.tutorName, kelasLabel: item.kelasLabel, studentName: item.studentName },
         }),
@@ -63,8 +71,41 @@ export default function LaporanTutorSection({
     }
   }
 
+  // WA reminder untuk absensi (new)
+  async function sendAbsensiReminder(item: AbsensiMissingItem) {
+    const key = `absensi-${item.sessionId}`
+    setSendingWA(prev => ({ ...prev, [key]: 'loading' }))
+    const firstName = item.tutorName.split(' ')[0]
+    const tgl = new Date(item.scheduledAt).toLocaleDateString('id-ID', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jayapura',
+    })
+    const jam = new Date(item.scheduledAt).toLocaleTimeString('id-ID', {
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura',
+    })
+    const message = `📋 *Reminder Absensi Siswa*\n\nHalo Kak ${firstName} 👋\n\nAbsensi siswa untuk kelas\n*${item.kelasLabel}*\npada ${tgl}, pukul ${jam} WIT\nbelum diisi.\n\nMohon segera dilengkapi\ndi portal ya 🙏\n\n🔗 app.edukazia.com/tutor/absensi\n\n\nTerima kasih!`
+    try {
+      const res = await fetch('/api/wa/remind-tutor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: item.tutorPhone, message,
+          type: 'wa_remind_tutor_absensi',
+          context: { tutorName: item.tutorName, kelasLabel: item.kelasLabel },
+        }),
+      })
+      const data = await res.json()
+      setSendingWA(prev => ({ ...prev, [key]: data.sent ? 'sent' : 'failed' }))
+    } catch {
+      setSendingWA(prev => ({ ...prev, [key]: 'failed' }))
+    }
+  }
+
+  const laporanBadge  = laporanBelumDiisi.length
+  const absensiBadge  = absensiMissing.length
+
   return (
     <div className="bg-white rounded-2xl border border-[#E5E3FF] p-5">
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-bold text-[#1A1640]">Laporan Tutor</h2>
         <Link href="/admin/laporan" className="text-xs text-[#5C4FE5] font-semibold hover:underline">
@@ -72,113 +113,198 @@ export default function LaporanTutorSection({
         </Link>
       </div>
 
-      {/* Summary */}
-      <div className="flex gap-2 mb-4">
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
-          {laporanTerbaru.length > 0 ? `${laporanTerbaru.length}+ sudah diisi` : '0 diisi'}
-        </span>
-        {laporanBelumDiisi.length > 0 && (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 animate-pulse">
-            {laporanBelumDiisi.length} belum diisi!
-          </span>
-        )}
+      {/* Tabs */}
+      <div className="flex gap-1 bg-[#F7F6FF] p-1 rounded-xl mb-4 border border-[#E5E3FF]">
+        <button
+          onClick={() => setActiveTab('laporan')}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'laporan' ? 'bg-white text-[#5C4FE5] shadow-sm' : 'text-[#7B78A8] hover:text-[#5C4FE5]'
+          }`}>
+          📝 Laporan
+          {laporanBadge > 0 && (
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${activeTab === 'laporan' ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-500'}`}>
+              {laporanBadge}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('absensi')}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'absensi' ? 'bg-white text-amber-600 shadow-sm' : 'text-[#7B78A8] hover:text-amber-600'
+          }`}>
+          <AlertTriangle size={11}/> Absensi
+          {absensiBadge > 0 && (
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${activeTab === 'absensi' ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-amber-600'}`}>
+              {absensiBadge}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Belum diisi */}
-      {laporanBelumDiisi.length > 0 && (
-        <div className="mb-4">
-          <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-2">Belum Diisi</p>
-          <div className="space-y-2">
-            {laporanBelumDiisi.slice(0, 5).map((item) => {
-              const key = `${item.sessionId}-${item.studentId}`
-              const waState = sendingWA[key]
-              return (
-                <div key={key} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-red-50/50 border border-red-100">
-                  <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-bold text-red-600 flex-shrink-0 mt-0.5">
-                    {item.tutorName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-[#1A1640] truncate">
-                      {item.kelasLabel} · {item.studentName}
-                    </div>
-                    <div className="text-[10px] text-[#7B78A8]">
-                      Tutor: {item.tutorName} · {fmtDateTime(item.scheduledAt)}
-                    </div>
-                  </div>
-                  {item.tutorPhone && (
-                    waState === 'sent' ? (
-                      <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex-shrink-0">Terkirim ✓</span>
-                    ) : waState === 'failed' ? (
-                      <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg flex-shrink-0">Gagal</span>
-                    ) : waState === 'loading' ? (
-                      <span className="text-[10px] text-[#7B78A8] flex-shrink-0">Mengirim...</span>
-                    ) : (
-                      <button
-                        onClick={() => sendReminder(item)}
-                        className="flex items-center gap-1 text-[10px] px-2 py-1 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition-colors flex-shrink-0">
-                        <Send size={10}/> WA
-                      </button>
-                    )
-                  )}
-                </div>
-              )
-            })}
+      {/* ══ TAB: LAPORAN ══ */}
+      {activeTab === 'laporan' && (
+        <>
+          {/* Summary */}
+          <div className="flex gap-2 mb-4">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+              {laporanTerbaru.length > 0 ? `${laporanTerbaru.length}+ sudah diisi` : '0 diisi'}
+            </span>
+            {laporanBelumDiisi.length > 0 && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 animate-pulse">
+                {laporanBelumDiisi.length} belum diisi!
+              </span>
+            )}
           </div>
-        </div>
+
+          {/* Belum diisi */}
+          {laporanBelumDiisi.length > 0 && (
+            <div className="mb-4">
+              <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-2">Belum Diisi</p>
+              <div className="space-y-2">
+                {laporanBelumDiisi.slice(0, 5).map(item => {
+                  const key = `laporan-${item.sessionId}-${item.studentId}`
+                  const waState = sendingWA[key]
+                  return (
+                    <div key={key} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-red-50/50 border border-red-100">
+                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-bold text-red-600 flex-shrink-0 mt-0.5">
+                        {item.tutorName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-[#1A1640] truncate">
+                          {item.kelasLabel} · {item.studentName}
+                        </div>
+                        <div className="text-[10px] text-[#7B78A8]">
+                          Tutor: {item.tutorName} · {fmtDateTime(item.scheduledAt)}
+                        </div>
+                      </div>
+                      {item.tutorPhone && (
+                        waState === 'sent' ? (
+                          <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex-shrink-0">Terkirim ✓</span>
+                        ) : waState === 'failed' ? (
+                          <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg flex-shrink-0">Gagal</span>
+                        ) : waState === 'loading' ? (
+                          <span className="text-[10px] text-[#7B78A8] flex-shrink-0">Mengirim...</span>
+                        ) : (
+                          <button onClick={() => sendReminder(item)}
+                            className="flex items-center gap-1 text-[10px] px-2 py-1 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition-colors flex-shrink-0">
+                            <Send size={10}/> WA
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Laporan terbaru */}
+          {!laporanTerbaru || laporanTerbaru.length === 0 ? (
+            laporanBelumDiisi.length === 0 && (
+              <div className="text-center py-6 text-[#7B78A8] text-sm">
+                <ClipboardList size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
+                Belum ada laporan
+              </div>
+            )
+          ) : (
+            <div>
+              <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-2">Terbaru</p>
+              <div className="space-y-3">
+                {laporanTerbaru.map((lap: any) => {
+                  const tutor = Array.isArray(lap.tutors) ? lap.tutors[0] : lap.tutors
+                  const sesi  = Array.isArray(lap.sessions) ? lap.sessions[0] : lap.sessions
+                  const cg    = Array.isArray(sesi?.class_groups) ? sesi?.class_groups[0] : sesi?.class_groups
+                  const tutorName  = tutor?.profiles?.full_name ?? '—'
+                  const kelasLabel = cg?.label ?? '—'
+                  const courseName = cg?.courses?.name ?? ''
+                  return (
+                    <div key={lap.id} className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#F0EFFF] flex items-center justify-center text-xs font-bold text-[#5C4FE5] flex-shrink-0 mt-0.5">
+                        {tutorName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-[#1A1640] truncate">{tutorName}</div>
+                        <div className="text-xs text-[#7B78A8] truncate">
+                          {kelasLabel}{courseName ? ` · ${courseName}` : ''}
+                        </div>
+                        <div className="text-[10px] text-[#A09EC0] mt-0.5">{fmtDateTime(lap.confirmed_at)}</div>
+                        {lap.material_notes && (
+                          <div className="text-[10px] text-[#7B78A8] mt-1 line-clamp-2 leading-relaxed bg-[#F7F6FF] rounded-lg px-2 py-1">
+                            {lap.material_notes}
+                          </div>
+                        )}
+                      </div>
+                      <Link href="/admin/laporan" className="flex-shrink-0 text-[#C4BFFF] hover:text-[#5C4FE5] transition-colors mt-0.5">
+                        <FileText size={13}/>
+                      </Link>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Laporan terbaru */}
-      {!laporanTerbaru || laporanTerbaru.length === 0 ? (
-        laporanBelumDiisi.length === 0 && (
-          <div className="text-center py-6 text-[#7B78A8] text-sm">
-            <ClipboardList size={32} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
-            Belum ada laporan
-          </div>
-        )
-      ) : (
-        <div>
-          <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-2">Terbaru</p>
-          <div className="space-y-3">
-            {laporanTerbaru.map((lap: any) => {
-              const tutor = Array.isArray(lap.tutors) ? lap.tutors[0] : lap.tutors
-              const sesi  = Array.isArray(lap.sessions) ? lap.sessions[0] : lap.sessions
-              const cg    = Array.isArray(sesi?.class_groups) ? sesi?.class_groups[0] : sesi?.class_groups
-              const tutorName = tutor?.profiles?.full_name ?? '—'
-              const kelasLabel = cg?.label ?? '—'
-              const courseName = cg?.courses?.name ?? ''
-              return (
-                <div key={lap.id} className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[#F0EFFF] flex items-center justify-center text-xs font-bold text-[#5C4FE5] flex-shrink-0 mt-0.5">
-                    {tutorName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-[#1A1640] truncate">
-                      {tutorName}
-                    </div>
-                    <div className="text-xs text-[#7B78A8] truncate">
-                      {kelasLabel}{courseName ? ` · ${courseName}` : ''}
-                    </div>
-                    <div className="text-[10px] text-[#A09EC0] mt-0.5">
-                      {fmtDateTime(lap.confirmed_at)}
-                    </div>
-                    {lap.material_notes && (
-                      <div className="text-[10px] text-[#7B78A8] mt-1 line-clamp-2 leading-relaxed bg-[#F7F6FF] rounded-lg px-2 py-1">
-                        {lap.material_notes}
+      {/* ══ TAB: ABSENSI ══ */}
+      {activeTab === 'absensi' && (
+        <>
+          {absensiMissing.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-3xl mb-2">✅</div>
+              <p className="text-sm font-semibold text-[#1A1640]">Semua absensi sudah diisi</p>
+              <p className="text-xs text-[#7B78A8] mt-1">7 hari terakhir bersih</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-2">
+                Belum Diabsen — {absensiMissing.length} sesi
+              </p>
+              <div className="space-y-2">
+                {absensiMissing.slice(0, 7).map(item => {
+                  const key = `absensi-${item.sessionId}`
+                  const waState = sendingWA[key]
+                  return (
+                    <div key={key} className="flex items-start gap-2.5 px-3 py-2 rounded-xl bg-amber-50/60 border border-amber-100">
+                      <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <AlertTriangle size={11} className="text-amber-600"/>
                       </div>
-                    )}
-                  </div>
-                  <Link
-                    href="/admin/laporan"
-                    className="flex-shrink-0 text-[#C4BFFF] hover:text-[#5C4FE5] transition-colors mt-0.5"
-                  >
-                    <FileText size={13}/>
-                  </Link>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-[#1A1640] truncate">
+                          {item.kelasLabel}
+                        </div>
+                        <div className="text-[10px] text-[#7B78A8]">
+                          Tutor: {item.tutorName} · {fmtDateTime(item.scheduledAt)}
+                        </div>
+                      </div>
+                      {item.tutorPhone && (
+                        waState === 'sent' ? (
+                          <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex-shrink-0">Terkirim ✓</span>
+                        ) : waState === 'failed' ? (
+                          <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-lg flex-shrink-0">Gagal</span>
+                        ) : waState === 'loading' ? (
+                          <span className="text-[10px] text-[#7B78A8] flex-shrink-0">Mengirim...</span>
+                        ) : (
+                          <button onClick={() => sendAbsensiReminder(item)}
+                            className="flex items-center gap-1 text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded-lg font-semibold hover:bg-amber-200 transition-colors flex-shrink-0">
+                            <Send size={10}/> WA
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )
+                })}
+                {absensiMissing.length > 7 && (
+                  <p className="text-[10px] text-[#7B78A8] text-center pt-1">
+                    +{absensiMissing.length - 7} sesi lainnya — cek Tab Jadwal di tiap kelas
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
+
       <Link href="/admin/laporan"
         className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#E5E3FF] text-sm text-[#7B78A8] hover:border-[#5C4FE5] hover:text-[#5C4FE5] transition-colors font-semibold">
         <ClipboardList size={14}/>

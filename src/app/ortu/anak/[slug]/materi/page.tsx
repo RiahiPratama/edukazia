@@ -9,11 +9,9 @@ export default async function MateriPage({
 }: { 
   params: Promise<{ slug: string }> 
 }) {
-  // Next.js 15: params is now a Promise
   const { slug } = await params
   const supabase = await createClient()
 
-  // Get authenticated user
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) notFound()
 
@@ -22,21 +20,17 @@ export default async function MateriPage({
     .from('students')
     .select('id, profile_id')
     .eq('slug', slug)
-
-  if (!students || students.length === 0) {
-    notFound()
-  }
-
+  if (!students || students.length === 0) notFound()
   const student = students[0]
 
-  // 2. Get student's profile name
+  // 2. Student profile
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name')
     .eq('id', student.profile_id)
     .single()
 
-  // 3. Get ALL student's active enrollments
+  // 3. Active enrollments
   const { data: enrollments } = await supabase
     .from('enrollments')
     .select('id, level_id, class_group_id')
@@ -48,45 +42,31 @@ export default async function MateriPage({
       <div className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600">
-              Hubungi admin untuk mengatur level pembelajaran kamu.
-            </p>
+            <p className="text-lg text-gray-600">Hubungi admin untuk mengatur level pembelajaran kamu.</p>
           </div>
         </div>
       </div>
     )
   }
 
-  // 4. Get level IDs dari 3 sumber berbeda
-  const enrollmentIds = enrollments.map(e => e.id)
-  const classGroupIds = enrollments.map(e => e.class_group_id).filter(Boolean)
+  // 4. Collect level IDs from 3 sources
+  const enrollmentIds    = enrollments.map(e => e.id)
+  const classGroupIds    = enrollments.map(e => e.class_group_id).filter(Boolean)
+  const levelIdsFromEnr  = enrollments.map(e => e.level_id).filter((id): id is string => !!id)
 
-  // Sumber 1: langsung dari enrollments.level_id (sistem lama)
-  const levelIdsFromEnrollments = enrollments
-    .map(e => e.level_id)
-    .filter((id): id is string => !!id)
-
-  // Sumber 2: dari enrollment_levels junction table
   const { data: enrollmentLevels } = await supabase
     .from('enrollment_levels')
     .select('level_id')
     .in('enrollment_id', enrollmentIds)
   const levelIdsFromJunction = enrollmentLevels?.map(el => el.level_id) || []
 
-  // ✅ Sumber 3: dari class_group_levels (untuk enrollment yang level_id-nya null)
   const { data: classGroupLevels } = classGroupIds.length > 0
-    ? await supabase
-        .from('class_group_levels')
-        .select('level_id')
-        .in('class_group_id', classGroupIds)
+    ? await supabase.from('class_group_levels').select('level_id').in('class_group_id', classGroupIds)
     : { data: [] }
   const levelIdsFromClassGroups = classGroupLevels?.map(cgl => cgl.level_id) || []
 
-  // Gabungkan semua sumber level_id
   const levelIds = Array.from(new Set([
-    ...levelIdsFromEnrollments,
-    ...levelIdsFromJunction,
-    ...levelIdsFromClassGroups,
+    ...levelIdsFromEnr, ...levelIdsFromJunction, ...levelIdsFromClassGroups,
   ].filter(Boolean)))
 
   if (levelIds.length === 0) {
@@ -94,23 +74,21 @@ export default async function MateriPage({
       <div className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600">
-              Level pembelajaran tidak ditemukan.
-            </p>
+            <p className="text-lg text-gray-600">Level pembelajaran tidak ditemukan.</p>
           </div>
         </div>
       </div>
     )
   }
 
-  // 5. Get levels with courses
+  // 5. Levels with courses
   const { data: levels } = await supabase
     .from('levels')
     .select('id, name, sort_order, course_id, courses:course_id(id, name)')
     .in('id', levelIds)
     .order('sort_order')
 
-  // 6. Get all units for ALL enrolled levels
+  // 6. Units (with chapter_id and position)
   const { data: units } = await supabase
     .from('units')
     .select('id, unit_name, position, level_id, chapter_id')
@@ -122,16 +100,14 @@ export default async function MateriPage({
       <div className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white border-2 border-[#E5E3FF] rounded-xl p-8 text-center">
-            <p className="text-lg text-gray-600">
-              Materi pembelajaran belum tersedia.
-            </p>
+            <p className="text-lg text-gray-600">Materi pembelajaran belum tersedia.</p>
           </div>
         </div>
       </div>
     )
   }
 
-  // 6. Get chapters for context
+  // 7. Chapters
   const chapterIds = units.map(u => u.chapter_id).filter((id): id is string => !!id)
   const { data: chapters } = await supabase
     .from('chapters')
@@ -139,7 +115,7 @@ export default async function MateriPage({
     .in('id', chapterIds)
     .order('order_number')
 
-  // ✅ Compute global position for each unit (level sort_order → chapter order_number → unit position)
+  // 8. Compute global position (for sort_order, backward compat)
   const levelOrderMap: Record<string, number> = {}
   levels?.forEach((l: any) => { levelOrderMap[l.id] = l.sort_order ?? 0 })
   const chapterOrderMap: Record<string, number> = {}
@@ -157,7 +133,7 @@ export default async function MateriPage({
   const globalPosMap: Record<string, number> = {}
   sortedUnitsGlobal.forEach((u, idx) => { globalPosMap[u.id] = idx + 1 })
 
-  // 7. Get all lessons for these units
+  // 9. Lessons
   const unitIds = units.map(u => u.id)
   const { data: lessons } = await supabase
     .from('lessons')
@@ -165,7 +141,7 @@ export default async function MateriPage({
     .in('unit_id', unitIds)
     .order('position')
 
-  // 8. Get all materials for these lessons
+  // 10. Materials (published only)
   const lessonIds = lessons?.map(l => l.id) || []
   const { data: materials } = await supabase
     .from('materials')
@@ -174,85 +150,75 @@ export default async function MateriPage({
     .eq('is_published', true)
     .order('position')
 
-  // 9. Get material contents for all materials
+  // 11. Material contents
   const materialIds = materials?.map(m => m.id) || []
   const { data: materialContents } = await supabase
     .from('material_contents')
     .select('material_id, content_url, storage_path, student_content_url, canva_url, slides_url')
     .in('material_id', materialIds)
 
-  // 10. Get student's material progress (tabel mungkin belum ada)
+  // 12. Material progress
   let progress: { material_id: string; completed_at: string }[] = []
   try {
     const { data: progressData, error: progressError } = await supabase
       .from('material_progress')
       .select('material_id, completed_at')
       .eq('student_id', student.id)
-    if (!progressError && progressData) {
-      progress = progressData
-    }
-  } catch (e) {
-    // tabel belum ada, progress kosong
-  }
+    if (!progressError && progressData) progress = progressData
+  } catch (e) { /* table may not exist yet */ }
 
-  // 11. Unit Lock: fetch student_unit_progress (Privat) + class_groups (Grup)
-  const unitLockMap: Record<string, number> = {}
-  const lessonLockMap: Record<string, number> = {}
+  // ────────────────────────────────────────────────
+  // 13. Chapter Lock Map (NEW — replaces unitLockMap)
+  // chapterLockMap[chapter_id] = { unit: N, lesson: M }
+  // N = position within chapter that is currently active (i.e., unlocked up to N)
+  // Default: undefined → all unlocked (999)
+  // ────────────────────────────────────────────────
+  const chapterLockMap: Record<string, { unit: number; lesson: number }> = {}
 
-  // Privat: dari student_unit_progress
-  const { data: studentProgress } = await supabase
-    .from('student_unit_progress')
-    .select('class_group_id, current_unit_position, current_lesson_position')
+  // Source A: student_chapter_progress (Privat)
+  const { data: studentChProg } = await supabase
+    .from('student_chapter_progress')
+    .select('chapter_id, current_unit_position, current_lesson_position, class_group_id')
     .eq('student_id', student.id)
+    .in('class_group_id', classGroupIds.length > 0 ? classGroupIds : ['00000000-0000-0000-0000-000000000000'])
 
-  // Map class_group → level via class_group_levels
-  if (studentProgress && studentProgress.length > 0) {
-    const spClassGroupIds = studentProgress.map(sp => sp.class_group_id)
-    const { data: spCgl } = await supabase
-      .from('class_group_levels')
-      .select('class_group_id, level_id')
-      .in('class_group_id', spClassGroupIds)
-    spCgl?.forEach((c: any) => {
-      const sp = studentProgress.find(s => s.class_group_id === c.class_group_id)
-      if (sp) {
-        unitLockMap[c.level_id] = Math.max(unitLockMap[c.level_id] ?? 0, sp.current_unit_position)
-        lessonLockMap[c.level_id] = Math.max(lessonLockMap[c.level_id] ?? 0, sp.current_lesson_position ?? 999)
+  studentChProg?.forEach((sp: any) => {
+    const existing = chapterLockMap[sp.chapter_id]
+    if (!existing || sp.current_unit_position > existing.unit) {
+      chapterLockMap[sp.chapter_id] = {
+        unit: sp.current_unit_position ?? 1,
+        lesson: sp.current_lesson_position ?? 999,
       }
-    })
-  }
+    }
+  })
 
-  // Grup: dari class_groups.current_unit_position (untuk level yang belum ada di studentProgress)
+  // Source B: class_group_chapter_progress (Grup)
   if (classGroupIds.length > 0) {
-    const { data: cgPositions } = await supabase
-      .from('class_groups')
-      .select('id, current_unit_position, current_lesson_position')
-      .in('id', classGroupIds)
-
-    const { data: cgLevels } = await supabase
-      .from('class_group_levels')
-      .select('class_group_id, level_id')
+    const { data: cgChProg } = await supabase
+      .from('class_group_chapter_progress')
+      .select('chapter_id, current_unit_position, current_lesson_position, class_group_id')
       .in('class_group_id', classGroupIds)
 
-    cgLevels?.forEach((c: any) => {
-      if (!unitLockMap[c.level_id]) {
-        const cg = cgPositions?.find(g => g.id === c.class_group_id)
-        if (cg) {
-          unitLockMap[c.level_id] = Math.max(unitLockMap[c.level_id] ?? 0, cg.current_unit_position)
-          lessonLockMap[c.level_id] = Math.max(lessonLockMap[c.level_id] ?? 0, cg.current_lesson_position ?? 999)
+    cgChProg?.forEach((cp: any) => {
+      const existing = chapterLockMap[cp.chapter_id]
+      if (!existing || cp.current_unit_position > existing.unit) {
+        chapterLockMap[cp.chapter_id] = {
+          unit: cp.current_unit_position ?? 1,
+          lesson: cp.current_lesson_position ?? 999,
         }
       }
     })
   }
 
-  // Transform data grouped by LEVEL
+  // ────────────────────────────────────────────────
+  // 14. Transform data grouped by LEVEL
+  // ────────────────────────────────────────────────
   const levelsData = levelIds.map(levelId => {
     const level = levels?.find(l => l.id === levelId)
     if (!level) return null
-
     const course = Array.isArray(level.courses) ? level.courses[0] : level.courses
-
     const levelUnits = units.filter(u => u.level_id === level.id)
-    
+
     const transformedUnits = levelUnits.map(unit => {
       const unitLessons = lessons?.filter(l => l.unit_id === unit.id) || []
       const unitMaterials = unitLessons.flatMap(lesson => {
@@ -260,11 +226,8 @@ export default async function MateriPage({
         return lessonMaterials.map(material => {
           const content = materialContents?.find(c => c.material_id === material.id)
           const isCompleted = progress.some(p => p.material_id === material.id)
-          
-          // ✅ Extract URL dari material_contents (schema v4.1)
           let materialUrl = null
           let componentId = null
-
           if (material.category === 'live_zoom' || material.category === 'kosakata') {
             materialUrl = content?.canva_url || content?.content_url || null
           } else if (material.category === 'bacaan') {
@@ -272,7 +235,6 @@ export default async function MateriPage({
           } else if (material.category === 'cefr') {
             componentId = material.lesson_id || null
           }
-          
           return {
             id: material.id,
             title: material.title,
@@ -284,7 +246,7 @@ export default async function MateriPage({
             completed: isCompleted || false,
             lesson_title: lesson.lesson_name,
             lesson_position: lesson.position ?? 0,
-            unit_name: unit.unit_name
+            unit_name: unit.unit_name,
           }
         })
       })
@@ -295,9 +257,11 @@ export default async function MateriPage({
         id: unit.id,
         name: unit.unit_name,
         chapter_title: chapter?.chapter_title || null,
+        chapter_id: unit.chapter_id || null,           // ← NEW
         chapter_order: chapter?.order_number || 0,
         sort_order: globalPosMap[unit.id] || unit.position,
-        materials: unitMaterials
+        unit_position: unit.position,                  // ← NEW: position within chapter
+        materials: unitMaterials,
       }
     })
 
@@ -305,7 +269,7 @@ export default async function MateriPage({
       level_id: level.id,
       level_name: level.name,
       course_name: course?.name || '',
-      units: transformedUnits
+      units: transformedUnits,
     }
   }).filter((l): l is NonNullable<typeof l> => l !== null)
     .sort((a, b) => {
@@ -320,8 +284,7 @@ export default async function MateriPage({
         levelsData={levelsData}
         studentName={profile?.full_name || 'Student'}
         studentSlug={slug}
-        unitLockMap={unitLockMap}
-        lessonLockMap={lessonLockMap}
+        chapterLockMap={chapterLockMap}
       />
     </div>
   )

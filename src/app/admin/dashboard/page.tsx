@@ -11,12 +11,10 @@ import LaporanTutorSection from './LaporanTutorSection'
 export default async function AdminDashboard() {
   const supabase = await createClient()
 
-  // Rentang hari ini WIT
   const todayWIT = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' })
   const startUTC = `${todayWIT}T00:00:00+09:00`
   const endUTC   = `${todayWIT}T23:59:59+09:00`
 
-  // Fetch announcements aktif hari ini
   const { data: announcements } = await supabase
     .from('announcements')
     .select('*')
@@ -41,14 +39,10 @@ export default async function AdminDashboard() {
       .gte('scheduled_at', startUTC)
       .lte('scheduled_at', endUTC)
       .order('scheduled_at'),
-    // Laporan tutor terbaru (gantikan pembayaran terbaru)
     supabase.from('session_reports')
       .select(`
         id, confirmed_at, material_notes,
-        sessions(
-          scheduled_at,
-          class_groups(label, courses(name))
-        ),
+        sessions(scheduled_at, class_groups(label, courses(name))),
         tutors(profiles(full_name))
       `)
       .order('confirmed_at', { ascending: false })
@@ -59,10 +53,9 @@ export default async function AdminDashboard() {
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const { data: pembayaranBulanIni } = await supabase
     .from('payments').select('amount').gte('paid_at', firstOfMonth)
-
   const totalBulanIni = pembayaranBulanIni?.reduce((sum, p) => sum + p.amount, 0) ?? 0
 
-  // ── Laporan belum diisi: sesi completed 7 hari terakhir, siswa hadir, tapi belum ada laporan ──
+  // ── Laporan belum diisi: sesi completed 7 hari terakhir, siswa HADIR, belum ada laporan ──
   const weekAgoISO = new Date(Date.now() - 7 * 86400000).toISOString()
 
   const { data: recentCompleted } = await supabase
@@ -74,21 +67,30 @@ export default async function AdminDashboard() {
 
   const rcIds = (recentCompleted ?? []).map(s => s.id)
 
-  const [{ data: rcAttendances }, { data: rcReports }] = await Promise.all([
+  const [{ data: rcAttendances }, { data: rcReports }, { data: rcAllAttendances }] = await Promise.all([
+    // Hanya hadir (untuk laporan missing check)
     rcIds.length > 0
       ? supabase.from('attendances').select('session_id, student_id').eq('status', 'hadir').in('session_id', rcIds)
       : Promise.resolve({ data: [] }),
     rcIds.length > 0
       ? supabase.from('session_reports').select('session_id, student_id').in('session_id', rcIds)
       : Promise.resolve({ data: [] }),
+    // Semua status attendance (untuk absensi missing check)
+    rcIds.length > 0
+      ? supabase.from('attendances').select('session_id').in('session_id', rcIds)
+      : Promise.resolve({ data: [] }),
   ])
 
+  // ── Build laporanBelumDiisi (existing logic) ──
   const reportSet = new Set((rcReports ?? []).map(r => `${r.session_id}-${r.student_id}`))
   const belumDiisiRaw = (rcAttendances ?? []).filter(a => !reportSet.has(`${a.session_id}-${a.student_id}`))
 
-  // Ambil info kelas + siswa + tutor untuk belum diisi
   const belumStudentIds = [...new Set(belumDiisiRaw.map(b => b.student_id))]
-  const belumCgIds = [...new Set((recentCompleted ?? []).filter(s => belumDiisiRaw.some(b => b.session_id === s.id)).map(s => s.class_group_id))]
+  const belumCgIds = [...new Set(
+    (recentCompleted ?? [])
+      .filter(s => belumDiisiRaw.some(b => b.session_id === s.id))
+      .map(s => s.class_group_id)
+  )]
 
   const [{ data: belumStudents }, { data: belumCgs }] = await Promise.all([
     belumStudentIds.length > 0
@@ -99,8 +101,8 @@ export default async function AdminDashboard() {
       : Promise.resolve({ data: [] }),
   ])
 
-  const belumProfIds = (belumStudents ?? []).map(s => s.profile_id).filter(Boolean)
-  const belumTutorIds = [...new Set((belumCgs ?? []).map(c => c.tutor_id).filter(Boolean))]
+  const belumProfIds   = (belumStudents ?? []).map(s => s.profile_id).filter(Boolean)
+  const belumTutorIds  = [...new Set((belumCgs ?? []).map(c => c.tutor_id).filter(Boolean))]
 
   const [{ data: belumProfiles }, { data: belumTutors }] = await Promise.all([
     belumProfIds.length > 0
@@ -116,35 +118,76 @@ export default async function AdminDashboard() {
     ? await supabase.from('profiles').select('id, full_name, phone').in('id', belumTutorProfIds)
     : { data: [] }
 
-  const bProfMap = Object.fromEntries((belumProfiles ?? []).map(p => [p.id, p.full_name]))
-  const bStudentMap = Object.fromEntries((belumStudents ?? []).map(s => [s.id, bProfMap[s.profile_id] ?? 'Siswa']))
+  const bProfMap      = Object.fromEntries((belumProfiles ?? []).map(p => [p.id, p.full_name]))
+  const bStudentMap   = Object.fromEntries((belumStudents ?? []).map(s => [s.id, bProfMap[s.profile_id] ?? 'Siswa']))
   const bTutorProfMap = Object.fromEntries((belumTutorProfiles ?? []).map(p => [p.id, { name: p.full_name, phone: p.phone }]))
-  const bTutorMap = Object.fromEntries((belumTutors ?? []).map(t => [t.id, bTutorProfMap[t.profile_id] ?? { name: 'Tutor', phone: '' }]))
-  const bCgMap = Object.fromEntries((belumCgs ?? []).map(c => [c.id, { label: c.label, tutorName: bTutorMap[c.tutor_id]?.name ?? 'Tutor', tutorPhone: bTutorMap[c.tutor_id]?.phone ?? '' }]))
+  const bTutorMap     = Object.fromEntries((belumTutors ?? []).map(t => [t.id, bTutorProfMap[t.profile_id] ?? { name: 'Tutor', phone: '' }]))
+  const bCgMap        = Object.fromEntries((belumCgs ?? []).map(c => [c.id, {
+    label: c.label,
+    tutorName: bTutorMap[c.tutor_id]?.name ?? 'Tutor',
+    tutorPhone: bTutorMap[c.tutor_id]?.phone ?? '',
+  }]))
 
   const laporanBelumDiisi = belumDiisiRaw.map(b => {
     const sesi = (recentCompleted ?? []).find(s => s.id === b.session_id)
-    const cg = bCgMap[sesi?.class_group_id ?? '']
+    const cg   = bCgMap[sesi?.class_group_id ?? '']
     return {
-      sessionId: b.session_id,
-      studentId: b.student_id,
+      sessionId:   b.session_id,
+      studentId:   b.student_id,
       studentName: bStudentMap[b.student_id] ?? 'Siswa',
-      kelasLabel: cg?.label ?? '—',
-      tutorName: cg?.tutorName ?? 'Tutor',
-      tutorPhone: cg?.tutorPhone ?? '',
+      kelasLabel:  cg?.label ?? '—',
+      tutorName:   cg?.tutorName ?? 'Tutor',
+      tutorPhone:  cg?.tutorPhone ?? '',
       scheduledAt: sesi?.scheduled_at ?? '',
     }
   }).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
 
+  // ── Absensi belum diisi: sesi completed TANPA record apapun di attendances ──
+  const sessionsWithAbs = new Set((rcAllAttendances ?? []).map(a => a.session_id))
+  const absensiMissingRaw = (recentCompleted ?? []).filter(s => !sessionsWithAbs.has(s.id))
+
+  // Fetch class group + tutor info untuk absensi missing sessions
+  const absMissingCgIds = [...new Set(absensiMissingRaw.map(s => s.class_group_id))]
+  let absensiMissing: { sessionId: string; kelasLabel: string; tutorName: string; tutorPhone: string; scheduledAt: string }[] = []
+
+  if (absMissingCgIds.length > 0) {
+    const { data: absMissingCgs } = await supabase
+      .from('class_groups')
+      .select('id, label, tutor_id')
+      .in('id', absMissingCgIds)
+
+    const absTutorIds = [...new Set((absMissingCgs ?? []).map((c: any) => c.tutor_id).filter(Boolean))]
+    let absTutorInfoMap: Record<string, { name: string; phone: string }> = {}
+
+    if (absTutorIds.length > 0) {
+      const { data: absTutors } = await supabase
+        .from('tutors').select('id, profile_id').in('id', absTutorIds)
+      const absProfIds = (absTutors ?? []).map((t: any) => t.profile_id).filter(Boolean)
+      if (absProfIds.length > 0) {
+        const { data: absProfs } = await supabase
+          .from('profiles').select('id, full_name, phone').in('id', absProfIds)
+        const absProfMap = Object.fromEntries((absProfs ?? []).map((p: any) => [p.id, { name: p.full_name, phone: p.phone }]))
+        absTutorInfoMap  = Object.fromEntries((absTutors ?? []).map((t: any) => [t.id, absProfMap[t.profile_id] ?? { name: 'Tutor', phone: '' }]))
+      }
+    }
+
+    const absCgInfoMap = Object.fromEntries((absMissingCgs ?? []).map((c: any) => [c.id, {
+      label:     c.label,
+      tutorName: absTutorInfoMap[c.tutor_id]?.name  ?? 'Tutor',
+      tutorPhone: absTutorInfoMap[c.tutor_id]?.phone ?? '',
+    }]))
+
+    absensiMissing = absensiMissingRaw.map(s => ({
+      sessionId:   s.id,
+      kelasLabel:  absCgInfoMap[s.class_group_id]?.label     ?? '—',
+      tutorName:   absCgInfoMap[s.class_group_id]?.tutorName  ?? 'Tutor',
+      tutorPhone:  absCgInfoMap[s.class_group_id]?.tutorPhone ?? '',
+      scheduledAt: s.scheduled_at,
+    })).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+  }
+
   function formatRupiah(n: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
-  }
-  function formatDateTime(iso: string) {
-    return new Date(iso).toLocaleDateString('id-ID', {
-      weekday: 'short', day: 'numeric', month: 'short',
-      hour: '2-digit', minute: '2-digit',
-      timeZone: 'Asia/Jayapura',
-    })
   }
 
   return (
@@ -156,7 +199,6 @@ export default async function AdminDashboard() {
         </p>
       </div>
 
-      {/* Pengumuman */}
       <AnnouncementSection announcements={announcements ?? []} />
 
       {/* Metric cards */}
@@ -203,9 +245,11 @@ export default async function AdminDashboard() {
           <SesiHariIniAdminClient sesiHariIni={sesiHariIni ?? []} />
         </div>
 
+        {/* Laporan Tutor card — now with Laporan + Absensi tabs */}
         <LaporanTutorSection
           laporanBelumDiisi={laporanBelumDiisi}
           laporanTerbaru={laporanTerbaru ?? []}
+          absensiMissing={absensiMissing}
         />
       </div>
 
@@ -219,17 +263,13 @@ export default async function AdminDashboard() {
             { href: '/admin/jadwal?new=1', icon: <CalendarDays size={18}/>,  label: 'Buat Jadwal' },
             { href: '/admin/tutor/baru',   icon: <Users size={18}/>,         label: 'Tambah Tutor' },
             { href: '/admin/honor',        icon: <Coins size={18}/>,         label: 'Honor Tutor' },
-          ].map((item) => (
+          ].map(item => (
             <Link key={item.href} href={item.href}
               className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#F0EFFF] transition-colors text-center group">
               <div className="w-10 h-10 rounded-xl bg-[#F0EFFF] group-hover:bg-[#5C4FE5] flex items-center justify-center transition-colors">
-                <span className="text-[#5C4FE5] group-hover:text-white transition-colors">
-                  {item.icon}
-                </span>
+                <span className="text-[#5C4FE5] group-hover:text-white transition-colors">{item.icon}</span>
               </div>
-              <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">
-                {item.label}
-              </span>
+              <span className="text-xs font-semibold text-[#4A4580] group-hover:text-[#5C4FE5]">{item.label}</span>
             </Link>
           ))}
         </div>
