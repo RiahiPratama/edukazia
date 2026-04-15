@@ -211,7 +211,26 @@ export default async function MateriPage({
   }
 
   // ────────────────────────────────────────────────
-  // 14. Transform data grouped by LEVEL
+  // 14. Compute per-chapter index for each unit
+  //     unit.position from DB is GLOBAL within level
+  //     We need 1-based index WITHIN each chapter for lock comparison
+  //     This must match what admin stores in current_unit_position
+  // ────────────────────────────────────────────────
+  const unitChapterIndexMap: Record<string, number> = {}
+  // Group units by chapter, sort by position, assign 1-based index
+  const chapterUnitGroups: Record<string, typeof units[0][]> = {}
+  units.forEach(u => {
+    const key = u.chapter_id || `__no_chapter_${u.level_id}`
+    if (!chapterUnitGroups[key]) chapterUnitGroups[key] = []
+    chapterUnitGroups[key].push(u)
+  })
+  Object.values(chapterUnitGroups).forEach(arr => {
+    arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    arr.forEach((u, idx) => { unitChapterIndexMap[u.id] = idx + 1 })
+  })
+
+  // ────────────────────────────────────────────────
+  // 15. Transform data grouped by LEVEL
   // ────────────────────────────────────────────────
   const levelsData = levelIds.map(levelId => {
     const level = levels?.find(l => l.id === levelId)
@@ -260,7 +279,7 @@ export default async function MateriPage({
         chapter_id: unit.chapter_id || null,           // ← NEW
         chapter_order: chapter?.order_number || 0,
         sort_order: globalPosMap[unit.id] || unit.position,
-        unit_position: unit.position,                  // ← NEW: position within chapter
+        unit_position: unitChapterIndexMap[unit.id] ?? 1,  // ← 1-based index WITHIN chapter
         materials: unitMaterials,
       }
     })

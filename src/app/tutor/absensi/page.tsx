@@ -375,6 +375,7 @@ export default function TutorAbsensiPage() {
   const [savedSesiIds,   setSavedSesiIds]   = useState<Set<string>>(new Set())
   const [laporanSesiIds, setLaporanSesiIds] = useState<Set<string>>(new Set())
   const [reminderSesi,   setReminderSesi]   = useState<any[]>([])
+  const [missingAbsensiSesi, setMissingAbsensiSesi] = useState<any[]>([])
   const [loading,        setLoading]        = useState(true)
   const [loadingSiswa,   setLoadingSiswa]   = useState(false)
   const [saving,         setSaving]         = useState(false)
@@ -429,6 +430,28 @@ export default function TutorAbsensiPage() {
         return !(reports ?? []).some((r: any) => r.session_id === s.id)
       })
       setReminderSesi(reminderList)
+    }
+
+    // ── Sesi lama yang belum diabsen (3 hari terakhir, bukan hari ini) ──
+    // Fetch completed sessions yang terjadi sebelum hari ini dan belum ada record absensi
+    const threeDaysAgo = new Date(Date.now() - 7 * 86400 * 1000).toISOString()
+    const { data: pastSessions } = await supabase
+      .from('sessions')
+      .select(`id, scheduled_at, status, zoom_link, class_groups!inner(id, label, tutor_id, courses(name), class_types(name))`)
+      .eq('class_groups.tutor_id', tutor.id)
+      .eq('status', 'completed')
+      .gte('scheduled_at', threeDaysAgo)
+      .lt('scheduled_at', startUtc)
+      .order('scheduled_at', { ascending: false })
+
+    const pastIds = (pastSessions ?? []).map((s: any) => s.id)
+    if (pastIds.length > 0) {
+      const { data: pastAbs } = await supabase
+        .from('attendances').select('session_id').in('session_id', pastIds)
+      const hasAbsensi = new Set((pastAbs ?? []).map((a: any) => a.session_id))
+      setMissingAbsensiSesi((pastSessions ?? []).filter((s: any) => !hasAbsensi.has(s.id)))
+    } else {
+      setMissingAbsensiSesi([])
     }
 
     setLoading(false)
@@ -739,9 +762,50 @@ export default function TutorAbsensiPage() {
         {/* ── Panel Kiri: Daftar Sesi ── */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E5E3FF]">
-              <h2 className="font-bold text-sm text-[#1A1640]">Sesi Hari Ini</h2>
-            </div>
+            {/* ── Section: Sesi Belum Diabsen (lama) ── */}
+            {missingAbsensiSesi.length > 0 && (
+              <>
+                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-1.5">
+                  <AlertTriangle size={12} className="text-amber-600 flex-shrink-0"/>
+                  <p className="text-[11px] font-bold text-amber-800">Belum Diabsen ({missingAbsensiSesi.length})</p>
+                </div>
+                <div className="divide-y divide-amber-50/50">
+                  {missingAbsensiSesi.map((s: any) => {
+                    const isSelected = selectedSesi?.id === s.id
+                    const tglSesi = new Date(s.scheduled_at).toLocaleDateString('id-ID', {
+                      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jayapura'
+                    })
+                    return (
+                      <button key={s.id} onClick={() => selectSesi(s)}
+                        className={['w-full text-left px-4 py-3 transition-colors', isSelected ? 'bg-[#5C4FE5] text-white' : 'bg-amber-50/40 hover:bg-amber-100/60'].join(' ')}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-[#1A1640]'}`}>
+                              {s.class_groups?.label ?? '—'}
+                            </div>
+                            <div className={`text-xs mt-0.5 ${isSelected ? 'text-white/70' : 'text-[#7B78A8]'}`}>
+                              {tglSesi} · {fmtTime(s.scheduled_at)} WIT
+                            </div>
+                          </div>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-200 text-amber-800'}`}>
+                            ⚠️ Absensi
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="px-4 py-2 bg-[#F7F6FF] border-t border-b border-[#E5E3FF]">
+                  <h2 className="font-bold text-xs text-[#7B78A8]">Sesi Hari Ini</h2>
+                </div>
+              </>
+            )}
+            {/* ── Section: Sesi Hari Ini ── */}
+            {!missingAbsensiSesi.length && (
+              <div className="px-4 py-3 border-b border-[#E5E3FF]">
+                <h2 className="font-bold text-sm text-[#1A1640]">Sesi Hari Ini</h2>
+              </div>
+            )}
             {sesiHariIni.length === 0 ? (
               <div className="p-6 text-center">
                 <CalendarDays size={28} strokeWidth={1.5} className="text-[#C4BFFF] mx-auto mb-2"/>
