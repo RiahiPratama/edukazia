@@ -106,6 +106,16 @@ export default function KelasDetailPage() {
   const [absensiSaving,        setAbsensiSaving]        = useState(false)
   const [absensiErr,           setAbsensiErr]           = useState('')
 
+  // Buat Tagihan state
+  const [showBuatTagihan,  setShowBuatTagihan]  = useState(false)
+  const [tagihanStudentId, setTagihanStudentId] = useState('')
+  const [tagihanAmount,    setTagihanAmount]    = useState('')
+  const [tagihanMethod,    setTagihanMethod]    = useState<'transfer'|'tunai'>('transfer')
+  const [tagihanPeriod,    setTagihanPeriod]    = useState('')
+  const [tagihanStatus,    setTagihanStatus]    = useState<'unpaid'|'pending'|'paid'>('unpaid')
+  const [tagihanSaving,    setTagihanSaving]    = useState(false)
+  const [tagihanErr,       setTagihanErr]       = useState('')
+
   useEffect(()=>{fetchAll()},[kelasId,activeTab])
   useEffect(()=>{if(kelasId)fetchLevels()},[kelasId,activeTab])
   useEffect(()=>{if(kelasId)fetchProgress()},[kelasId,activeTab])
@@ -523,6 +533,44 @@ export default function KelasDetailPage() {
     fetchAll()
   }
   function openPerpanjang(enr:Enrollment){setPerpanjangEnr(enr);setShowPerpanjang(true)}
+
+  function openBuatTagihan(){
+    // Default ke siswa aktif pertama
+    const firstActive = enrollments.find(e => e.status === 'active')
+    setTagihanStudentId(firstActive?.student_id ?? '')
+    setTagihanAmount('')
+    setTagihanMethod('transfer')
+    setTagihanPeriod('')
+    setTagihanStatus('unpaid')
+    setTagihanErr('')
+    setShowBuatTagihan(true)
+  }
+
+  async function simpanTagihan(){
+    if(!tagihanStudentId){setTagihanErr('Pilih siswa terlebih dahulu.');return}
+    const nominal = parseInt(tagihanAmount.replace(/\D/g,''),10)
+    if(!nominal||nominal<=0){setTagihanErr('Masukkan jumlah tagihan yang valid.');return}
+    setTagihanSaving(true);setTagihanErr('')
+
+    // Cari enrollment_id untuk siswa ini di kelas ini
+    const enr = enrollments.find(e=>e.student_id===tagihanStudentId&&e.status==='active')
+    if(!enr){setTagihanErr('Enrollment aktif siswa tidak ditemukan.');setTagihanSaving(false);return}
+
+    const {error} = await supabase.from('payments').insert({
+      student_id:    tagihanStudentId,
+      enrollment_id: enr.id,
+      amount:        nominal,
+      method:        tagihanMethod,
+      status:        tagihanStatus,
+      period_label:  tagihanPeriod.trim()||null,
+      is_new_student: false,
+    })
+    setTagihanSaving(false)
+    if(error){setTagihanErr('Gagal menyimpan: '+error.message);return}
+    setShowBuatTagihan(false)
+    fetchAll()
+  }
+
   async function deleteSession(id:string){await supabase.from('sessions').delete().eq('id',id);fetchAll()}
 
   const statusLabel:Record<string,string>={active:'Aktif',inactive:'Nonaktif',completed:'Selesai'}
@@ -729,8 +777,19 @@ export default function KelasDetailPage() {
 
       {/* ══ TAB: PEMBAYARAN ══ */}
       {activeTab==='pembayaran'&&(
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-          {payments.length===0?(<div className="px-5 py-12 text-center"><div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3"><CreditCard size={20} className="text-[#C4BFFF]"/></div><p className="text-sm text-[#7B78A8] font-semibold">Belum ada data pembayaran</p><Link href="/admin/pembayaran" className="mt-3 inline-block text-sm text-[#5C4FE5] font-semibold hover:underline">+ Buat tagihan di menu Pembayaran</Link></div>):(
+        <div className="space-y-3">
+          {/* Header + tombol Buat Tagihan */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-[#7B78A8] font-semibold">
+              {payments.length > 0 ? `${payments.length} tagihan` : 'Belum ada tagihan'}
+            </p>
+            <button onClick={openBuatTagihan}
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#5C4FE5] text-white text-xs font-bold rounded-lg hover:bg-[#3D34C4] transition">
+              <Plus size={13}/> Buat Tagihan
+            </button>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
+          {payments.length===0?(<div className="px-5 py-12 text-center"><div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3"><CreditCard size={20} className="text-[#C4BFFF]"/></div><p className="text-sm text-[#7B78A8] font-semibold">Belum ada tagihan</p><p className="text-xs text-[#7B78A8] mt-1">Klik tombol <strong>Buat Tagihan</strong> di atas untuk membuat tagihan baru</p></div>):(
           payments.map((p,idx)=>{
             const st=STATUS_BAYAR[p.status]??{label:p.status,cls:'bg-gray-100 text-gray-600'}
             return(<div key={p.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-[#F7F6FF] transition-colors ${idx<payments.length-1?'border-b border-[#E5E3FF]':''}`}>
@@ -740,6 +799,7 @@ export default function KelasDetailPage() {
               {p.status==='pending'&&<button onClick={()=>konfirmasiPembayaran(p.id)} className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-colors flex-shrink-0 border border-emerald-200">✓ Konfirmasi Lunas</button>}
             </div>)
           }))}
+          </div>
         </div>
       )}
 
@@ -1130,6 +1190,91 @@ export default function KelasDetailPage() {
             <div className="flex gap-3">
               <button onClick={()=>setConfirmDialog(null)} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-[#4A4580] border border-[#E5E3FF] hover:bg-[#F7F6FF] transition-colors">Batal</button>
               <button onClick={()=>{confirmDialog.onConfirm();setConfirmDialog(null)}} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-[#5C4FE5] hover:bg-[#4338CA] transition-colors">Ya, Lanjutkan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL BUAT TAGIHAN ── */}
+      {showBuatTagihan&&(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E3FF]">
+              <div>
+                <p className="text-[14px] font-extrabold text-[#1A1640]">Buat Tagihan</p>
+                <p className="text-[11px] text-[#7B78A8] mt-0.5">{kelas?.label}</p>
+              </div>
+              <button onClick={()=>setShowBuatTagihan(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F7F6FF] transition-colors">
+                <X size={16} className="text-[#7B78A8]"/>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {/* Pilih Siswa */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Siswa</label>
+                <select value={tagihanStudentId} onChange={e=>setTagihanStudentId(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition">
+                  <option value="">Pilih siswa...</option>
+                  {enrollments.filter(e=>e.status==='active').map(e=>(
+                    <option key={e.student_id} value={e.student_id}>{e.student_name}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Jumlah */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Jumlah (Rp)</label>
+                <input type="number" min="0" placeholder="Contoh: 500000"
+                  value={tagihanAmount} onChange={e=>setTagihanAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+              </div>
+              {/* Periode Label */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">
+                  Label Periode <span className="normal-case font-normal">(opsional)</span>
+                </label>
+                <input type="text" placeholder="Contoh: Paket April 2026"
+                  value={tagihanPeriod} onChange={e=>setTagihanPeriod(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-[#E5E3FF] rounded-xl text-sm bg-[#F7F6FF] text-[#1A1640] focus:outline-none focus:border-[#5C4FE5] transition"/>
+              </div>
+              {/* Metode */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Metode Pembayaran</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['transfer','tunai'] as const).map(m=>(
+                    <button key={m} onClick={()=>setTagihanMethod(m)}
+                      className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${tagihanMethod===m?'border-[#5C4FE5] bg-[#EEEDFE] text-[#5C4FE5]':'border-[#E5E3FF] text-[#7B78A8] hover:border-[#5C4FE5]'}`}>
+                      {m==='transfer'?'💳 Transfer':'💵 Tunai'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Status */}
+              <div>
+                <label className="block text-[10px] font-bold text-[#7B78A8] uppercase tracking-wider mb-1.5">Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    {v:'unpaid',label:'Belum Bayar'},
+                    {v:'pending',label:'Menunggu'},
+                    {v:'paid',label:'Lunas'},
+                  ] as const).map(s=>(
+                    <button key={s.v} onClick={()=>setTagihanStatus(s.v)}
+                      className={`py-2 rounded-xl text-xs font-bold border-2 transition-all ${tagihanStatus===s.v?'border-[#5C4FE5] bg-[#EEEDFE] text-[#5C4FE5]':'border-[#E5E3FF] text-[#7B78A8] hover:border-[#5C4FE5]'}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {tagihanErr&&<p className="text-[11px] text-red-600 px-3 py-2 bg-red-50 rounded-xl border border-red-200">{tagihanErr}</p>}
+            </div>
+            <div className="px-5 py-4 border-t border-[#E5E3FF] flex gap-2">
+              <button onClick={()=>setShowBuatTagihan(false)}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-[#7B78A8] bg-[#F7F6FF] hover:bg-[#EEEDFE] transition-colors">
+                Batal
+              </button>
+              <button onClick={simpanTagihan} disabled={tagihanSaving}
+                className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white bg-[#5C4FE5] hover:bg-[#4338CA] disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                {tagihanSaving?(<><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"/>Menyimpan...</>):'Simpan Tagihan'}
+              </button>
             </div>
           </div>
         </div>
