@@ -528,8 +528,26 @@ export default function KelasDetailPage() {
   }
   async function konfirmasiPembayaran(paymentId:string){
     if(!confirm('Konfirmasi pembayaran ini sudah LUNAS?'))return
-    const {error}=await supabase.from('payments').update({status:'paid',paid_at:new Date().toISOString()}).eq('id',paymentId)
+    const {error} = await supabase.from('payments')
+      .update({status:'paid',paid_at:new Date().toISOString()}).eq('id',paymentId)
     if(error){alert('Gagal konfirmasi: '+error.message);return}
+
+    // Kirim WA ke ortu — fire and forget
+    const p = payments.find(p=>p.id===paymentId)
+    const enr = enrollments.find(e=>e.student_name===p?.student_name&&e.status==='active')
+    if(p&&enr){
+      fetch('/api/wa/notify-payment',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          student_id:    enr.student_id,
+          class_group_id: kelasId,
+          amount:        p.amount,
+          period_label:  p.period_label,
+        }),
+      }).catch(()=>{})
+    }
+
     fetchAll()
   }
   function openPerpanjang(enr:Enrollment){setPerpanjangEnr(enr);setShowPerpanjang(true)}
@@ -567,6 +585,21 @@ export default function KelasDetailPage() {
     })
     setTagihanSaving(false)
     if(error){setTagihanErr('Gagal menyimpan: '+error.message);return}
+
+    // Kirim WA ke ortu jika langsung lunas — fire and forget
+    if(tagihanStatus==='paid'){
+      fetch('/api/wa/notify-payment',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          student_id:    tagihanStudentId,
+          class_group_id: kelasId,
+          amount:        nominal,
+          period_label:  tagihanPeriod.trim()||null,
+        }),
+      }).catch(()=>{})
+    }
+
     setShowBuatTagihan(false)
     fetchAll()
   }
