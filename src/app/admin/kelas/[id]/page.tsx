@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Calendar, Users, CreditCard, ExternalLink, Check, Pencil, Trash2, ChevronLeft, ChevronDown, ChevronRight, X, BookOpen, Plus, Trash, AlertTriangle } from 'lucide-react'
 import PerpanjangModal from '@/components/admin/PerpanjangModal'
+import PeriodeJadwalTab from '@/components/admin/PeriodeJadwalTab'
 
 type KelasDetail = {
   id: string; label: string; status: string; max_participants: number
@@ -16,7 +17,7 @@ type KelasDetail = {
 type Enrollment = {
   id: string; student_id: string; sessions_total: number; session_start_offset: number
   sessions_used: number; status: 'active'|'renewed'|'inactive'|'completed'|'paused'|'transferred'
-  student_name: string; attended_count: number
+  student_name: string; attended_count: number; enrolled_at: string
 }
 type SessionAttendance = { student_id: string; student_name: string; status: string; notes: string | null }
 type SessionReport = { student_id: string; student_name: string; materi: string|null; perkembangan: string|null; saran_siswa: string|null; saran_ortu: string|null; recording_url: string|null }
@@ -410,9 +411,6 @@ export default function KelasDetailPage() {
     }else{setEnrollments([])}
 
     const activeEnrollment=(enr??[]).find((e:any)=>e.status==='active')
-    const activeEnrolledAt=activeEnrollment?.enrolled_at??null
-    // ✅ FIX: tampilkan SEMUA sesi kelas tanpa filter enrolled_at
-    // Sesi lama (periode sebelumnya yang belum terlaksana) harus tetap muncul di tab Jadwal
     const {data:sess}=await supabase.from('sessions').select('id,scheduled_at,status,zoom_link').eq('class_group_id',kelasId).order('scheduled_at',{ascending:true})
     setSessions((sess??[]) as Session[])
 
@@ -743,70 +741,19 @@ export default function KelasDetailPage() {
 
       {/* ══ TAB: JADWAL ══ */}
       {activeTab==='jadwal'&&(
-        <div className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
-          {sessions.length===0?(
-            <div className="px-5 py-12 text-center"><div className="w-12 h-12 rounded-2xl bg-[#F0EFFF] flex items-center justify-center mx-auto mb-3"><Calendar size={20} className="text-[#C4BFFF]"/></div><p className="text-sm text-[#7B78A8] font-semibold">Belum ada sesi dijadwalkan</p></div>
-          ):(
-            <>
-              <div className="px-5 py-3 bg-[#F7F6FF] border-b border-[#E5E3FF] flex items-center gap-4 text-xs flex-wrap">
-                <span className="text-[#7B78A8]">Total: <strong className="text-[#1A1640]">{sessions.length} sesi</strong></span>
-                <span className="text-[#7B78A8]">Selesai: <strong className="text-[#27A05A]">{selesai}</strong></span>
-                <span className="text-[#7B78A8]">Terjadwal: <strong className="text-[#5C4FE5]">{terjadwal}</strong></span>
-                {missingAbsensiCount>0&&<span className="flex items-center gap-1 text-amber-700 font-bold"><AlertTriangle size={11}/> {missingAbsensiCount} belum absensi</span>}
-              </div>
-              {sessions.map((s,idx)=>{
-                const st=STATUS_SESI[s.status]??{label:s.status,cls:'bg-gray-100 text-gray-600'}
-                const isCompleted=s.status==='completed'||s.status==='cancelled'
-                const isExpanded=expandedSessionId===s.id,detail=sessionDetails[s.id]
-                const missingAbs=s.status==='completed'&&!sessionAbsensiMap[s.id]
-                return(
-                  <div key={s.id} className="border-b border-[#E5E3FF] last:border-0">
-                    <div className={`flex items-center gap-4 px-5 py-3.5 transition-colors ${isCompleted?(isExpanded?'bg-[#F0EFFF]':'bg-[#FAFAFE] hover:bg-[#F0EFFF] cursor-pointer'):'hover:bg-[#F7F6FF]'}`}
-                      onClick={isCompleted?()=>toggleSessionDetail(s.id):undefined}>
-                      <div className="min-w-[28px] text-center"><div className={`text-xs font-bold ${isCompleted?'text-[#C4BFFF]':'text-[#5C4FE5]'}`}>{idx+1}</div></div>
-                      <div className="flex-1 min-w-0"><div className={`text-sm font-semibold ${isCompleted?'text-[#7B78A8]':'text-[#1A1640]'}`}>{fmtDate(s.scheduled_at)}</div><div className="text-xs text-[#7B78A8]">{fmtTime(s.scheduled_at)}</div></div>
-                      {missingAbs&&<span className="flex items-center gap-0.5 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0"><AlertTriangle size={8}/> Absensi</span>}
-                      {s.zoom_link&&!isCompleted&&<a href={s.zoom_link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="text-[#5C4FE5] hover:opacity-70 transition"><ExternalLink size={13}/></a>}
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${st.cls}`}>{st.label}</span>
-                      {isCompleted?(<div className="flex-shrink-0 text-[#7B78A8]">{isExpanded?<ChevronDown size={14}/>:<ChevronRight size={14}/>}</div>):(
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {s.status==='scheduled'&&<button onClick={e=>{e.stopPropagation();markSessionComplete(s.id)}} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition" title="Tandai Selesai"><Check size={13}/></button>}
-                          {!isCompleted&&<button onClick={e=>{e.stopPropagation();openEditSession(s)}} className="p-1.5 rounded-lg text-gray-400 hover:text-[#5C4FE5] hover:bg-[#F0EFFF] transition" title="Edit"><Pencil size={13}/></button>}
-                          <button onClick={e=>{e.stopPropagation();deleteSession(s.id)}} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition" title="Hapus"><Trash2 size={13}/></button>
-                        </div>
-                      )}
-                    </div>
-                    {isCompleted&&isExpanded&&(
-                      <div className="px-5 pb-4 bg-[#F7F6FF] border-t border-[#E5E3FF]">
-                        {!detail||detail.loading?(<div className="flex items-center gap-2 py-4 text-xs text-[#7B78A8]"><div className="w-3 h-3 border-2 border-[#5C4FE5] border-t-transparent rounded-full animate-spin"/>Memuat data...</div>):(
-                          <div className="pt-3 space-y-3">
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Absensi</p>
-                                <button onClick={()=>openEditAbsensi(expandedSessionId!)} className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEEDFE] text-[#5C4FE5] hover:bg-[#5C4FE5] hover:text-white transition-colors"><Pencil size={9}/> Edit</button>
-                              </div>
-                              {detail.attendances.length===0?(<p className="text-xs text-amber-600 font-semibold italic">⚠️ Belum ada data absensi — klik Edit untuk mengisi</p>):(
-                                <div className="space-y-1.5">{detail.attendances.map(a=>(<div key={a.student_id} className="flex items-center gap-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${a.status==='hadir'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{a.status==='hadir'?'✓ Hadir':'✗ Tidak Hadir'}</span><span className="text-xs font-semibold text-[#1A1640]">{a.student_name}</span></div>))}</div>
-                              )}
-                            </div>
-                            <div className="border-t border-[#E5E3FF] pt-3 flex items-center gap-3">
-                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Laporan Tutor</p>
-                              {detail.reports.length>0?<span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700">✓ Sudah diinput</span>:<span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600">✗ Belum diinput</span>}
-                            </div>
-                            <div className="border-t border-[#E5E3FF] pt-3 flex items-center gap-3">
-                              <p className="text-[10px] font-bold text-[#7B78A8] uppercase tracking-wide">Link Rekaman</p>
-                              {detail.reports[0]?.recording_url?<a href={detail.reports[0].recording_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition"><ExternalLink size={10}/> Tersedia — Buka</a>:<span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">Belum tersedia</span>}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </>
-          )}
-        </div>
+        <PeriodeJadwalTab
+          sessions={sessions}
+          enrollments={enrollments}
+          sessionAbsensiMap={sessionAbsensiMap}
+          expandedSessionId={expandedSessionId}
+          sessionDetails={sessionDetails}
+          missingAbsensiCount={missingAbsensiCount}
+          onToggleSession={toggleSessionDetail}
+          onEditAbsensi={openEditAbsensi}
+          onMarkComplete={markSessionComplete}
+          onEditSession={openEditSession}
+          onDeleteSession={deleteSession}
+        />
       )}
 
       {/* ══ TAB: PEMBAYARAN ══ */}
