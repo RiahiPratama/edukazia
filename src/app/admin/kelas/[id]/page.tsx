@@ -411,8 +411,9 @@ export default function KelasDetailPage() {
 
     const activeEnrollment=(enr??[]).find((e:any)=>e.status==='active')
     const activeEnrolledAt=activeEnrollment?.enrolled_at??null
-    const sessQuery=supabase.from('sessions').select('id,scheduled_at,status,zoom_link').eq('class_group_id',kelasId).order('scheduled_at',{ascending:true})
-    const {data:sess}=activeEnrolledAt?await sessQuery.gte('scheduled_at',activeEnrolledAt):await sessQuery
+    // ✅ FIX: tampilkan SEMUA sesi kelas tanpa filter enrolled_at
+    // Sesi lama (periode sebelumnya yang belum terlaksana) harus tetap muncul di tab Jadwal
+    const {data:sess}=await supabase.from('sessions').select('id,scheduled_at,status,zoom_link').eq('class_group_id',kelasId).order('scheduled_at',{ascending:true})
     setSessions((sess??[]) as Session[])
 
     const completedIds=(sess??[]).filter((s:any)=>s.status==='completed').map((s:any)=>s.id)
