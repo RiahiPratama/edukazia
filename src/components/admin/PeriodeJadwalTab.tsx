@@ -19,6 +19,11 @@ const STATUS_SESI: Record<string,{label:string;cls:string}> = {
 function fmtDate(iso:string){return new Date(iso).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}
 function fmtTime(iso:string){return new Date(iso).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false})}
 
+// Supabase returns "2026-04-26 13:00:00+00" — non-standard, must normalize to ISO before parsing
+function parseDate(s: string): Date {
+  return new Date(s.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
+}
+
 type Props = {
   sessions: Session[]
   enrollments: Enrollment[]
@@ -44,7 +49,7 @@ export default function PeriodeJadwalTab({
   // Sort enrollments by enrolled_at
   const sortedEnr = enrollments
     .slice()
-    .sort((a,b)=>new Date(a.enrolled_at).getTime()-new Date(b.enrolled_at).getTime())
+    .sort((a,b)=>parseDate(a.enrolled_at).getTime()-parseDate(b.enrolled_at).getTime())
 
   const hasMultiplePeriods = sortedEnr.length > 1
 
@@ -92,17 +97,17 @@ export default function PeriodeJadwalTab({
   return (
     <div className="space-y-3">
       {sortedEnr.map((enr, idx) => {
-        const startAt = new Date(enr.enrolled_at)
+        const startAt = parseDate(enr.enrolled_at)
         const nextEnr = sortedEnr[idx + 1]
-        const endAt   = nextEnr ? new Date(nextEnr.enrolled_at) : null
+        const endAt   = nextEnr ? parseDate(nextEnr.enrolled_at) : null
         const periSessions = sessions.filter(s => {
           const t = new Date(s.scheduled_at)
           return t >= startAt && (endAt === null || t < endAt)
         })
 
-        // Sembunyikan periode yang tidak punya sesi sama sekali
-        if (periSessions.length === 0) return null
-        const isActive  = enr.status === 'active'
+        // Sembunyikan periode lama yang tidak punya sesi scheduled (sudah selesai semua)
+        const isActive = enr.status === 'active'
+        if (!isActive && periSessions.filter(s=>s.status==='scheduled').length === 0) return null
         const isOpen    = openPeriods.has(idx)
         const periSelesai   = periSessions.filter(s=>s.status==='completed').length
         const periTerjadwal = periSessions.filter(s=>s.status==='scheduled').length
