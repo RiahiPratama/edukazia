@@ -93,6 +93,12 @@ export default function PeriodeJadwalTab({
     )
   }
 
+  // Compare dates only (tanpa time) dalam WIT — supaya edit jam tidak pindah periode
+  function toWITDateStr(iso: string): string {
+    const witMs = parseDate(iso).getTime() + 9 * 60 * 60 * 1000
+    return new Date(witMs).toISOString().slice(0, 10) // "2026-04-26"
+  }
+
   // Sort all sessions by date
   const allSortedSessions = [...sessions].sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime())
 
@@ -100,10 +106,13 @@ export default function PeriodeJadwalTab({
   return (
     <div className="space-y-3">
       {sortedEnr.map((enr, idx) => {
-        // Assign sessions by COUNT (sessions_total), not by date boundary
-        // Supaya edit tanggal tidak menyebabkan session pindah periode
-        const offset = sortedEnr.slice(0, idx).reduce((sum, e) => sum + e.sessions_total, 0)
-        const periSessions = allSortedSessions.slice(offset, offset + enr.sessions_total)
+        const startDateStr = toWITDateStr(enr.enrolled_at)
+        const nextEnr = sortedEnr[idx + 1]
+        const endDateStr = nextEnr ? toWITDateStr(nextEnr.enrolled_at) : null
+        const periSessions = allSortedSessions.filter(s => {
+          const sd = toWITDateStr(s.scheduled_at)
+          return sd >= startDateStr && (endDateStr === null || sd < endDateStr)
+        })
 
         // Sembunyikan periode lama yang tidak punya sesi scheduled (sudah selesai semua)
         const isActive = enr.status === 'active'
