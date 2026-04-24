@@ -467,10 +467,11 @@ export default function KelasDetailPage() {
   }
 
   function openEditSession(s:Session){
+    // Gunakan toLocaleDateString & toLocaleTimeString terpisah — lebih reliable dari toLocaleString
     const dt=new Date(s.scheduled_at)
-    const witStr=dt.toLocaleString('en-CA',{timeZone:'Asia/Jayapura',hour12:false})
-    const [datePart,timePart]=witStr.split(', ')
-    setEDate(datePart);setETime(timePart.slice(0,5));setEZoom(s.zoom_link??'');setEStatus(s.status)
+    const datePart=dt.toLocaleDateString('en-CA',{timeZone:'Asia/Jayapura'}) // "2026-04-26"
+    const timePart=dt.toLocaleTimeString('en-GB',{timeZone:'Asia/Jayapura',hour:'2-digit',minute:'2-digit',hour12:false}) // "22:00"
+    setEDate(datePart);setETime(timePart);setEZoom(s.zoom_link??'');setEStatus(s.status)
     setEErr('');setEOk(false);setEditSession(s)
   }
   async function handleSaveSession(){

@@ -99,6 +99,9 @@ export default function PeriodeJadwalTab({
           const t = new Date(s.scheduled_at)
           return t >= startAt && (endAt === null || t < endAt)
         })
+
+        // Sembunyikan periode yang tidak punya sesi sama sekali
+        if (periSessions.length === 0) return null
         const isActive  = enr.status === 'active'
         const isOpen    = openPeriods.has(idx)
         const periSelesai   = periSessions.filter(s=>s.status==='completed').length
