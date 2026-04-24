@@ -19,6 +19,11 @@ const STATUS_SESI: Record<string,{label:string;cls:string}> = {
 function fmtDate(iso:string){return new Date(iso).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}
 function fmtTime(iso:string){return new Date(iso).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false})}
 
+// Supabase returns "2026-04-26 13:00:00+00" — non-standard, normalize to ISO
+function parseDate(s: string): Date {
+  return new Date(s.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
+}
+
 type Props = {
   sessions: Session[]
   enrollments: Enrollment[]
