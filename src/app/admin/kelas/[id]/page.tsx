@@ -22,7 +22,7 @@ type Enrollment = {
 type SessionAttendance = { student_id: string; student_name: string; status: string; notes: string | null }
 type SessionReport = { student_id: string; student_name: string; materi: string|null; perkembangan: string|null; saran_siswa: string|null; saran_ortu: string|null; recording_url: string|null }
 type SessionDetail = { attendances: SessionAttendance[]; reports: SessionReport[]; loading: boolean }
-type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null }
+type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null; enrollment_id: string | null }
 type Payment = { id: string; amount: number; status: string; period_label: string|null; method: string; created_at: string; student_name: string }
 type Level = { id: string; name: string; description: string|null; target_age: string|null; sort_order: number }
 type ClassGroupLevel = { id: string; level_id: string; level: Level }
@@ -411,7 +411,7 @@ export default function KelasDetailPage() {
     }else{setEnrollments([])}
 
     const activeEnrollment=(enr??[]).find((e:any)=>e.status==='active')
-    const {data:sess}=await supabase.from('sessions').select('id,scheduled_at,status,zoom_link').eq('class_group_id',kelasId).order('scheduled_at',{ascending:true})
+    const {data:sess}=await supabase.from('sessions').select('id,scheduled_at,status,zoom_link,enrollment_id').eq('class_group_id',kelasId).order('scheduled_at',{ascending:true})
     setSessions((sess??[]) as Session[])
 
     const completedIds=(sess??[]).filter((s:any)=>s.status==='completed').map((s:any)=>s.id)
@@ -467,12 +467,10 @@ export default function KelasDetailPage() {
   }
 
   function openEditSession(s:Session){
-    // Manual UTC+9 (WIT) — tidak pakai locale API yang inconsistent di Safari/macOS
-    const witMs = new Date(s.scheduled_at).getTime() + 9 * 60 * 60 * 1000
-    const witISO = new Date(witMs).toISOString()
-    const datePart = witISO.slice(0, 10)  // "2026-04-26"
-    const timePart = witISO.slice(11, 16) // "22:00"
-    setEDate(datePart);setETime(timePart);setEZoom(s.zoom_link??'');setEStatus(s.status)
+    const dt=new Date(s.scheduled_at)
+    const witStr=dt.toLocaleString('en-CA',{timeZone:'Asia/Jayapura',hour12:false})
+    const [datePart,timePart]=witStr.split(', ')
+    setEDate(datePart);setETime(timePart.slice(0,5));setEZoom(s.zoom_link??'');setEStatus(s.status)
     setEErr('');setEOk(false);setEditSession(s)
   }
   async function handleSaveSession(){

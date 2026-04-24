@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Calendar, Check, ChevronDown, ChevronRight, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 
-type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null }
+type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null; enrollment_id: string | null }
 type SessionAttendance = { student_id: string; student_name: string; status: string; notes: string | null }
 type SessionReport = { student_id: string; student_name: string; materi: string|null; perkembangan: string|null; saran_siswa: string|null; saran_ortu: string|null; recording_url: string|null }
 type SessionDetail = { attendances: SessionAttendance[]; reports: SessionReport[]; loading: boolean }
@@ -18,11 +18,6 @@ const STATUS_SESI: Record<string,{label:string;cls:string}> = {
 
 function fmtDate(iso:string){return new Date(iso).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}
 function fmtTime(iso:string){return new Date(iso).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false})}
-
-// Supabase returns "2026-04-26 13:00:00+00" — non-standard, must normalize to ISO before parsing
-function parseDate(s: string): Date {
-  return new Date(s.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
-}
 
 type Props = {
   sessions: Session[]
@@ -49,7 +44,7 @@ export default function PeriodeJadwalTab({
   // Sort enrollments by enrolled_at
   const sortedEnr = enrollments
     .slice()
-    .sort((a,b)=>parseDate(a.enrolled_at).getTime()-parseDate(b.enrolled_at).getTime())
+    .sort((a,b)=>new Date(a.enrolled_at).getTime()-new Date(b.enrolled_at).getTime())
 
   const hasMultiplePeriods = sortedEnr.length > 1
 
@@ -93,30 +88,22 @@ export default function PeriodeJadwalTab({
     )
   }
 
-  // Compare dates only (tanpa time) dalam WIT — supaya edit jam tidak pindah periode
-  function toWITDateStr(iso: string): string {
-    const witMs = parseDate(iso).getTime() + 9 * 60 * 60 * 1000
-    return new Date(witMs).toISOString().slice(0, 10) // "2026-04-26"
-  }
-
-  // Sort all sessions by date
-  const allSortedSessions = [...sessions].sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime())
-
   // Multi periode — dropdown per periode
   return (
     <div className="space-y-3">
       {sortedEnr.map((enr, idx) => {
-        const startDateStr = toWITDateStr(enr.enrolled_at)
+        // Filter by enrollment_id — paling akurat, tidak terpengaruh edit tanggal/jam
+        // Fallback ke parseDate boundary untuk sessions lama yang belum punya enrollment_id
+        const startAt = parseDate(enr.enrolled_at)
         const nextEnr = sortedEnr[idx + 1]
-        const endDateStr = nextEnr ? toWITDateStr(nextEnr.enrolled_at) : null
-        const periSessions = allSortedSessions.filter(s => {
-          const sd = toWITDateStr(s.scheduled_at)
-          return sd >= startDateStr && (endDateStr === null || sd < endDateStr)
-        })
+        const endAt   = nextEnr ? parseDate(nextEnr.enrolled_at) : null
+        const periSessions = sessions.filter(s => {
+          if (s.enrollment_id) return s.enrollment_id === enr.id
+          const t = new Date(s.scheduled_at)
+          return t >= startAt && (endAt === null || t < endAt)
+        }).sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime())
 
-        // Sembunyikan periode lama yang tidak punya sesi scheduled (sudah selesai semua)
-        const isActive = enr.status === 'active'
-        if (!isActive && periSessions.filter(s=>s.status==='scheduled').length === 0) return null
+        const isActive  = enr.status === 'active'
         const isOpen    = openPeriods.has(idx)
         const periSelesai   = periSessions.filter(s=>s.status==='completed').length
         const periTerjadwal = periSessions.filter(s=>s.status==='scheduled').length

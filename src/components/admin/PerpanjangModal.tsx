@@ -202,6 +202,29 @@ export default function PerpanjangModal({
         .eq('id', enrollment.id)
       if (renewErr) throw new Error(`Gagal update enrollment lama: ${renewErr.message}`)
 
+      // 2. Insert enrollment BARU
+      // FIX: pakai enrolled_at bukan start_date (tidak ada di schema)
+      const { data: newEnrollment, error: enrErr } = await supabase
+        .from('enrollments')
+        .insert({
+          student_id:           enrollment.student_id,
+          class_group_id:       kelasId,
+          package_id:           packageId,
+          sessions_total:       parseInt(sessionsTotal),
+          sessions_used:        0,
+          session_start_offset: parseInt(startOffset),
+          enrolled_at:          new Date().toISOString(),
+          status:               'active',
+        })
+        .select('id')
+        .single()
+
+      if (enrErr) {
+        // ROLLBACK: kembalikan enrollment lama ke active kalau step 2 gagal
+        await supabase.from('enrollments').update({ status: 'active' }).eq('id', enrollment.id)
+        throw new Error(`Gagal buat enrollment baru: ${enrErr.message}`)
+      }
+
       // 3. Generate & insert sessions baru
       const rows = jadwalMode === 'auto'
         ? jadwalRows.map(r => ({ ...r, repeat: Math.ceil(parseInt(sessionsTotal) / jadwalRows.length) }))
@@ -217,38 +240,10 @@ export default function PerpanjangModal({
             scheduled_at:   d.toISOString(),
             status:         'scheduled',
             zoom_link:      zoomLink || null,
+            enrollment_id:  newEnrollment.id,
           })
         })
       })
-
-      // ✅ FIX: enrolled_at = tanggal sesi BARU yang pertama
-      // Supaya sesi lama yang masih scheduled tidak ikut terhitung di periode baru
-      const sortedNewSessions = [...allSessions].sort((a, b) =>
-        new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-      )
-      const firstNewSessionDate = sortedNewSessions[0]?.scheduled_at ?? new Date().toISOString()
-
-      // 2. Insert enrollment BARU (setelah sessions disiapkan supaya bisa pakai firstNewSessionDate)
-      const { data: newEnrollment, error: enrErr } = await supabase
-        .from('enrollments')
-        .insert({
-          student_id:           enrollment.student_id,
-          class_group_id:       kelasId,
-          package_id:           packageId,
-          sessions_total:       parseInt(sessionsTotal),
-          sessions_used:        0,
-          session_start_offset: parseInt(startOffset),
-          enrolled_at:          firstNewSessionDate,
-          status:               'active',
-        })
-        .select('id')
-        .single()
-
-      if (enrErr) {
-        // ROLLBACK: kembalikan enrollment lama ke active kalau step 2 gagal
-        await supabase.from('enrollments').update({ status: 'active' }).eq('id', enrollment.id)
-        throw new Error(`Gagal buat enrollment baru: ${enrErr.message}`)
-      }
 
       if (allSessions.length > 0) {
         const { error: sessErr } = await supabase.from('sessions').insert(allSessions)
