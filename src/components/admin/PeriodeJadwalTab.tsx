@@ -93,17 +93,17 @@ export default function PeriodeJadwalTab({
     )
   }
 
+  // Sort all sessions by date
+  const allSortedSessions = [...sessions].sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime())
+
   // Multi periode — dropdown per periode
   return (
     <div className="space-y-3">
       {sortedEnr.map((enr, idx) => {
-        const startAt = parseDate(enr.enrolled_at)
-        const nextEnr = sortedEnr[idx + 1]
-        const endAt   = nextEnr ? parseDate(nextEnr.enrolled_at) : null
-        const periSessions = sessions.filter(s => {
-          const t = new Date(s.scheduled_at)
-          return t >= startAt && (endAt === null || t < endAt)
-        })
+        // Assign sessions by COUNT (sessions_total), not by date boundary
+        // Supaya edit tanggal tidak menyebabkan session pindah periode
+        const offset = sortedEnr.slice(0, idx).reduce((sum, e) => sum + e.sessions_total, 0)
+        const periSessions = allSortedSessions.slice(offset, offset + enr.sessions_total)
 
         // Sembunyikan periode lama yang tidak punya sesi scheduled (sudah selesai semua)
         const isActive = enr.status === 'active'
