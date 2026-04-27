@@ -685,6 +685,8 @@ export default function KelasDetailPage() {
           ):(() => {
             const grouped=new Map<string,Enrollment[]>()
             enrollments.forEach(e=>{if(!grouped.has(e.student_id))grouped.set(e.student_id,[]);grouped.get(e.student_id)!.push(e)})
+            // Sort per-student enrollments by enrolled_at — supaya P1/P2/P3 urut benar
+            grouped.forEach(enrs=>enrs.sort((a,b)=>new Date(a.enrolled_at).getTime()-new Date(b.enrolled_at).getTime()))
             return Array.from(grouped.entries()).map(([studentId,enrs],idx)=>{
               const avatarColor=AVATAR_COLORS[idx%AVATAR_COLORS.length]
               const firstName=enrs[0].student_name,hasMultiple=enrs.length>1

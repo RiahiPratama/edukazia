@@ -114,6 +114,9 @@ export default function PeriodeJadwalTab({
         const periTerjadwal = periSessions.filter(s=>s.status==='scheduled').length
         const periMissing   = periSessions.filter(s=>s.status==='completed'&&!sessionAbsensiMap[s.id]).length
 
+        // Sembunyikan periode lama yang sudah tidak ada sesi scheduled
+        if (!isActive && periTerjadwal === 0) return null
+
         return (
           <div key={enr.id} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
             <button onClick={()=>togglePeriod(idx)}
