@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Calendar, Check, ChevronDown, ChevronRight, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 
-type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null; enrollment_id: string | null }
+type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null }
 type SessionAttendance = { student_id: string; student_name: string; status: string; notes: string | null }
 type SessionReport = { student_id: string; student_name: string; materi: string|null; perkembangan: string|null; saran_siswa: string|null; saran_ortu: string|null; recording_url: string|null }
 type SessionDetail = { attendances: SessionAttendance[]; reports: SessionReport[]; loading: boolean }
@@ -18,11 +18,6 @@ const STATUS_SESI: Record<string,{label:string;cls:string}> = {
 
 function fmtDate(iso:string){return new Date(iso).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}
 function fmtTime(iso:string){return new Date(iso).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false})}
-
-// Supabase returns "2026-04-26 13:00:00+00" — non-standard, normalize to ISO
-function parseDate(s: string): Date {
-  return new Date(s.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
-}
 
 type Props = {
   sessions: Session[]
@@ -97,25 +92,21 @@ export default function PeriodeJadwalTab({
   return (
     <div className="space-y-3">
       {sortedEnr.map((enr, idx) => {
-        // Filter by enrollment_id — paling akurat, tidak terpengaruh edit tanggal/jam
-        // Fallback ke parseDate boundary untuk sessions lama yang belum punya enrollment_id
-        const startAt = parseDate(enr.enrolled_at)
+        const startAt = new Date(enr.enrolled_at)
         const nextEnr = sortedEnr[idx + 1]
-        const endAt   = nextEnr ? parseDate(nextEnr.enrolled_at) : null
+        const endAt   = nextEnr ? new Date(nextEnr.enrolled_at) : null
         const periSessions = sessions.filter(s => {
-          if (s.enrollment_id) return s.enrollment_id === enr.id
           const t = new Date(s.scheduled_at)
           return t >= startAt && (endAt === null || t < endAt)
-        }).sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime())
-
+        })
         const isActive  = enr.status === 'active'
         const isOpen    = openPeriods.has(idx)
         const periSelesai   = periSessions.filter(s=>s.status==='completed').length
         const periTerjadwal = periSessions.filter(s=>s.status==='scheduled').length
         const periMissing   = periSessions.filter(s=>s.status==='completed'&&!sessionAbsensiMap[s.id]).length
 
-        // Sembunyikan periode lama yang sudah tidak ada sesi scheduled
-        if (!isActive && periTerjadwal === 0) return null
+        // Sembunyikan periode lama yang sudah tidak ada sesi scheduled DAN tidak ada absensi pending
+        if (!isActive && periTerjadwal === 0 && periMissing === 0) return null
 
         return (
           <div key={enr.id} className="bg-white rounded-2xl border border-[#E5E3FF] overflow-hidden">
