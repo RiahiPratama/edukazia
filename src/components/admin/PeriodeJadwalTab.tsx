@@ -96,19 +96,21 @@ export default function PeriodeJadwalTab({
         const nextEnr = sortedEnr[idx + 1]
         const endAt   = nextEnr ? new Date(nextEnr.enrolled_at) : null
         const periSessions = sessions.filter(s => {
-          // Pakai enrollment_id jika ada — paling akurat
+          // Pakai enrollment_id — paling akurat
           if (s.enrollment_id) return s.enrollment_id === enr.id
-          // Fallback date boundary untuk sessions lama
+          // Fallback date boundary untuk sessions lama tanpa enrollment_id
           const t = new Date(s.scheduled_at)
           return t >= startAt && (endAt === null || t < endAt)
         }).sort((a,b)=>new Date(a.scheduled_at).getTime()-new Date(b.scheduled_at).getTime())
         const isActive  = enr.status === 'active'
         const isOpen    = openPeriods.has(idx)
         const periSelesai   = periSessions.filter(s=>s.status==='completed').length
-        const periTerjadwal = periSessions.filter(s=>s.status==='scheduled').length
+        const periTerjadwal = periSessions.filter(s=>s.status==='scheduled'||s.status==='rescheduled').length
         const periMissing   = periSessions.filter(s=>s.status==='completed'&&!sessionAbsensiMap[s.id]).length
 
-        // Sembunyikan periode lama yang sudah tidak ada sesi scheduled DAN tidak ada absensi pending
+        // Sembunyikan periode lama hanya jika BENAR-BENAR selesai:
+        // - Tidak ada sesi scheduled/rescheduled (masih akan dieksekusi)
+        // - Tidak ada sesi completed yang belum diabsensi
         if (!isActive && periTerjadwal === 0 && periMissing === 0) return null
 
         // Sembunyikan periode lama yang sudah tidak ada sesi scheduled DAN tidak ada absensi pending
