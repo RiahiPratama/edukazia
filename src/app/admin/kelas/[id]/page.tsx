@@ -418,7 +418,7 @@ export default function KelasDetailPage() {
     const sessionsWithNull=(sess??[]).filter((s:any)=>!s.enrollment_id)
     if(sessionsWithNull.length>0 && enr && enr.length>0){
       const sortedEnrForAssign=[...enr].sort((a:any,b:any)=>new Date(a.enrolled_at).getTime()-new Date(b.enrolled_at).getTime())
-      const updates:Promise<any>[]=sessionsWithNull.map((s:any)=>{
+      const updates:any[]=sessionsWithNull.map((s:any)=>{
         const sTime=new Date(s.scheduled_at).getTime()
         // Cari enrollment yang tepat: enrolled_at <= scheduled_at < next enrolled_at
         let assignedEnr=sortedEnrForAssign[0]
