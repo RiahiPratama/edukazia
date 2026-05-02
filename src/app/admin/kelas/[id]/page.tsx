@@ -412,6 +412,36 @@ export default function KelasDetailPage() {
 
     const activeEnrollment=(enr??[]).find((e:any)=>e.status==='active')
     const {data:sess}=await supabase.from('sessions').select('id,scheduled_at,status,zoom_link,enrollment_id').eq('class_group_id',kelasId).order('scheduled_at',{ascending:true})
+
+    // Auto-assign enrollment_id untuk sessions yang masih NULL (sessions lama sebelum kolom ditambah)
+    // Backend adalah Otak — tidak perlu SQL manual
+    const sessionsWithNull=(sess??[]).filter((s:any)=>!s.enrollment_id)
+    if(sessionsWithNull.length>0 && enr && enr.length>0){
+      const sortedEnrForAssign=[...enr].sort((a:any,b:any)=>new Date(a.enrolled_at).getTime()-new Date(b.enrolled_at).getTime())
+      const updates:Promise<any>[]=sessionsWithNull.map((s:any)=>{
+        const sTime=new Date(s.scheduled_at).getTime()
+        // Cari enrollment yang tepat: enrolled_at <= scheduled_at < next enrolled_at
+        let assignedEnr=sortedEnrForAssign[0]
+        for(let i=0;i<sortedEnrForAssign.length;i++){
+          const eTime=new Date(sortedEnrForAssign[i].enrolled_at).getTime()
+          const nextTime=sortedEnrForAssign[i+1]?new Date(sortedEnrForAssign[i+1].enrolled_at).getTime():Infinity
+          if(sTime>=eTime&&sTime<nextTime){assignedEnr=sortedEnrForAssign[i];break}
+        }
+        return supabase.from('sessions').update({enrollment_id:assignedEnr.id}).eq('id',s.id)
+      })
+      await Promise.all(updates)
+      // Update local data dengan enrollment_id yang sudah di-assign
+      const sortedEnrForAssign2=[...enr].sort((a:any,b:any)=>new Date(a.enrolled_at).getTime()-new Date(b.enrolled_at).getTime())
+      sessionsWithNull.forEach((s:any)=>{
+        const sTime=new Date(s.scheduled_at).getTime()
+        for(let i=0;i<sortedEnrForAssign2.length;i++){
+          const eTime=new Date(sortedEnrForAssign2[i].enrolled_at).getTime()
+          const nextTime=sortedEnrForAssign2[i+1]?new Date(sortedEnrForAssign2[i+1].enrolled_at).getTime():Infinity
+          if(sTime>=eTime&&sTime<nextTime){s.enrollment_id=sortedEnrForAssign2[i].id;break}
+        }
+      })
+    }
+
     setSessions((sess??[]) as Session[])
 
     const completedIds=(sess??[]).filter((s:any)=>s.status==='completed').map((s:any)=>s.id)
