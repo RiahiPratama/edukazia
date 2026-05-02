@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Calendar, Check, ChevronDown, ChevronRight, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 
-type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null }
+type Session = { id: string; scheduled_at: string; status: string; zoom_link: string | null; enrollment_id: string | null }
 type SessionAttendance = { student_id: string; student_name: string; status: string; notes: string | null }
 type SessionReport = { student_id: string; student_name: string; materi: string|null; perkembangan: string|null; saran_siswa: string|null; saran_ortu: string|null; recording_url: string|null }
 type SessionDetail = { attendances: SessionAttendance[]; reports: SessionReport[]; loading: boolean }
